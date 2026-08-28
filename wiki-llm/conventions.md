@@ -14,6 +14,7 @@
 | Terminal color | **`chalk` v6** (ESM-only — matches our `type: module`). Used *only* through `src/ui/theme.ts`. |
 | Prompts | **`@inquirer/prompts` v8** (ESM; modular `select`/`search`/`input`). Used *only* in `src/config/wizard.ts` and `src/recovery/prompt.ts`. |
 | Progress | **`ora` v9** (ESM). Used *only* through `src/ui/progress.ts`. |
+| Package | **`baya-cli`** on npm (`baya` itself is taken by an unrelated package) |
 | Bin | `baya` → `dist/cli/index.js` |
 
 > **Known friction: Jest + ESM.** Jest's ESM support requires `--experimental-vm-modules` and trips on `.js` extension resolution under `NodeNext`. **`chalk` v6 is ESM-only and is the usual thing that detonates here** — include it in the spike, not later. Settle in M0.2: `@swc/jest` + `extensionsToTreatAsEsm` + a `moduleNameMapper` stripping `.js` from relative imports.
