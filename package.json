@@ -1,0 +1,40 @@
+{
+  "name": "baya-cli",
+  "version": "0.1.0",
+  "description": "Local multi-provider CLI orchestrator: Markdown to LLM-planned JSON DAG to parallel dispatch across local agent CLIs.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "baya": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:contract": "BAYA_CONTRACT=1 node --experimental-vm-modules node_modules/.bin/jest --config jest.contract.config.js"
+  },
+  "dependencies": {
+    "chalk": "^6.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.19.0",
+    "@swc/core": "^1.10.0",
+    "@swc/jest": "^0.2.37",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.19.0",
+    "eslint-config-prettier": "^9.1.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.21.0"
+  }
+}
