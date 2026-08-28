@@ -19,7 +19,7 @@ Baya is a local multi-provider CLI orchestrator: freeform Markdown → LLM-plann
 | [conventions.md](conventions.md) | Repo layout, TS/ESM/Jest setup, hard rules, definition of done. |
 
 ## Status
-Pre-implementation. Repo is scaffolding-only. Refinement record: [../specs/001/](../specs/001/) — `00-validation.md` (what was wrong with the original spec), `01-spec.md` (refined spec v2), `02-plan.md` (phased task plan).
+M0.1–M0.5 landed: toolchain scaffold, Jest+ESM, the `no-shell-exec` lint rule, the fake-provider test harness, and the structured logger. No product behavior yet — that starts at M1. Refinement record: [../specs/001/](../specs/001/) — `00-validation.md` (what was wrong with the original spec), `01-spec.md` (refined spec v2), `02-plan.md` (phased task plan).
 
 ## Known documentation gaps
 - `.agents/skills/token-optimize/SKILL.md` is referenced by `AGENTS.md` §0 but **does not exist**. Pages here follow its style by convention; author the skill or drop the reference.

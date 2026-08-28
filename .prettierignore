@@ -1,0 +1,4 @@
+dist/
+coverage/
+.baya/
+node_modules/
