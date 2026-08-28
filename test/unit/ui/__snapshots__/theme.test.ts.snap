@@ -1,0 +1,33 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`theme color off (createTheme('never')) renders every status token with its glyph, no ANSI, matching the cli.md table 1`] = `
+{
+  "action": "⚑",
+  "fail": "✗",
+  "note": "·",
+  "ok": "✓",
+  "park": "⏸",
+  "pending": "·",
+  "run": "▸",
+  "skip": "⊘",
+  "warn": "!",
+}
+`;
+
+exports[`theme color on (createTheme('always')) renders every status token wrapped in ANSI, matching the cli.md table 1`] = `
+{
+  "action": "[1m[33m⚑[39m[22m",
+  "fail": "[31m✗[39m",
+  "note": "[2m·[22m",
+  "ok": "[32m✓[39m",
+  "park": "[33m⏸[39m",
+  "pending": "[2m·[22m",
+  "run": "[36m▸[39m",
+  "skip": "[2m⊘[22m",
+  "warn": "[33m![39m",
+}
+`;
+
+exports[`theme color on (createTheme('always')) wraps taskId and provider text in ANSI 1`] = `"[1mgen-schema[22m"`;
+
+exports[`theme color on (createTheme('always')) wraps taskId and provider text in ANSI 2`] = `"[35mcodex[39m"`;
