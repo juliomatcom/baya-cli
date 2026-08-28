@@ -8,25 +8,26 @@ All four **live-probed 2026-08-28** (help text + real invocation), not read from
 
 ## Capability matrix
 
-| | codex | claude | copilot | opencode |
-| :-- | :-- | :-- | :-- | :-- |
-| Non-interactive | `codex exec` | `-p/--print` | `-p/--prompt <text>` | `opencode run` |
-| Prompt via **file/stdin** | ✅ stdin or `-` | ✅ stdin | ❌ **argv only** | ✅ `-f/--file` |
-| Schema enforcement | ✅ `--output-schema <FILE>` | ✅ `--json-schema '<inline>'` | ❌ | ❌ |
-| Result extraction | `-o <FILE>` (clean JSON) | `.structured_output` (parsed) | JSONL text | JSONL text |
-| Events | `--json` JSONL | `--output-format json`/`stream-json` | `--output-format json` JSONL | `--format json` JSONL |
-| **Session id field** | `thread_id` | `session_id` | `sessionId` | `sessionID` |
-| **Pre-assign session id** | ❌ capture | ✅ `--session-id <uuid>` | ✅ `--session-id <id>` | ❌ capture |
-| Resume | `codex exec resume <id>` | `-r/--resume <id>` | `-r/--resume=<id>` | `-s/--session <id>` |
-| Working dir flag | ✅ `-C/--cd` | ❌ **none** — set spawn `cwd` | ✅ `-C` | ✅ `--dir` |
-| Disable color | ✅ `--color never` | ❌ none | ✅ `--no-color` | ❌ none |
-| Cost cap | — | `--max-budget-usd` | `--max-ai-credits` | — |
+|                           | codex                       | claude                               | copilot                      | opencode              |
+| :------------------------ | :-------------------------- | :----------------------------------- | :--------------------------- | :-------------------- |
+| Non-interactive           | `codex exec`                | `-p/--print`                         | `-p/--prompt <text>`         | `opencode run`        |
+| Prompt via **file/stdin** | ✅ stdin or `-`             | ✅ stdin                             | ❌ **argv only**             | ✅ `-f/--file`        |
+| Schema enforcement        | ✅ `--output-schema <FILE>` | ✅ `--json-schema '<inline>'`        | ❌                           | ❌                    |
+| Result extraction         | `-o <FILE>` (clean JSON)    | `.structured_output` (parsed)        | JSONL text                   | JSONL text            |
+| Events                    | `--json` JSONL              | `--output-format json`/`stream-json` | `--output-format json` JSONL | `--format json` JSONL |
+| **Session id field**      | `thread_id`                 | `session_id`                         | `sessionId`                  | `sessionID`           |
+| **Pre-assign session id** | ❌ capture                  | ✅ `--session-id <uuid>`             | ✅ `--session-id <id>`       | ❌ capture            |
+| Resume                    | `codex exec resume <id>`    | `-r/--resume <id>`                   | `-r/--resume=<id>`           | `-s/--session <id>`   |
+| Working dir flag          | ✅ `-C/--cd`                | ❌ **none** — set spawn `cwd`        | ✅ `-C`                      | ✅ `--dir`            |
+| Disable color             | ✅ `--color never`          | ❌ none                              | ✅ `--no-color`              | ❌ none               |
+| Cost cap                  | —                           | `--max-budget-usd`                   | `--max-ai-credits`           | —                     |
 
 **Four different spellings of the session id.** Normalizing this is the single clearest justification for the adapter layer.
 
 ## Cross-cutting rules
 
 ### 1. Always set stdin explicitly — never inherit
+
 `claude -p` with an argv prompt **blocks 3 seconds** waiting for stdin, then warns:
 `Warning: no stdin data received in 3s, proceeding without it.`
 `codex exec` writes `Reading additional input from stdin...` to stderr. Both vanish when stdin is set.
@@ -34,14 +35,17 @@ All four **live-probed 2026-08-28** (help text + real invocation), not read from
 **Rule: every spawn sets `stdin` to the prompt pipe or `/dev/null`.** Across a 20-task run, inheriting costs a minute of pure latency and pollutes logs.
 
 ### 2. Schema enforcement has three tiers, not two
+
 - **codex** — file in, file out. `--output-schema <FILE>` + `-o <FILE>`; the file contains exactly the conforming JSON. Cleanest path in the system; **no parsing at all**.
 - **claude** — `--json-schema` accepts **inline JSON only**; a file path is rejected (`Error: --json-schema is not valid JSON`). Read the pre-parsed object from `.structured_output` (`.result` holds the same thing as a string).
 - **copilot / opencode** — no enforcement. Fall to the fenced-extract rung of `protocol.md` §4.
 
 ### 3. ANSI stripping stays mandatory
+
 `claude` and `opencode` expose no color flag. Use `--color never` / `--no-color` where they exist, and strip residual ANSI everywhere.
 
 ### 4. Retry classification is available from every provider
+
 `copilot` → `session.error.errorCode` (e.g. `quota_exceeded`, `statusCode: 402`) · `opencode` → `error.data.isRetryable` **boolean** · `claude` → `is_error`, `subtype`, `permission_denials[]` · `codex` → exit code + stderr.
 
 ## Adapter interface
@@ -51,22 +55,32 @@ interface ProviderAdapter {
   id: ProviderId;
   resolve(): Promise<{ bin: string; version: string } | null>;
   capabilities: {
-    promptDelivery: ('file' | 'stdin' | 'argv')[];   // ordered preference
-    structuredOutput: 'schema-file' | 'schema-inline' | 'none';
-    events: 'jsonl' | 'json' | 'none';
-    sessionId: 'preassign' | 'capture';
-    resume: 'session' | 'none';
-    cwdFlag: boolean; modelFlag: boolean;
+    promptDelivery: ("file" | "stdin" | "argv")[]; // ordered preference
+    structuredOutput: "schema-file" | "schema-inline" | "none";
+    events: "jsonl" | "json" | "none";
+    sessionId: "preassign" | "capture";
+    resume: "session" | "none";
+    cwdFlag: boolean;
+    modelFlag: boolean;
     maxConcurrency: number;
   };
-  buildRun(task, env): { argv: string[]; cwd: string; stdin: 'pipe' | 'ignore' };
-  buildResume(sessionId, answer, env): { argv: string[]; cwd: string; stdin: 'pipe' | 'ignore' };
-  parseEvents(chunk: string): ProviderEvent[];
-  extractResult(events, files): TaskResult;
+  buildRun(task, env): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
+  buildResume(
+    sessionId,
+    answer,
+    env,
+  ): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
+  parseEvents(chunk: string): ProviderEvent[]; // fed complete lines; buffering is the executor's job
+  extractResult(ctx: ExtractContext): TaskResult;
+  extractUsage?(events): { cost_usd?; input_tokens?; output_tokens? };
 }
 ```
 
 `buildRun` returns `argv: string[]` — never a command string. `shell: true` is banned repo-wide. `buildRun` is pure and **snapshot-tested**; that snapshot is the drift alarm.
+
+`extractUsage` is optional and per-provider: `codex` reports usage on `turn.completed`, which normalizes to an `unknown` event. Reading it back out here keeps accounting out of the `ProviderEvent` union, which would otherwise grow a member for one provider's bookkeeping.
+
+`parseEvents` receives whole lines only. Partial-chunk buffering lives in `src/executor/spawn.ts`, so every adapter gets it right by not implementing it.
 
 ## Binary resolution
 
@@ -89,8 +103,11 @@ Events (`--json`): `thread.started` → **`thread_id`** · `turn.started` · `it
 
 Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-file'` · `sessionId 'capture'` · `resume 'session'` · `cwdFlag true`.
 
-**Strongest provider — build the adapter here first (M1.5).**
-⚠️ Unverified: whether `thread_id` is the identifier `exec resume` accepts. Confirm in M1.5.
+**Strongest provider — the adapter the engine was built against (M1.5, landed).** Implemented in `src/providers/codex.ts`; argv is snapshot-tested in `test/unit/providers/codex.test.ts`.
+
+argv: `codex exec --json --color never --skip-git-repo-check -C <cwd> -s <sandbox> --output-schema <file> -o <file> [-m <model>] -`, prompt on stdin behind the `-` positional. Sandbox comes from the task: `writes:false` ⇒ `read-only`, `writes:true` ⇒ `workspace-write`, `--dangerously-allow-all` ⇒ `danger-full-access`.
+
+⚠️ **UNVERIFIED:** whether `thread_id` is the identifier `exec resume` accepts. `buildResume` assumes it; the contract tier (M3.7) is where that gets settled against the real binary. Escalation does not depend on it until M4.
 
 ## claude — ✅ verified 2026-08-28 (live, v2.1.251)
 
@@ -115,7 +132,7 @@ Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-inl
 
 Events: `{type, data, ephemeral, id, timestamp, parentId}`. **15 of 20 events are `ephemeral: true` — filter them.** Terminal event `{"type":"result","sessionId":…,"exitCode":…,"usage":{"codeChanges":{"filesModified":[…]}}}` supplies session id, exit code, **and `files_changed` for free**. Errors: `{"type":"session.error","data":{"errorType":"quota","errorCode":"quota_exceeded","statusCode":402}}`.
 
-⚠️ Help claims `--allow-all-tools` is "required for non-interactive mode", but the process **ran without it** (reached quota before any tool use). Treat it as required for unattended *tool execution*, not as a parse requirement. Re-verify once quota resets.
+⚠️ Help claims `--allow-all-tools` is "required for non-interactive mode", but the process **ran without it** (reached quota before any tool use). Treat it as required for unattended _tool execution_, not as a parse requirement. Re-verify once quota resets.
 💡 **Set `--no-ask-user`.** It disables the `ask_user` tool so the agent cannot block on an interactive question — exactly right for our design, where a question must come back as `status:"needs_input"` in the result JSON instead.
 ⚠️ Assistant-text event shape unverified (the probe failed before any text). Confirm in M3.5.
 

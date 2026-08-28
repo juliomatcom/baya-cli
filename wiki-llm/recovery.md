@@ -18,17 +18,23 @@ At `.baya/runs/<runId>/state.json`. Rewritten **atomically** (write tmp → `ren
   "updated_at": "2026-08-28T21:56:41Z",
   "source": { "path": "tasks.md", "sha256": "9f2c…" },
   "manifest_path": ".baya/runs/20260828T2152Z-a1f4c9/manifest.json",
-  "config_snapshot": { "planner": { "provider": "codex", "model": null },
-                       "defaults": { "provider": "codex", "model": null },
-                       "max_parallel": 4, "isolation": "shared" },
+  "config_snapshot": {
+    "planner": { "provider": "codex", "model": null },
+    "defaults": { "provider": "codex", "model": null },
+    "max_parallel": 4,
+    "isolation": "shared"
+  },
   "totals": { "succeeded": 2, "failed": 1, "skipped": 2, "pending": 0, "cost_usd": 0.42 },
   "tasks": {
     "build-ui": {
       "state": "failed",
-      "provider": "codex", "model": null,
+      "provider": "codex",
+      "model": null,
       "session_id": "01a04a04-b8a5-7ae0-80ea-697cf3b65066",
       "attempts": 1,
-      "started_at": "…", "ended_at": "…", "duration_ms": 8112,
+      "started_at": "…",
+      "ended_at": "…",
+      "duration_ms": 8112,
       "exit_code": 1,
       "failure": {
         "kind": "quota",
@@ -38,19 +44,24 @@ At `.baya/runs/<runId>/state.json`. Rewritten **atomically** (write tmp → `ren
         "retry": "later",
         "occurred_at": "2026-08-28T21:56:41Z"
       },
-      "artifacts": { "request": "tasks/build-ui/request.json",
-                     "result":  "tasks/build-ui/result.json",
-                     "events":  "tasks/build-ui/events.jsonl",
-                     "stdout":  "tasks/build-ui/stdout.log",
-                     "stderr":  "tasks/build-ui/stderr.log" },
-      "notes": [ { "severity": "warn", "message": "…" } ],
-      "files_changed": [], "cost_usd": 0.0
+      "artifacts": {
+        "request": "tasks/build-ui/request.json",
+        "result": "tasks/build-ui/result.json",
+        "events": "tasks/build-ui/events.jsonl",
+        "stdout": "tasks/build-ui/stdout.log",
+        "stderr": "tasks/build-ui/stderr.log"
+      },
+      "notes": [{ "severity": "warn", "message": "…" }],
+      "files_changed": [],
+      "cost_usd": 0.0
     }
   }
 }
 ```
 
 `config_snapshot` makes a resume reproduce the original run's settings rather than silently picking up changed config.
+
+`pid` is the child's process-group leader, checkpointed **before** the spawn so a later `baya doctor` can find a stray group left by a crash. `blocked_by` names the failed ancestor that caused a `skipped` state — without it the report can say a task was skipped but not why. `result_rung` records which rung of the degradation ladder produced the result (`protocol.md` §4).
 
 ## One Baya per directory
 
@@ -65,14 +76,14 @@ At `.baya/runs/<runId>/state.json`. Rewritten **atomically** (write tmp → `ren
 
 This also collapses several guarantees into one. A second `baya resume` of the same run cannot double-spend credits, because it cannot start at all.
 
-| Resource | Guarantee |
-| :-- | :-- |
-| **Directory** | One `.baya/baya.lock`, held for the process lifetime. |
-| **`runId`** | `<utc-timestamp>-<rand>-<pid>` — sortable and unique. |
+| Resource                 | Guarantee                                                                                                                                     |
+| :----------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Directory**            | One `.baya/baya.lock`, held for the process lifetime.                                                                                         |
+| **`runId`**              | `<utc-timestamp>-<rand>-<pid>` — sortable and unique.                                                                                         |
 | **Writers within a run** | Serialized by an **in-memory semaphore in the scheduler**. No file lock: there is only one process, so there is nothing to coordinate across. |
-| **Config / plan cache** | Atomic `rename`; no torn file is ever observable. |
-| **Logs** | Per-run files. |
-| **`.baya/` creation** | `mkdir` recursive; `EEXIST` is success. |
+| **Config / plan cache**  | Atomic `rename`; no torn file is ever observable.                                                                                             |
+| **Logs**                 | Per-run files.                                                                                                                                |
+| **`.baya/` creation**    | `mkdir` recursive; `EEXIST` is success.                                                                                                       |
 
 ### Stale locks
 
@@ -90,7 +101,7 @@ An unparseable lock file is never removed automatically; we cannot tell whether 
 
 ### Running two task lists against one repo
 
-Not supported in-process, and deliberately so. The answer is isolation at the *user* level: a second `git worktree` is a second checkout with its own `.baya/`, so two Bayas share no state at all.
+Not supported in-process, and deliberately so. The answer is isolation at the _user_ level: a second `git worktree` is a second checkout with its own `.baya/`, so two Bayas share no state at all.
 
 ```bash
 git worktree add ../baya-feature-x feature-x
@@ -103,17 +114,17 @@ Worth keeping in mind if per-task write parallelism is ever revisited (`--isolat
 
 Normalized from signals each provider actually emits (verified 2026-08-28 — see `providers.md`).
 
-| `kind` | `retry` | Detected from |
-| :-- | :-- | :-- |
-| `quota` | `later` | copilot `errorCode:"quota_exceeded"` / `statusCode:402`; provider text |
-| `rate_limit` | `now` | HTTP 429; provider rate-limit events |
-| `auth` | `never` | opencode `statusCode:401` + `isRetryable:false`; login errors |
-| `network` | `now` | connection reset, DNS, timeout to provider |
-| `timeout` | `now` | Baya's own `max_runtime_s` exceeded |
-| `permission` | `never` | claude `permission_denials[]`; sandbox refusal |
-| `schema` | `now` | result failed the degradation ladder (`protocol.md` §4) |
-| `crash` | `now` | non-zero exit with no classified signal |
-| `interrupted` | `now` | SIGINT/SIGTERM teardown |
+| `kind`        | `retry` | Detected from                                                          |
+| :------------ | :------ | :--------------------------------------------------------------------- |
+| `quota`       | `later` | copilot `errorCode:"quota_exceeded"` / `statusCode:402`; provider text |
+| `rate_limit`  | `now`   | HTTP 429; provider rate-limit events                                   |
+| `auth`        | `never` | opencode `statusCode:401` + `isRetryable:false`; login errors          |
+| `network`     | `now`   | connection reset, DNS, timeout to provider                             |
+| `timeout`     | `now`   | Baya's own `max_runtime_s` exceeded                                    |
+| `permission`  | `never` | claude `permission_denials[]`; sandbox refusal                         |
+| `schema`      | `now`   | result failed the degradation ladder (`protocol.md` §4)                |
+| `crash`       | `now`   | non-zero exit with no classified signal                                |
+| `interrupted` | `now`   | SIGINT/SIGTERM teardown                                                |
 
 ### `retry: "later"` is the important one
 
@@ -167,22 +178,22 @@ Run 20260828T2152Z-a1f4c9 · tasks.md · interrupted 4m ago
 
 ### Guards
 
-| Situation | Behavior |
-| :-- | :-- |
-| `tasks.md` changed since the run (`source.sha256` mismatch) | Warn that the stored plan is stale; offer *re-plan* / *continue with stored manifest* / *abort*. Never silently execute a stale plan. |
-| Another Baya is running here | The directory lock refuses it at startup, so a second resume cannot double-spend credits. |
-| Not a TTY | No prompt. `--yes` retries everything retryable and skips the rest; without it, exit `2`. |
-| `state.json` unreadable or malformed | Report the file and stop. Never silently start a fresh run — that would re-spend money already spent. |
+| Situation                                                   | Behavior                                                                                                                              |
+| :---------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| `tasks.md` changed since the run (`source.sha256` mismatch) | Warn that the stored plan is stale; offer _re-plan_ / _continue with stored manifest_ / _abort_. Never silently execute a stale plan. |
+| Another Baya is running here                                | The directory lock refuses it at startup, so a second resume cannot double-spend credits.                                             |
+| Not a TTY                                                   | No prompt. `--yes` retries everything retryable and skips the rest; without it, exit `2`.                                             |
+| `state.json` unreadable or malformed                        | Report the file and stop. Never silently start a fresh run — that would re-spend money already spent.                                 |
 
 ## Progress display
 
 **`ora`** (v9, ESM) drives the working animation.
 
-| Rule | Why |
-| :-- | :-- |
-| Spinner writes to **stderr** (ora's default) | Keeps stdout a clean JSON document for `--json \| jq`. |
-| Disabled when not a TTY, under `--json`, or with `NO_COLOR` | Spinner frames in a log file or a pipe are noise. |
-| **Stopped before any prompt** | A live spinner and an inquirer prompt on the same terminal corrupt each other. |
+| Rule                                                                          | Why                                                                                                                                                                    |
+| :---------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Spinner writes to **stderr** (ora's default)                                  | Keeps stdout a clean JSON document for `--json \| jq`.                                                                                                                 |
+| Disabled when not a TTY, under `--json`, or with `NO_COLOR`                   | Spinner frames in a log file or a pipe are noise.                                                                                                                      |
+| **Stopped before any prompt**                                                 | A live spinner and an inquirer prompt on the same terminal corrupt each other.                                                                                         |
 | **Cursor restored on every exit path** — SIGINT, SIGTERM, `uncaughtException` | ora hides the cursor; a hard exit without cleanup leaves the user's terminal with **no visible cursor**. Restore it in the signal handler, not only on the happy path. |
 
 > ⚠️ **ora is single-line and does not multiplex.** It fits M1, which is sequential. When M2 introduces parallelism, either render one aggregate line (`▸ 3 running · 5 done · 12 pending`) or move the status block to `log-update`. Do not attempt N concurrent ora instances — they fight over the same terminal line.

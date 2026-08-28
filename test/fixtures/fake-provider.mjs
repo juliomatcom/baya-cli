@@ -15,10 +15,25 @@
  *   "spawn_child": false,
  *   "expect_stdin": false | true | "substring that must appear",
  *   "expect_file": "path that must exist and be non-empty",
- *   "writes_file": "path to append start/end markers to"
+ *   "writes_file": "path to append start/end markers to",
+ *   "by_task": { "<taskId>": {scenario}, "__planner__": {...}, "default": {...} }
  * }
+ *
+ * Emulates the codex file-out contract: when argv carries `-o <path>`, `final`
+ * is written to that file instead of stdout, exactly as
+ * `codex exec --output-schema … -o …` behaves. The task id is read back from
+ * that path (`tasks/<id>/result.json`), which is what lets one scenario file
+ * script a whole multi-task run without any stdin coordination.
  */
-import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname } from "node:path";
 import { spawn } from "node:child_process";
 
 function sleep(ms) {
@@ -30,12 +45,29 @@ function fail(message) {
   process.exit(2);
 }
 
-function loadScenario() {
+function outputFileFromArgv() {
+  const argv = process.argv.slice(2);
+  const index = argv.indexOf("-o");
+  return index !== -1 && argv[index + 1] ? argv[index + 1] : null;
+}
+
+/** `.../tasks/<id>/result.json` -> `<id>`; the planner's draft has no task dir. */
+function taskIdFromOutputFile(outputFile) {
+  if (!outputFile) return null;
+  if (basename(outputFile) === "plan-draft.json") return "__planner__";
+  return basename(dirname(outputFile));
+}
+
+function loadScenario(taskId) {
   const scenarioPath = process.env.BAYA_FAKE_SCRIPT;
   if (!scenarioPath) {
     fail("BAYA_FAKE_SCRIPT env var not set");
   }
-  return JSON.parse(readFileSync(scenarioPath, "utf8"));
+  const raw = JSON.parse(readFileSync(scenarioPath, "utf8"));
+  if (!raw.by_task) return raw;
+  const picked = (taskId && raw.by_task[taskId]) ?? raw.by_task.default;
+  if (!picked) fail(`no scenario for task "${taskId}"`);
+  return picked;
 }
 
 function installSignalHandlers(onSignalMode) {
@@ -90,14 +122,25 @@ async function emitLines(emit) {
   }
 }
 
-function writeFinal(final) {
+function writeFinal(final, outputFile) {
   if (final === undefined || final === null) return;
   const line = typeof final === "string" ? final : JSON.stringify(final);
+  if (outputFile) {
+    mkdirSync(dirname(outputFile), { recursive: true });
+    writeFileSync(outputFile, `${line}\n`);
+    return;
+  }
   process.stdout.write(`${line}\n`);
 }
 
 async function main() {
-  const scenario = loadScenario();
+  if (process.argv.slice(2).join(" ") === "--version") {
+    process.stdout.write("fake-provider 1.0.0\n");
+    process.exit(0);
+  }
+
+  const outputFile = outputFileFromArgv();
+  const scenario = loadScenario(taskIdFromOutputFile(outputFile));
 
   installSignalHandlers(scenario.on_signal ?? "exit");
   checkExpectFile(scenario.expect_file);
@@ -116,7 +159,7 @@ async function main() {
   if (scenario.hang_ms) await sleep(scenario.hang_ms);
 
   writeFileMarker(scenario.writes_file, "end");
-  writeFinal(scenario.final);
+  writeFinal(scenario.final, outputFile);
 
   process.exit(scenario.exit_code ?? 0);
 }

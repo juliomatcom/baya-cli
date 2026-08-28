@@ -2,6 +2,7 @@ export { stripAnsi } from "./ansi.js";
 export {
   type Logger,
   type LogFields,
+  type LogLine,
   type LoggerOptions,
   createLogger,
 } from "./logger.js";

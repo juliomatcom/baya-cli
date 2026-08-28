@@ -19,6 +19,7 @@ export interface FakeProviderScenario {
   expect_stdin?: boolean | string;
   expect_file?: string;
   writes_file?: string;
+  by_task?: Record<string, FakeProviderScenario>;
 }
 
 export interface FakeProviderResult {

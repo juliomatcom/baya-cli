@@ -5,18 +5,18 @@
 
 ## Layers
 
-| # | Layer | Module | Responsibility | Purity |
-| :-- | :-- | :-- | :-- | :-- |
-| 1 | Ingestion | `src/planner/` | Markdown → planner provider → Manifest JSON. Repair loop, cache, deterministic fallback. | I/O |
-| 2 | Validation | `src/manifest/` | Zod parse, id uniqueness, dep resolution, cycle detection, provider allowlist. | **Pure** |
-| 3 | Graph | `src/graph/` | Topological layering, ready-set computation, descendant marking. | **Pure** |
-| 4 | Providers | `src/providers/` | One adapter per CLI. argv construction, prompt delivery, event parsing, result extraction, resume. | Pure build + I/O resolve |
-| 5 | Execution | `src/executor/` | Scheduler, concurrency budgets, writer semaphore, subprocess lifecycle, signals. | I/O |
-| 6 | Context | `src/context/` | Result persistence, context assembly, budgeting strategies. | Mostly pure |
-| 7 | Escalation | `src/escalation/` | Park queue, stdin ownership, question rendering, session resume dispatch. | I/O |
-| 8 | Presentation | `src/ui/` | DAG preview, live status, run report, `--json` output. `theme.ts` is the sole chalk importer. | I/O |
-| 9 | Entry | `src/cli/` | Arg parsing, config load, command routing, exit codes. | I/O |
-| 10 | Logging | `src/log/` | JSONL trace sink + filtered stderr renderer, redaction. See [logging.md](logging.md). | I/O |
+| #   | Layer        | Module            | Responsibility                                                                                     | Purity                   |
+| :-- | :----------- | :---------------- | :------------------------------------------------------------------------------------------------- | :----------------------- |
+| 1   | Ingestion    | `src/planner/`    | Markdown → planner provider → Manifest JSON. Repair loop, cache, deterministic fallback.           | I/O                      |
+| 2   | Validation   | `src/manifest/`   | Zod parse, id uniqueness, dep resolution, cycle detection, provider allowlist.                     | **Pure**                 |
+| 3   | Graph        | `src/graph/`      | Topological layering, ready-set computation, descendant marking.                                   | **Pure**                 |
+| 4   | Providers    | `src/providers/`  | One adapter per CLI. argv construction, prompt delivery, event parsing, result extraction, resume. | Pure build + I/O resolve |
+| 5   | Execution    | `src/executor/`   | Scheduler, concurrency budgets, writer semaphore, subprocess lifecycle, signals.                   | I/O                      |
+| 6   | Context      | `src/context/`    | Result persistence, context assembly, budgeting strategies.                                        | Mostly pure              |
+| 7   | Escalation   | `src/escalation/` | Park queue, stdin ownership, question rendering, session resume dispatch.                          | I/O                      |
+| 8   | Presentation | `src/ui/`         | DAG preview, live status, run report, `--json` output. `theme.ts` is the sole chalk importer.      | I/O                      |
+| 9   | Entry        | `src/cli/`        | Arg parsing, config load, command routing, exit codes.                                             | I/O                      |
+| 10  | Logging      | `src/log/`        | JSONL trace sink + filtered stderr renderer, redaction. See [logging.md](logging.md).              | I/O                      |
 
 **Rule:** layers 2, 3, and the `buildRun`/`extractResult` halves of layer 4 are pure and carry the bulk of test coverage. Push logic down into them.
 
@@ -67,7 +67,7 @@ pending ──deps met──► ready ──budget+lock──► running
                                     descendants ──► skipped        answer ──► running
 ```
 
-- `blocked` is a *view* over `pending` (unmet deps), not a stored state.
+- `blocked` is a _view_ over `pending` (unmet deps), not a stored state.
 - Descendants of `failed` become **`skipped`**, never `failed` — the distinction drives the exit code and the report.
 - `parked` never blocks independent branches.
 - Every transition is checkpointed atomically (tmp + `rename`) to `state.json`.
@@ -76,13 +76,18 @@ pending ──deps met──► ready ──budget+lock──► running
 
 ```
 .baya/                        # gitignored
+├─ baya.lock                  # one Baya per directory; held for the process lifetime
 ├─ config.json                # optional: provider paths, concurrency caps
-├─ schema/task_result.schema.json   # emitted at runtime for codex --output-schema
+├─ schema/
+│  ├─ task_result.schema.json # emitted at runtime for codex --output-schema
+│  └─ plan_draft.schema.json  # what the planner is held to
 ├─ plans/<sha256>.json        # plan cache, keyed on markdown + planner flags + schema version
 ├─ wt/<taskId>/               # git worktrees, --isolation worktree only
 └─ runs/<runId>/
    ├─ manifest.json
    ├─ state.json              # atomic checkpoint: task states, pids, session ids
+   ├─ baya.jsonl              # the orchestrator's own trace, every level
+   ├─ plan-draft.json         # the planner's raw output for this run
    ├─ report.json
    └─ tasks/<taskId>/
       ├─ request.json         # what we sent
@@ -97,11 +102,11 @@ pending ──deps met──► ready ──budget+lock──► running
 
 ## Trust boundaries
 
-| Boundary | Rule |
-| :-- | :-- |
-| Markdown → planner | Untrusted content. Never interpolated into argv. |
-| Planner → manifest | **Privilege boundary.** Manifest may name `provider` (closed enum) and `model` (string). Never argv, shell, env, or executable paths. |
-| Manifest → adapter | Adapter alone constructs argv. `shell: true` is banned repo-wide and lint-enforced. |
-| Provider → orchestrator | Untrusted output. Parsed as JSON against a schema, never regexed for meaning. |
-| Logs → disk | Secret-shaped strings redacted before write. |
+| Boundary                 | Rule                                                                                                                                                                     |
+| :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Markdown → planner       | Untrusted content. Never interpolated into argv.                                                                                                                         |
+| Planner → manifest       | **Privilege boundary.** Manifest may name `provider` (closed enum) and `model` (string). Never argv, shell, env, or executable paths.                                    |
+| Manifest → adapter       | Adapter alone constructs argv. `shell: true` is banned repo-wide and lint-enforced.                                                                                      |
+| Provider → orchestrator  | Untrusted output. Parsed as JSON against a schema, never regexed for meaning.                                                                                            |
+| Logs → disk              | Secret-shaped strings redacted before write.                                                                                                                             |
 | Provider ANSI → terminal | Provider stdout is untrusted and may carry escape sequences. Disable provider color at the flag level where possible, and **strip ANSI** before rendering or persisting. |

@@ -16,6 +16,13 @@ export interface LoggerOptions {
   stderrLevel?: LogLevel;
   /** Injectable for tests; defaults to `process.stderr`. Never `process.stdout` (logging.md). */
   stderrStream?: NodeJS.WritableStream;
+  /**
+   * Composes the terminal sentence from structured fields (logging.md rule 4).
+   * Return `null` to keep a line out of the display — it is still written to
+   * the file in full, because verbosity filters the *display*, never the record.
+   * Defaults to a flat `ts level event k=v` rendering.
+   */
+  render?: (line: LogLine) => string | null;
 }
 
 export interface Logger {
@@ -49,7 +56,7 @@ function sanitize(fields: LogFields): LogFields {
   return redactDeep(stripped);
 }
 
-interface LogLine extends LogFields {
+export interface LogLine extends LogFields {
   ts: string;
   level: LogLevel;
   event: string;
@@ -75,6 +82,7 @@ function renderStderrLine(line: LogLine): string {
 export function createLogger(options: LoggerOptions): Logger {
   const stderrLevel = options.stderrLevel ?? "info";
   const stderrStream = options.stderrStream ?? process.stderr;
+  const render = options.render ?? renderStderrLine;
   mkdirSync(dirname(options.traceFile), { recursive: true });
 
   function write(level: LogLevel, event: string, fields: LogFields = {}): void {
@@ -90,7 +98,8 @@ export function createLogger(options: LoggerOptions): Logger {
     appendFileSync(options.traceFile, `${JSON.stringify(line)}\n`);
 
     if (isAtLeast(level, stderrLevel)) {
-      stderrStream.write(renderStderrLine(line));
+      const rendered = render(line);
+      if (rendered !== null) stderrStream.write(rendered);
     }
   }
 

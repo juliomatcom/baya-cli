@@ -1,0 +1,245 @@
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { ProviderIdSchema, type ProviderId } from "../manifest/index.js";
+import {
+  BUILTIN_CONFIG,
+  CONFIG_VERSION,
+  ConfigFileSchema,
+  type ConfigFile,
+  type ResolvedConfig,
+} from "./schema.js";
+import { projectConfigPath, userConfigPath } from "./paths.js";
+
+/**
+ * Layered config (config.md §Precedence). Highest wins:
+ * flags > env > project > user > built-in.
+ *
+ * Every value records the layer it came from, so `baya config --show` can
+ * explain itself instead of printing an unattributed blob.
+ */
+export const LAYER_NAMES = ["flags", "env", "project", "user", "built-in"] as const;
+export type LayerName = (typeof LAYER_NAMES)[number];
+
+export interface ConfigLayer {
+  name: LayerName;
+  /** File path for `project`/`user`; a description otherwise. */
+  origin: string;
+  values: ConfigFile;
+}
+
+export interface LoadedConfig {
+  config: ResolvedConfig;
+  /** Dotted key -> the layer that supplied it. */
+  sources: Record<string, LayerName>;
+  layers: ConfigLayer[];
+  userPath: string;
+  projectPath: string;
+  /** True when no user config file exists — the first-run wizard's trigger. */
+  userConfigExists: boolean;
+}
+
+/**
+ * A malformed config is a hard error naming the file and the offending key —
+ * never a silent reset. Silently discarding a user's settings because one key
+ * is misspelled is the worst possible response to a typo.
+ */
+export class ConfigError extends Error {
+  constructor(
+    readonly path: string,
+    message: string,
+  ) {
+    super(`${path}: ${message}`);
+    this.name = "ConfigError";
+  }
+}
+
+function readConfigFile(path: string): ConfigFile | null {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new ConfigError(path, (err as Error).message);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new ConfigError(path, `not valid JSON — ${(err as Error).message}`);
+  }
+
+  const result = ConfigFileSchema.safeParse(parsed);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const key = issue?.path.join(".") ?? "<root>";
+    throw new ConfigError(path, `invalid key "${key}" — ${issue?.message ?? "unknown"}`);
+  }
+  return result.data;
+}
+
+export interface ConfigFlags {
+  defaultProvider?: string | undefined;
+  defaultModel?: string | undefined;
+  plannerProvider?: string | undefined;
+  plannerModel?: string | undefined;
+}
+
+function providerOrThrow(value: string, origin: string): ProviderId {
+  const parsed = ProviderIdSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new ConfigError(origin, `unknown provider "${value}"`);
+  }
+  return parsed.data;
+}
+
+function envLayer(env: NodeJS.ProcessEnv): ConfigFile {
+  const values: ConfigFile = {};
+  const set = (
+    section: "defaults" | "planner",
+    key: "provider" | "model",
+    raw: string | undefined,
+  ): void => {
+    if (raw === undefined || raw === "") return;
+    const target = (values[section] ??= {});
+    if (key === "provider") target.provider = providerOrThrow(raw, "env");
+    else target.model = raw;
+  };
+  set("defaults", "provider", env["BAYA_DEFAULT_PROVIDER"]);
+  set("defaults", "model", env["BAYA_DEFAULT_MODEL"]);
+  set("planner", "provider", env["BAYA_PLANNER_PROVIDER"]);
+  set("planner", "model", env["BAYA_PLANNER_MODEL"]);
+  return values;
+}
+
+function flagLayer(flags: ConfigFlags): ConfigFile {
+  const values: ConfigFile = {};
+  if (flags.defaultProvider) {
+    values.defaults = { provider: providerOrThrow(flags.defaultProvider, "flags") };
+  }
+  if (flags.defaultModel) {
+    values.defaults = { ...values.defaults, model: flags.defaultModel };
+  }
+  if (flags.plannerProvider) {
+    values.planner = { provider: providerOrThrow(flags.plannerProvider, "flags") };
+  }
+  if (flags.plannerModel) {
+    values.planner = { ...values.planner, model: flags.plannerModel };
+  }
+  return values;
+}
+
+export interface LoadConfigOptions {
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+  flags?: ConfigFlags;
+}
+
+export function loadConfig(options: LoadConfigOptions): LoadedConfig {
+  const env = options.env ?? process.env;
+  const userPath = userConfigPath(env);
+  const projectPath = projectConfigPath(options.cwd);
+
+  const user = readConfigFile(userPath);
+  const project = readConfigFile(projectPath);
+
+  const layers: ConfigLayer[] = [
+    { name: "flags", origin: "command line", values: flagLayer(options.flags ?? {}) },
+    { name: "env", origin: "BAYA_* environment", values: envLayer(env) },
+    { name: "project", origin: projectPath, values: project ?? {} },
+    { name: "user", origin: userPath, values: user ?? {} },
+    { name: "built-in", origin: "built-in defaults", values: {} },
+  ];
+
+  const config: ResolvedConfig = {
+    defaults: { ...BUILTIN_CONFIG.defaults },
+    planner: { ...BUILTIN_CONFIG.planner },
+    providers: {},
+  };
+  const sources: Record<string, LayerName> = {
+    "defaults.provider": "built-in",
+    "defaults.model": "built-in",
+    "planner.provider": "built-in",
+    "planner.model": "built-in",
+  };
+
+  // Lowest precedence first, so a higher layer simply overwrites.
+  for (const layer of [...layers].reverse()) {
+    for (const section of ["defaults", "planner"] as const) {
+      const values = layer.values[section];
+      if (!values) continue;
+      if (values.provider !== undefined) {
+        config[section].provider = values.provider;
+        sources[`${section}.provider`] = layer.name;
+      }
+      if (values.model !== undefined) {
+        config[section].model = values.model;
+        sources[`${section}.model`] = layer.name;
+      }
+    }
+    for (const [id, settings] of Object.entries(layer.values.providers ?? {})) {
+      const providerId = id as ProviderId;
+      config.providers[providerId] = { ...config.providers[providerId], ...settings };
+      for (const key of Object.keys(settings)) {
+        sources[`providers.${providerId}.${key}`] = layer.name;
+      }
+    }
+  }
+
+  // The planner falls back to the task default rather than to nothing: a user
+  // who answered one setup question has answered this one too.
+  if (config.planner.provider === null && config.defaults.provider !== null) {
+    config.planner.provider = config.defaults.provider;
+    sources["planner.provider"] = sources["defaults.provider"] ?? "built-in";
+  }
+
+  return {
+    config,
+    sources,
+    layers,
+    userPath,
+    projectPath,
+    userConfigExists: user !== null,
+  };
+}
+
+/** Atomic write (config.md), like `state.json`: no torn file is ever observable. */
+export function writeConfigFile(path: string, values: ConfigFile): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const body = { version: CONFIG_VERSION, ...values };
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+  renameSync(tmp, path);
+}
+
+export function readUserConfig(env: NodeJS.ProcessEnv = process.env): ConfigFile {
+  return readConfigFile(userConfigPath(env)) ?? {};
+}
+
+/** `baya config set <key> <value>`. Returns the file it wrote. */
+export function setConfigValue(
+  key: string,
+  value: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const path = userConfigPath(env);
+  const current = readConfigFile(path) ?? {};
+  const [section, field] = key.split(".");
+
+  if ((section !== "defaults" && section !== "planner") || !field) {
+    throw new ConfigError(path, `unknown config key "${key}"`);
+  }
+  const next: ConfigFile = { ...current, [section]: { ...current[section] } };
+  const target = next[section] as { provider?: ProviderId | null; model?: string | null };
+
+  if (field === "provider") {
+    target.provider = value === "null" ? null : providerOrThrow(value, path);
+  } else if (field === "model") {
+    target.model = value === "null" ? null : value;
+  } else {
+    throw new ConfigError(path, `unknown config key "${key}"`);
+  }
+
+  writeConfigFile(path, next);
+  return path;
+}

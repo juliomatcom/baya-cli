@@ -33,9 +33,16 @@ export default tseslint.config(
     },
   },
   {
-    // M0.2's spike proves chalk loads under Jest+ESM; it predates the
-    // theme.ts-only rule and isn't part of the app's runtime import graph.
-    files: ["src/ui/theme.ts", "test/unit/esm-spike.test.ts"],
+    // The single permitted importer of each terminal-owning library. M0.2's
+    // spike proves chalk loads under Jest+ESM; it predates the theme.ts-only
+    // rule and isn't part of the app's runtime import graph.
+    files: [
+      "src/ui/theme.ts",
+      "src/ui/progress.ts",
+      "src/config/wizard.ts",
+      "src/ui/confirm.ts",
+      "test/unit/esm-spike.test.ts",
+    ],
     rules: {
       "no-restricted-imports": "off",
     },
