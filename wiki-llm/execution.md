@@ -5,7 +5,7 @@
 
 ## Scheduler
 
-Loop: compute ready-set (all `depends_on` `succeeded`) → admit tasks while **global budget** *and* **per-provider budget** *and* **workspace lock** allow → spawn → on completion, re-evaluate. Terminates when no task is `running` or `parked` and the ready-set is empty.
+Loop: compute ready-set (all `depends_on` `succeeded`) → admit tasks while **global budget** *and* **per-provider budget** *and* the **writer semaphore** allow → spawn → on completion, re-evaluate. Terminates when no task is `running` or `parked` and the ready-set is empty.
 
 | Budget | Source | Default |
 | :-- | :-- | :-- |
@@ -16,11 +16,11 @@ Per-provider caps default conservative because these run on **consumer subscript
 
 ## Workspace isolation
 
-**v1 — `--isolation shared` (default).** Read-only tasks (`writes: false`) run fully parallel. Any `writes: true` task acquires the **single-writer workspace lock**, so writers serialize against each other while readers continue.
+**v1 — `--isolation shared` (default).** Read-only tasks (`writes: false`) run fully parallel. Any `writes: true` task takes the **single-writer semaphore**, so writers serialize against each other while readers continue.
 
-The lock is a **cross-process advisory lockfile** (`.baya/workspace.lock`, `O_EXCL` + pid + heartbeat), not an in-process mutex — several `baya` processes may share a working tree, and an in-memory lock would not see them. Released on normal exit and on signal teardown; stale locks reclaimed per [recovery.md](recovery.md).
+The lock is an **in-memory semaphore in the scheduler** — nothing on disk. Only one Baya runs per directory ([recovery.md](recovery.md)), so there is no second process to coordinate with, and a file lock here would be machinery without a job.
 
-**`later` — `--isolation worktree`.** One `git worktree add .baya/wt/<id>` per writing task for true parallel writes, plus an end-of-run merge/report step. Deferred: conflict resolution is a large surface and buys nothing until write-parallelism is a measured bottleneck.
+**`later` — `--isolation worktree`.** One `git worktree add .baya/wt/<id>` per writing task for true parallel writes, plus an end-of-run merge/report step. Deferred: conflict resolution is a large surface and buys nothing until write-parallelism is a measured bottleneck. Note that a *user-level* worktree already covers the "two task lists, one repo" case with none of that machinery ([recovery.md](recovery.md)).
 
 > Without this, two agents editing the same repo clobber each other and runs stop being reproducible. The original spec mandated parallelism and never addressed it.
 

@@ -11,7 +11,7 @@
 | 2 | Validation | `src/manifest/` | Zod parse, id uniqueness, dep resolution, cycle detection, provider allowlist. | **Pure** |
 | 3 | Graph | `src/graph/` | Topological layering, ready-set computation, descendant marking. | **Pure** |
 | 4 | Providers | `src/providers/` | One adapter per CLI. argv construction, prompt delivery, event parsing, result extraction, resume. | Pure build + I/O resolve |
-| 5 | Execution | `src/executor/` | Scheduler, concurrency budgets, workspace locks, isolation, subprocess lifecycle, signals. | I/O |
+| 5 | Execution | `src/executor/` | Scheduler, concurrency budgets, writer semaphore, subprocess lifecycle, signals. | I/O |
 | 6 | Context | `src/context/` | Result persistence, context assembly, budgeting strategies. | Mostly pure |
 | 7 | Escalation | `src/escalation/` | Park queue, stdin ownership, question rendering, session resume dispatch. | I/O |
 | 8 | Presentation | `src/ui/` | DAG preview, live status, run report, `--json` output. `theme.ts` is the sole chalk importer. | I/O |
@@ -93,7 +93,7 @@ pending ──deps met──► ready ──budget+lock──► running
       └─ stderr.log
 ```
 
-`runId` is `<utc-timestamp>-<rand>-<pid>` — lexically sortable and collision-free across concurrent processes. **Several `baya` processes may run simultaneously**; all shared state is guarded by cross-process file locks ([recovery.md](recovery.md)).
+`runId` is `<utc-timestamp>-<rand>-<pid>` — lexically sortable and unique. **A working tree hosts at most one Baya at a time**, enforced by `.baya/baya.lock`; a second is refused rather than coordinated with ([recovery.md](recovery.md)).
 
 ## Trust boundaries
 

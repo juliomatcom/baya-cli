@@ -55,7 +55,7 @@ Four ideas do most of the work:
 
 - **JSON on the wire, both directions.** Every exchange with a provider is a validated envelope, never prose. `codex` and `claude` enforce the result schema natively. A question from an agent is a `status: "needs_input"` field — not a question mark spotted in a stream.
 - **The planner picks a provider, never a command.** Manifests carry a provider name from a closed enum; adapters alone build `argv`. `shell: true` is banned repo-wide.
-- **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume --provider claude` picks up exactly where it stopped.
+- **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume <runId> --provider claude` picks up exactly where it stopped.
 - **Providers are watched, not trusted.** Their flag surfaces are live-probed and contract-tested, their output is ANSI-stripped and schema-validated.
 
 ## Install
@@ -74,8 +74,9 @@ Requires **Node 24+** and at least one supported CLI on your machine. Run `baya 
 baya ./tasks.md                    # plan it, show it, run it
 baya ./tasks.md --dry-run          # show the plan, run nothing
 baya ./tasks.md --max-parallel 4
-baya resume                        # continue an interrupted run
-baya resume --provider claude      # ...on a different provider
+baya runs                          # list interrupted runs
+baya resume <runId>                # continue one of them
+baya resume <runId> --provider claude   # ...on a different provider
 baya doctor                        # check provider installs
 baya config                        # change your default provider
 ```
@@ -148,7 +149,7 @@ Adding a provider is deliberately small: one adapter, one capability block, one 
 
 **Does this need API keys?** No. It drives locally installed CLIs under whatever subscription you already have.
 
-**Is it safe to run in parallel?** Read-only tasks run concurrently; anything that writes takes a cross-process lock, so writers serialize. Several `baya` processes can share a repo safely.
+**Is it safe to run in parallel?** Read-only tasks run concurrently; anything that writes is serialized by the scheduler. One Baya runs per directory — a second is refused rather than left to fight over the same files. To run two task lists against one repo, give each its own `git worktree`.
 
 ## License
 
