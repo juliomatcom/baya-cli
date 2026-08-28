@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "bin": {
-    "baya": "dist/cli/index.js"
+    "baya": "dist/cli/bin.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -21,7 +21,9 @@
     "test:contract": "BAYA_CONTRACT=1 node --experimental-vm-modules node_modules/.bin/jest --config jest.contract.config.js"
   },
   "dependencies": {
+    "@inquirer/prompts": "^8.7.0",
     "chalk": "^6.0.0",
+    "ora": "^9.4.1",
     "zod": "^3.24.0"
   },
   "devDependencies": {

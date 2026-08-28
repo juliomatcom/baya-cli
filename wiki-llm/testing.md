@@ -12,38 +12,51 @@ Every component depends on spawning nondeterministic, rate-limited, paid subproc
 `test/fixtures/fake-provider.mjs` — a real executable that any adapter can be pointed at via `.baya/config.json` binary override. It reads a scenario from `BAYA_FAKE_SCRIPT` (a JSON file) and replays it deterministically:
 
 ```json
-{ "emit": [ { "delay_ms": 10, "line": "{\"type\":\"session\",\"id\":\"s-1\"}" },
-            { "delay_ms": 10, "line": "{\"type\":\"text\",\"text\":\"working\"}" } ],
-  "final": { "baya": "1", "kind": "task_result", "task_id": "t1", "status": "ok",
-             "summary": "done", "output": "…" },
+{
+  "emit": [
+    { "delay_ms": 10, "line": "{\"type\":\"session\",\"id\":\"s-1\"}" },
+    { "delay_ms": 10, "line": "{\"type\":\"text\",\"text\":\"working\"}" }
+  ],
+  "final": {
+    "baya": "1",
+    "kind": "task_result",
+    "task_id": "t1",
+    "status": "ok",
+    "summary": "done",
+    "output": "…"
+  },
   "exit_code": 0,
-  "on_signal": "exit" }
+  "on_signal": "exit"
+}
 ```
 
 Scenario knobs it must support — each maps to a real failure mode:
 
-| Knob | Exercises |
-| :-- | :-- |
-| `final.status: needs_input` | Park → bubble → resume path |
-| `exit_code: 1` + `stderr` | Failure → descendants `skipped` |
-| `final` = malformed / prose-wrapped | Result-parsing degradation ladder |
-| `hang_ms` + `on_signal: "ignore"` | SIGINT teardown, grace window, SIGKILL escalation |
-| `spawn_child: true` | **Grandchild reaping** — process-group teardown |
-| `emit` with unknown event types | `ProviderEvent.unknown` passthrough |
-| `emit` lines containing ANSI escapes | ANSI stripping before persist/render |
-| `error.kind: rate_limit` | Retry classification and backoff |
-| `writes_file` | Workspace write-lock serialization |
-| `expect_stdin` / `expect_file` | Prompt-delivery preference chain |
+| Knob                                 | Exercises                                          |
+| :----------------------------------- | :------------------------------------------------- |
+| `final.status: needs_input`          | Park → bubble → resume path                        |
+| `exit_code: 1` + `stderr`            | Failure → descendants `skipped`                    |
+| `final` = malformed / prose-wrapped  | Result-parsing degradation ladder                  |
+| `hang_ms` + `on_signal: "ignore"`    | SIGINT teardown, grace window, SIGKILL escalation  |
+| `spawn_child: true`                  | **Grandchild reaping** — process-group teardown    |
+| `emit` with unknown event types      | `ProviderEvent.unknown` passthrough                |
+| `emit` lines containing ANSI escapes | ANSI stripping before persist/render               |
+| `error.kind: rate_limit`             | Retry classification and backoff                   |
+| `writes_file`                        | Workspace write-lock serialization                 |
+| `expect_stdin` / `expect_file`       | Prompt-delivery preference chain                   |
+| `by_task` map keyed by task id       | One scenario file scripting a whole multi-task run |
+
+The fixture also emulates the **codex file-out contract**: when argv carries `-o <path>`, `final` is written to that file rather than to stdout, and the task id is read back from the path (`tasks/<id>/result.json`). That is what lets one scenario file script an entire run with no stdin coordination — and it is why `test/helpers/runCli.ts` can drive the real CLI end to end by pointing `.baya/config.json` at the fixture, exactly as a user would set a binary override.
 
 **Every engine test runs against this. Zero network, zero LLM, zero cost, deterministic.**
 
 ## Tiers
 
-| Tier | Scope | Command | CI |
-| :-- | :-- | :-- | :-- |
-| **Unit** | Pure layers: manifest validation, cycle detection, topo order, alias resolution, context budgeting, redaction, **adapter argv snapshots**. | `npm test` | ✅ |
-| **Integration** | Full engine against fake providers. | `npm test` | ✅ |
-| **Contract** | Real binaries, trivial prompt, asserts flag surfaces still hold. | `BAYA_CONTRACT=1 npm run test:contract` | ❌ offline |
+| Tier            | Scope                                                                                                                                      | Command                                 | CI         |
+| :-------------- | :----------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :--------- |
+| **Unit**        | Pure layers: manifest validation, cycle detection, topo order, alias resolution, context budgeting, redaction, **adapter argv snapshots**. | `npm test`                              | ✅         |
+| **Integration** | Full engine against fake providers.                                                                                                        | `npm test`                              | ✅         |
+| **Contract**    | Real binaries, trivial prompt, asserts flag surfaces still hold.                                                                           | `BAYA_CONTRACT=1 npm run test:contract` | ❌ offline |
 
 Contract tests are the defense against provider drift — exactly the class of bug that made the original spec's universal `-p` assumption wrong (`codex -p` = `--profile`). Run before every release; never in offline CI.
 
@@ -63,13 +76,13 @@ Contract tests are the defense against provider drift — exactly the class of b
 ## Color in tests
 
 - **All snapshot tests run with color forced off** (`FORCE_COLOR=0`, chalk level `0`, set in Jest global setup). Colored snapshots are unstable across CI/TTY environments and unreadable in diffs.
-- A dedicated test asserts the inverse: with color forced *on*, `theme` tokens emit the expected ANSI and every status still carries its glyph.
+- A dedicated test asserts the inverse: with color forced _on_, `theme` tokens emit the expected ANSI and every status still carries its glyph.
 - A test asserts `--json` output parses as JSON **with color forced on** — the regression guard for ANSI leaking into machine-readable output.
 - A test feeds ANSI escape sequences through the fake provider's output and asserts they are stripped from `events.jsonl`, `stdout.log`, and the rendered display.
 
 ## Conventions
 
-- Jest with `@swc/jest` (see `conventions.md` for the ESM caveat). Coverage gate on `src/manifest`, `src/graph`, `src/context` — the pure layers — at 90%.
+- Jest with `@swc/jest` (see `conventions.md` for the ESM caveat). Coverage gate on `src/manifest`, `src/graph`, `src/context` — the pure layers — at 90% statements/lines/functions. The branch floor is lower and deliberately so: `noUncheckedIndexedAccess` forces a `?? []` on every `Map.get`, and those arms describe states earlier validation stages have already ruled out. Chasing them would mean writing tests for impossible inputs.
 - No test touches the network or a real provider outside the contract tier.
 - No test writes outside its own `tmp` dir; `.baya/` roots are per-test temp dirs.
 - Every bug fix lands with a failing-first regression test.

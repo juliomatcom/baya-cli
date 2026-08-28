@@ -1,0 +1,45 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`renderHelp matches the recorded help output 1`] = `
+"baya — orchestrate local AI coding CLIs from a Markdown task list
+
+USAGE
+  baya <file.md> [options]        run a task list (default)
+  baya run|plan <file.md>         explicit form
+  baya doctor                     check provider installs
+  baya config [--show|path|set]   change defaults
+
+PROVIDERS
+  codex      ✗ not found — npm i -g @openai/codex
+
+OPTIONS
+  --dry-run                  render the plan and exit
+  -y, --yes                  auto-confirm the plan gate
+  --plan-out <f>             write the manifest and exit
+  --plan-in <f>              execute a manifest directly, skipping planning
+  --planner-provider <id>    provider that plans the Markdown
+  --planner-model <m>        unset means the provider's own default
+  --default-provider <id>    provider for tasks that name none
+  --default-model <m>        unset means the provider's own default
+  --max-tasks <n>            planner output ceiling (default 50)
+  --context-strategy <s>     link-only (default) | truncate
+  --context-budget <n>       total inline chars (default 12000)
+  --dangerously-allow-all    full permission bypass
+  --json                     machine-readable run report on stdout
+  --log-level <l>            trace|debug|info|warn|error (default info)
+  --verbose                  alias for --log-level debug
+  --quiet                    alias for --log-level warn
+  --no-progress              disable the spinner
+  --no-color                 disable ANSI
+
+EXAMPLES
+  baya ./tasks.md
+  baya ./tasks.md --default-provider codex
+  baya ./tasks.md --dry-run          # show the plan, run nothing
+  baya plan tasks.md --plan-out plan.json
+  baya run tasks.md --plan-in plan.json --yes
+
+  Run \`baya doctor\` to check installs, \`baya config\` to change defaults.
+  Full reference: wiki-llm/cli.md
+"
+`;

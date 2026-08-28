@@ -1,0 +1,63 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`codexAdapter.buildRun argv builds a resume around the captured thread id 1`] = `
+[
+  "/usr/local/bin/codex",
+  "exec",
+  "resume",
+  "thread-42",
+  "--json",
+  "--color",
+  "never",
+  "--skip-git-repo-check",
+  "-C",
+  "/work",
+  "-s",
+  "read-only",
+  "--output-schema",
+  "/work/.baya/schema/task_result.schema.json",
+  "-o",
+  "/work/.baya/runs/r1/tasks/gen-schema/result.json",
+  "-",
+]
+`;
+
+exports[`codexAdapter.buildRun argv matches the recorded surface 1`] = `
+[
+  "/usr/local/bin/codex",
+  "exec",
+  "--json",
+  "--color",
+  "never",
+  "--skip-git-repo-check",
+  "-C",
+  "/work",
+  "-s",
+  "read-only",
+  "--output-schema",
+  "/work/.baya/schema/task_result.schema.json",
+  "-o",
+  "/work/.baya/runs/r1/tasks/gen-schema/result.json",
+  "-",
+]
+`;
+
+exports[`codexAdapter.buildRun argv uses workspace-write only when the task writes 1`] = `
+[
+  "/usr/local/bin/codex",
+  "exec",
+  "--json",
+  "--color",
+  "never",
+  "--skip-git-repo-check",
+  "-C",
+  "/work",
+  "-s",
+  "workspace-write",
+  "--output-schema",
+  "/work/.baya/schema/task_result.schema.json",
+  "-o",
+  "/work/.baya/runs/r1/tasks/gen-schema/result.json",
+  "-",
+]
+`;
