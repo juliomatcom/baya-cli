@@ -111,6 +111,25 @@ describe("baya --help", () => {
     expect(result.stdout).toContain("baya ./tasks.md");
   });
 
+  it("shows each resolved provider's version, not a placeholder", async () => {
+    const result = await runCli(["--help"]);
+    expect(result.stdout).toContain("fake-provider 1.0.0");
+    expect(result.stdout).not.toContain("unknown");
+  });
+
+  it("resolves through the config's binary override, as every command must", async () => {
+    const result = await runCli(["--help"]);
+    expect(result.stdout).toContain(FAKE_PROVIDER);
+  });
+
+  it("still prints when the config is unreadable — help must survive a broken setup", async () => {
+    const workspace = makeWorkspace({});
+    writeFileSync(join(workspace.cwd, ".baya", "config.json"), "{oops");
+    const result = await runCli(["--help"], { workspace });
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("USAGE");
+  });
+
   it("is what a bare invocation shows", async () => {
     const result = await runCli([]);
     expect(result.stdout).toContain("USAGE");

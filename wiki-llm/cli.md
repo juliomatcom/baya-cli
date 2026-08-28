@@ -78,7 +78,7 @@ USAGE
   baya config [--show|path|set]   change defaults
 
 PROVIDERS
-  codex       ✓ 0.5x   ~/.local/bin/codex
+  codex      ✓ codex-cli 0.148.0  ~/.local/bin/codex
 
 EXAMPLES
   baya ./tasks.md
@@ -91,7 +91,7 @@ EXAMPLES
   Full reference: wiki-llm/cli.md
 ```
 
-Version strings and paths above are illustrative; real values come from `resolve()`. **The block lists exactly the registered adapters** — v1 registers `codex` alone; M3 adds the other three and the help snapshot changes with no other edit. **The provider block lists exactly the registered adapters** — v1 registers `codex`; M3 adds the other three, and the help snapshot changes with no other edit.
+Version strings and paths above are illustrative; real values come from `resolve()`, which runs `<bin> --version` per adapter — concurrently, ~20ms each. The string is whatever the CLI prints, unparsed; the column is sized to the widest one. **The block lists exactly the registered adapters** — v1 registers `codex` alone; M3 adds the other three and the help snapshot changes with no other edit. **The provider block lists exactly the registered adapters** — v1 registers `codex`; M3 adds the other three, and the help snapshot changes with no other edit.
 
 ## First run
 
