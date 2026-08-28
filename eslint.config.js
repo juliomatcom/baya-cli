@@ -2,6 +2,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier";
+import { CHALK_RESTRICTED_IMPORTS } from "./eslint-rules/chalk-restriction.js";
 import localRules from "./eslint-rules/index.js";
 
 export default tseslint.config(
@@ -23,11 +24,20 @@ export default tseslint.config(
     },
     rules: {
       "local/no-shell-exec": "error",
+      "no-restricted-imports": ["error", CHALK_RESTRICTED_IMPORTS],
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "no-console": "error",
+    },
+  },
+  {
+    // M0.2's spike proves chalk loads under Jest+ESM; it predates the
+    // theme.ts-only rule and isn't part of the app's runtime import graph.
+    files: ["src/ui/theme.ts", "test/unit/esm-spike.test.ts"],
+    rules: {
+      "no-restricted-imports": "off",
     },
   },
   {
