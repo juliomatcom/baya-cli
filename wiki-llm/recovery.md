@@ -52,33 +52,52 @@ At `.baya/runs/<runId>/state.json`. Rewritten **atomically** (write tmp → `ren
 
 `config_snapshot` makes a resume reproduce the original run's settings rather than silently picking up changed config.
 
-## Concurrent Baya processes
+## One Baya per directory
 
-**Several `baya` processes may run at once — same machine, same repo, different repos.** State is per run, never global, and every shared resource is guarded by a cross-process file lock rather than in-process state.
+**A working tree hosts at most one Baya at a time.** On startup, `run` and `resume` take `.baya/baya.lock` and hold it for the process lifetime. A second Baya in the same directory is refused outright:
+
+```
+✗ another baya is already running in this directory
+    pid 44119 · run 20260828T2152Z-a1f4c9 · started 3m ago
+```
+
+> **Why refuse rather than coordinate.** Two Bayas in one tree means two sets of agents editing the same files. That is a state to prevent, not to support. Refusing costs a use case nobody wants and removes an entire class of machinery: no cross-process write lock, no double-spend guard on resume, no reconciling two processes' views of the same run.
+
+This also collapses several guarantees into one. A second `baya resume` of the same run cannot double-spend credits, because it cannot start at all.
 
 | Resource | Guarantee |
 | :-- | :-- |
-| **`runId`** | `<utc-timestamp>-<rand>-<pid>`. Two processes starting in the same second cannot collide. |
-| **Run directory** | `.baya/runs/<runId>/` is owned by exactly one process. Nothing outside it is written per-run. |
-| **Run lock** | An active run holds `.baya/runs/<runId>/run.lock` (pid + host + heartbeat). A second process attempting the same run is refused, not queued. |
-| **Workspace write lock** | An **advisory lockfile** at `.baya/workspace.lock` (`O_EXCL` + pid + heartbeat), so writers serialize **across processes**, not merely across tasks in one process. An in-memory mutex would be worthless here. |
-| **Config / plan cache** | Atomic `rename`. Concurrent writes resolve last-write-wins; no torn file is ever observable. |
-| **Logs** | Per-run files only. No shared global log, so no contention. |
-| **`.baya/` creation** | `mkdir` recursive, race-tolerant — `EEXIST` is success. |
+| **Directory** | One `.baya/baya.lock`, held for the process lifetime. |
+| **`runId`** | `<utc-timestamp>-<rand>-<pid>` — sortable and unique. |
+| **Writers within a run** | Serialized by an **in-memory semaphore in the scheduler**. No file lock: there is only one process, so there is nothing to coordinate across. |
+| **Config / plan cache** | Atomic `rename`; no torn file is ever observable. |
+| **Logs** | Per-run files. |
+| **`.baya/` creation** | `mkdir` recursive; `EEXIST` is success. |
 
 ### Stale locks
 
-Every lock stores pid, host, and a heartbeat timestamp. A lock is stale only when the pid is gone **and** the heartbeat has aged past threshold. Stale locks are reclaimed with a logged warning; live ones are never broken.
+This is the part that earns its keep: a crashed Baya leaves its lock behind, and the next run must reclaim it rather than wedging the repo forever.
+
+A lock is stale when its heartbeat has aged past threshold **and** its pid is gone. A fresh heartbeat alone proves liveness, so a live Baya is never displaced. Stale locks are reclaimed with a logged warning.
+
+**Accepted limitation:** if the OS recycles a crashed holder's pid onto an unrelated process, the lock looks live indefinitely and must be deleted by hand. `baya doctor` reports the path. Erring toward a stuck lock is the right trade — the opposite error lets two Bayas loose in one tree.
+
+An unparseable lock file is never removed automatically; we cannot tell whether its holder lives. `doctor` names the file for a human to delete.
 
 ### ⚠️ `baya doctor` must not reap a live run
 
-`doctor` reaps orphaned process groups left by crashed runs. **A naive implementation would kill a concurrently running Baya's children.**
+`doctor` reaps orphaned process groups left by crashed runs. **A naive implementation would kill a running Baya's children.** Reap only when `.baya/baya.lock` is stale by the rule above — never on pid-liveness alone. When in doubt, report and leave it.
 
-Reap a run's process group only when its `run.lock` is **stale** by the rule above. Never reap on pid-liveness alone, and never reap a run whose lock is held. When in doubt, report and leave it.
+### Running two task lists against one repo
 
-### `baya resume` with no argument
+Not supported in-process, and deliberately so. The answer is isolation at the *user* level: a second `git worktree` is a second checkout with its own `.baya/`, so two Bayas share no state at all.
 
-Selects the most recent **resumable** run — one that is not currently locked by a live process. A live run is never a resume candidate. If several are equally resumable, list them and ask rather than guessing.
+```bash
+git worktree add ../baya-feature-x feature-x
+cd ../baya-feature-x && baya ./tasks.md
+```
+
+Worth keeping in mind if per-task write parallelism is ever revisited (`--isolation worktree`, still `later` in `execution.md`): a user-level worktree already delivers most of the benefit with none of the merge machinery.
 
 ## Failure taxonomy
 
@@ -105,12 +124,14 @@ This is exactly the "no more credits" case: the run stops cleanly, everything fi
 ## Resume
 
 ```bash
-baya resume                      # most recent resumable run
-baya resume <runId>
+baya runs                               # list resumable runs and their ids
+baya resume <runId>                     # the explicit form
+baya resume                             # pick from a list of resumable runs
 baya resume <runId> --provider claude   # re-run the unfinished work elsewhere
 baya resume <runId> --yes               # non-interactive: retry all retryable, skip the rest
-baya runs                               # list resumable runs
 ```
+
+**`resume` never guesses which run you meant.** Several runs can sit paused at once — a quota stop from yesterday, an interrupt from an hour ago — and silently picking "the most recent" would resume the wrong one and spend real credits doing it. With no `runId`, resume shows a picker; with no TTY, it exits `2` and tells you to run `baya runs`.
 
 **Re-run:** `failed`, `skipped`, `parked`, and any `running`/`pending` left behind by a crash.
 **Kept:** every `succeeded` task, including its outputs, which stay available as downstream context.
@@ -149,7 +170,7 @@ Run 20260828T2152Z-a1f4c9 · tasks.md · interrupted 4m ago
 | Situation | Behavior |
 | :-- | :-- |
 | `tasks.md` changed since the run (`source.sha256` mismatch) | Warn that the stored plan is stale; offer *re-plan* / *continue with stored manifest* / *abort*. Never silently execute a stale plan. |
-| Another process is on the same run | A run lockfile (pid + staleness check) refuses the second resume rather than double-spending credits. |
+| Another Baya is running here | The directory lock refuses it at startup, so a second resume cannot double-spend credits. |
 | Not a TTY | No prompt. `--yes` retries everything retryable and skips the rest; without it, exit `2`. |
 | `state.json` unreadable or malformed | Report the file and stop. Never silently start a fresh run — that would re-spend money already spent. |
 

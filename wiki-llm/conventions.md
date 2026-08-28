@@ -60,7 +60,7 @@ specs/001/     point-in-time refinement record
 15. **Restore the terminal cursor on every exit path.** `ora` hides it; SIGINT/SIGTERM/`uncaughtException` must all restore it.
 16. **Stop the spinner before any prompt.** A live spinner and a prompt corrupt each other.
 16b. **All persistent terminal output goes through `src/ui/progress.ts`.** Writing straight to stderr while `ora` spins garbles the line — the progress module clears, writes, and re-renders.
-17. **All cross-process coordination uses file locks with pid + heartbeat.** In-memory mutexes never guard shared resources — several `baya` processes may share a working tree.
+17. **One Baya per directory**, enforced by `.baya/baya.lock` at startup. Coordination *within* a run is in-memory; the lock file exists only to refuse a second process and to survive a crash.
 18. **Log before acting, never after** — and never to stdout.
 19. **Never encode meaning in color alone.** Every colored status also carries a glyph, so the output survives piping, `NO_COLOR`, and colorblind readers.
 

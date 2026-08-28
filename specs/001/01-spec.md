@@ -154,7 +154,7 @@ Baya never guesses. Each task carries a policy mapped per adapter (`codex -s wor
 Global `--max-parallel` (default `min(4, cpus)`); per-provider `maxConcurrency` from capabilities (default **1** for `claude` and `copilot` until measured — B7); a task never starts unless both budgets allow.
 
 ### 5.3 Workspace isolation (B1)
-Default `--isolation shared`: read-only tasks run fully parallel; any `writes: true` task acquires a **single-writer workspace lock**, so writers serialize. `--isolation worktree`: each writing task gets `git worktree add .baya/wt/<id>`, runs isolated, and the run ends with a merge/report step listing per-task diffs and conflicts. Locks are pidfiles with staleness detection and are released on crash.
+Default `--isolation shared`: read-only tasks run fully parallel; any `writes: true` task takes an **in-memory scheduler semaphore**, so writers serialize. No file lock is needed — only one Baya runs per directory. `--isolation worktree` (`later`): each writing task gets `git worktree add .baya/wt/<id>` plus an end-of-run merge/report step.
 
 ### 5.4 Context bus (B4)
 Upstream results land at `…/tasks/<id>/result.json` and `output.md`. Downstream `task_request.context[]` carries `summary` + **absolute paths** by default. Overflow strategy `--context-strategy link-only | truncate | summarize` (default **`link-only`**), with per-edge and total budgets (`--context-budget`, default 12000 chars total / 6000 per edge).
@@ -178,7 +178,7 @@ Out of scope: PTY multiplexing, keystroke injection, alternate-buffer scraping.
 Children spawn `detached: true` in their own process group. SIGINT → `kill(-pgid, SIGTERM)` → 5 s grace → `SIGKILL`. Second Ctrl-C kills immediately. Same path on SIGTERM/SIGHUP/`uncaughtException`. Live pids are checkpointed so a later `baya doctor` can reap strays.
 
 ### 5.8 Run state & recovery (B6) — **v1**
-`.baya/runs/<runId>/state.json` written **atomically** (tmp + rename) **before** every transition, carrying task states, session ids, timings, cost, and a normalized `failure` record. `baya resume [runId]` re-runs `failed`/`skipped`/`parked`/interrupted nodes while keeping every `succeeded` output as context; `--provider` re-runs them elsewhere. `quota`/`auth` failures are `retry: "later"` and never consume retry attempts. Full schema, taxonomy, and recovery prompt: **[`wiki-llm/recovery.md`](../../wiki-llm/recovery.md)**.
+`.baya/runs/<runId>/state.json` written **atomically** (tmp + rename) **before** every transition, carrying task states, session ids, timings, cost, and a normalized `failure` record. `baya resume <runId>` re-runs `failed`/`skipped`/`parked`/interrupted nodes while keeping every `succeeded` output as context; with no `runId` it offers a picker and **never guesses**, since several runs may sit paused at once; `--provider` re-runs them elsewhere. `quota`/`auth` failures are `retry: "later"` and never consume retry attempts. Full schema, taxonomy, and recovery prompt: **[`wiki-llm/recovery.md`](../../wiki-llm/recovery.md)**.
 
 ## 6. CLI Surface
 
@@ -188,7 +188,7 @@ Children spawn `detached: true` in their own process group. SIGINT → `kill(-pg
 baya <file.md> [flags]         # bare path implies `run`
 baya run <file.md>             baya plan <file.md>     baya doctor
 baya config [--show|path|set <k> <v>]           # first-run wizard + defaults
-baya resume [runId] [--provider <id>]           baya runs
+baya resume <runId> [--provider <id>]           baya runs
 ```
 
 `-h/--help` must list every registered provider with its resolution status and show at least one runnable example.
@@ -214,7 +214,7 @@ baya resume [runId] [--provider <id>]           baya runs
 - **Zero footprint** — no daemon, no DB, no mandatory config. Optional `.baya/config.json` for provider overrides and concurrency caps. All run state under `.baya/` (gitignored).
 - **Live provider output** — every provider CLI's assistant prose, tool calls, and stderr is forwarded to the main process and surfaced at **`info`**, task-prefixed and ANSI-stripped. A running task is never a black box.
 - **Observability (B10)** — per-run `baya.jsonl` recording **every internal move** at `trace`, with a filtered stderr view; per-task `stdout.log`, `stderr.log`, `events.jsonl`, `request.json`, `result.json`. Live status table; `--json` report. Never stdout. Vocabulary: **[`wiki-llm/logging.md`](../../wiki-llm/logging.md)**.
-- **Multi-process safety** — several `baya` processes may run concurrently on one machine or one repo. State is per run (`runId` = `<utc-ts>-<rand>-<pid>`); every shared resource uses a cross-process lockfile with pid + heartbeat.
+- **One Baya per directory** — enforced by `.baya/baya.lock` (`O_EXCL` + pid + heartbeat) taken at startup. A second invocation in the same tree is refused with the holder's pid, runId, and age; a crashed holder's lock is reclaimed once its heartbeat ages and its pid is gone. Two task lists against one repo is a *user-level* `git worktree`, not an in-process feature.
 - **Presentation** — `chalk` v6 via semantic tokens in `src/ui/theme.ts` (the sole chalk importer). Status is always color **plus** glyph, never color alone. Machine-readable output (`--json` and all artifacts) is forced ANSI-free; provider ANSI is stripped as untrusted input.
 - **Redaction** — scrub `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`GITHUB_TOKEN`-shaped strings from logs and artifacts.
 - **Provider drift (B15)** — opt-in contract tests exercise real binaries; CI stays fully offline.

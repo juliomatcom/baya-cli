@@ -23,8 +23,8 @@ baya tasks.md --yes        # ≡ baya run tasks.md --yes
 | `baya plan <file.md>` | Plan and render the DAG; never executes. Equivalent to `run --dry-run`. | v1 |
 | `baya doctor` | Resolve every provider: path, version, capabilities, auth reachability. Reap stray process groups. | v1 |
 | `baya config` | Re-run the first-run wizard. `--show`, `path`, `set <key> <value>`. See [config.md](config.md). | v1 |
-| `baya resume [runId]` | Re-execute unfinished nodes of a prior run; `--provider <id>` re-runs them elsewhere. Interactive recovery prompt. See [recovery.md](recovery.md). | v1 |
-| `baya runs` | List resumable runs. | v1 |
+| `baya resume <runId>` | Re-execute unfinished nodes of a prior run; `--provider <id>` re-runs them elsewhere. With no `runId`, picks from a list — **never guesses**. See [recovery.md](recovery.md). | v1 |
+| `baya runs` | List resumable runs and their ids. | v1 |
 
 Run `baya doctor` first on any new machine — provider binaries are frequently not on `$PATH`.
 
@@ -84,8 +84,9 @@ EXAMPLES
   baya ./tasks.md
   baya ./tasks.md --default-provider codex --max-parallel 2
   baya ./tasks.md --dry-run          # show the plan, run nothing
-  baya resume                        # continue the last interrupted run
-  baya resume --provider claude      # ...on a different provider
+  baya runs                          # list resumable runs
+  baya resume <runId>                # continue one of them
+  baya resume <runId> --provider claude
 
   Run `baya doctor` to check installs, `baya config` to change defaults.
   Full reference: wiki-llm/cli.md

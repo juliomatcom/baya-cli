@@ -73,7 +73,7 @@ Every line carries **`run_id`**, so concurrent Baya processes stay distinguishab
 `signal.received` · `process.killed` (pgid, signal) · `process.escalated` (SIGTERM → SIGKILL) · `state.checkpointed` (`trace`) · `run.completed` (totals) · `run.failed` · `run.interrupted`
 
 ### Recovery
-`resume.requested` · `resume.state.loaded` · `resume.source.stale` (sha256 mismatch) · `resume.planned` (re-run vs kept) · `run.lock.refused`
+`resume.requested` · `resume.state.loaded` · `resume.source.stale` (sha256 mismatch) · `resume.planned` (re-run vs kept) · `lock.acquired` · `lock.refused` (holder pid/run/age) · `lock.reclaimed` (stale)
 
 > `provider.event` and `state.checkpointed` are the high-volume pair. They stay in the file at `debug`/`trace` and reach the terminal only under `--verbose`.
 
@@ -84,4 +84,4 @@ Every line carries **`run_id`**, so concurrent Baya processes stay distinguishab
 3. **Never log to stdout.**
 4. **Structured fields, not interpolated prose.** `{"event":"task.failed","kind":"quota"}`, never `"task failed: quota"`. The renderer composes the sentence.
 5. **Redact before write**, at the sink, so no call site can leak.
-6. Per-run files only — no shared global log, so concurrent processes never contend.
+6. Per-run files only — no shared global log to contend over.
