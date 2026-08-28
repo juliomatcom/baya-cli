@@ -1,0 +1,53 @@
+# 00 — Validation of `multi_model_cli_orchestrator_spec-gemini.md`
+
+> **Maintenance Invariant:** Findings only. Each entry cites evidence or marks itself UNVERIFIED. Do not add design here — design lives in `01-spec.md`.
+> Probe date: 2026-08-28. Host: darwin 25.6.0, node 22.14.0 active (24.19.0 available via nvm).
+
+## A. Falsified assumptions (evidence-backed)
+
+| # | Original claim | Reality | Impact |
+| :-- | :-- | :-- | :-- |
+| A1 | §2.3/§4 imply a shared `-p` prompt flag across CLIs | `codex -p` = `--profile`. Codex takes the prompt as a **positional** or **stdin**. `gemini -p` **is** prompt. `opencode run` takes a positional `[message..]`. | A per-provider adapter is mandatory, not a convenience. Blocks §2.3 as written. |
+| A2 | §2.3/§5.1 name `openai` as a provider binary; §4 uses `--default-model gpt-4o` | No agentic `openai` CLI exists. OpenAI's is **`codex`**. The `openai` pip CLI is API-key-based. | Directly contradicts §2.3 "Subscription Model Preservation." Both the binary and the model name are dead. |
+| A3 | §5.2 "function out of the box using binaries existing on `$PATH`" | After installing all four (2026-08-28): `claude`+`codex` → `~/.local/bin`, `copilot`+`gemini` → nvm bin, `opencode` → `~/.opencode/bin`. **Not one is in a system directory.** | Naive `$PATH` lookup is unreliable. Needs a resolution chain + `doctor`. |
+| A4 | §5.1 defaults `claude-3-5-haiku` / `claude-3-5-sonnet` / `gpt-4o` | All three are stale generations. Model IDs churn faster than this tool will ship. | Hard-coded model defaults are a maintenance trap. Default must be **unset** (defer to each provider's own default). |
+| A5 | §2.4 "detect interactive prompts … forward response into the child's stdin" | Headless modes (`codex exec`, `gemini -p`, `opencode run`) are built to **never** ask. Permissions resolve up-front via flags (`--approval-mode`, `-s/--sandbox`, `--dangerously-bypass-approvals-and-sandbox`). stdout is a JSONL event stream, not a REPL. | §2.4 is unimplementable as specified. **Resolved** → Pause & Resume (`01-spec.md` §5). |
+
+## B. Unaddressed edge cases (omissions)
+
+| # | Gap | Why it matters |
+| :-- | :-- | :-- |
+| B1 | **Concurrent writes to one working tree.** §2.4 mandates parallel execution; nothing isolates the filesystem. | Two agents editing the same repo clobber each other and produce non-reproducible runs. The single largest omission. **Resolved** → write-lock default, opt-in worktrees. |
+| B2 | **Planner output is a privilege boundary.** A planner-emitted manifest chooses which binary runs with which flags; §2.2 does not constrain its shape. | Untrusted/confused Markdown → arbitrary command execution. Manifest must forbid raw argv/shell; provider is a closed enum. |
+| B3 | **Planner failure modes.** No schema, no validation, no retry, no fallback. | LLMs emit cycles, dangling `depends_on`, duplicate ids, prose-wrapped JSON. A run must not die on a malformed plan. |
+| B4 | **Context bus scale.** §2.5 "prepend upstream output" with no fan-in bound. | A node with 5 upstream deps × 40 KB overflows any window. §5.2 mentions budgeting but names no strategy. |
+| B5 | **Failure semantics.** §5.2 says a failure "must halt dependent downstream tasks" — but no retry policy, no `skipped` state, no exit codes, no partial-run report. | Undefined behavior for the most common path. |
+| B6 | **No resumability.** No checkpoint, no run state, no `resume`. | A 20-task run that fails at task 18 must not restart from zero — these are paid/rate-limited calls. |
+| B7 | **Rate limits.** §2.3 sells subscription use; §2.4 mandates parallelism. These conflict. | Consumer plans throttle. Needs per-provider concurrency caps + backoff + usage-limit detection. |
+| B8 | **Orphan processes.** §5.2 requires clean SIGINT teardown but node's `child_process` does not kill grandchildren. | Agentic CLIs spawn their own subprocesses. Needs process groups (`detached` + `kill(-pgid)`). |
+| B9 | **Non-TTY / CI.** §2.2 mandates a confirmation gate; §2.4 mandates stdin capture. Neither is possible when stdin is not a TTY. | Needs `--yes` and defined non-TTY behavior. |
+| B10 | **No observability.** No per-task logs, no live status, no machine-readable report. | Debugging a failed parallel run is impossible without artifacts. |
+| B11 | **No test strategy at all.** | Every component depends on spawning nondeterministic paid LLM CLIs. Untestable unless designed for fakes from day one. **Resolved** → fake-provider harness, `02-plan.md` §Testing. |
+| B12 | **Model alias resolution.** §2.1 wants "Use Sonnet" to work, but never says how a natural-language name maps to (provider, model-id). | Ambiguous: "Sonnet" implies provider `claude`; "GPT-5" implies `codex`. Needs an alias table and conflict rules. |
+| B13 | **Prompt delivery mechanism.** Prompts are assumed to be argv strings. | Long prompts hit `ARG_MAX` and shell-quoting hazards. Providers expose file/stdin paths that are strictly safer. **Resolved** → delivery-preference chain. |
+| B14 | **Plan is not reviewable or editable.** §2.2 offers a confirm/deny gate only. | When the planner mis-infers one dependency, the only recourse is abort. Needs `--plan-out` / `--plan-in` / `--edit`. |
+| B15 | **Provider flag drift.** Finding A1 will recur — these CLIs ship weekly. | Needs opt-in contract tests that exercise real binaries. |
+
+## C. Verified provider surfaces (2026-08-28)
+
+- **`codex`** ✅ `~/.local/bin/codex` — `codex exec [PROMPT]`; prompt via positional, `-` , or **stdin**. `-m/--model`, `-C/--cd`, `--add-dir`, `-s/--sandbox {read-only,workspace-write,danger-full-access}`, `--json` (JSONL events), `-o/--output-last-message <FILE>`, `--output-schema <FILE>`, `--color never`, `--skip-git-repo-check`, `--ephemeral`. Resume: `codex exec resume [--last]`. ⚠️ `-p` = `--profile`.
+- **`gemini`** ✅ nvm bin — `gemini -p <prompt>` (headless); prompt also appended to stdin. `-m/--model`, `-o/--output-format {text,json,stream-json}`, `--approval-mode {default,auto_edit,yolo,plan}`, `-y/--yolo`, `--include-directories`, `-r/--resume`. Verified but **deferred to v1.1** (not in the named provider set).
+- **`opencode`** ✅ `~/.opencode/bin/opencode` — `opencode run [message..]`; `-m provider/model`, `--format {default,json}`, `-f/--file` (**native prompt-file attach**), `--agent`, `-c/--continue`, `-s/--session <id>`, `--fork`, `--dir`.
+- **`claude`** ✅ live-probed 2026-08-28 (v2.1.251). `-p` + stdin; **`--json-schema` (inline only)** → `.structured_output`; `.session_id`; `--session-id` pre-assign; **no cwd flag**; blocks 3 s on inherited stdin.
+- **`copilot`** ⚠️ partially verified (v1.0.81) — flags and JSONL confirmed; **monthly quota exhausted**, so the success path is unverified. **argv-only prompt**; `--no-ask-user`; `result` event yields session id, exit code, and `filesModified`.
+
+> Full verified surfaces, capability matrix, and event shapes: **[`wiki-llm/providers.md`](../../wiki-llm/providers.md)**.
+
+## D. Resolved by user decision (2026-08-28)
+
+1. §2.4 → **Pause & Resume**, not live PTY bubbling. Full PTY multiplexing is out of scope.
+2. Runtime → **Node 24 + TypeScript**, tests in **Jest**.
+3. Parallel writes → **serialize writers by default**, `--isolation worktree` opt-in.
+4. Provider set → **opencode, codex, claude, copilot**. "Provider" is the term of art for a supported CLI.
+5. Prompt delivery → **prefer files over argv** wherever the provider supports it.
+6. Wire format → **JSON in both directions** between the orchestrator and every provider. Prose is never the interface.
