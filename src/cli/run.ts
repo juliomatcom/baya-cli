@@ -169,6 +169,13 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   });
 
   logger.info("cli.invoked", { argv: process.argv.slice(2), cwd, run_id: runId });
+  // The one line that answers "which agent, which model?" without --verbose.
+  logger.info("run.agent", {
+    provider: defaultProvider,
+    model: defaultModel,
+    planner_provider: plannerProvider,
+    planner_model: plannerModel,
+  });
   logger.debug("config.loaded", {
     sources: loaded.sources,
     user_config: loaded.userPath,
@@ -327,7 +334,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- the gate
     progress.stop();
     io.stderr.write(
-      `\n  ${theme.taskId("baya")} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${planOrigin === "fallback" ? theme.warn(" · linear fallback") : ""}\n\n`,
+      `\n  ${theme.taskId("baya")} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ""}${planOrigin === "fallback" ? theme.warn(" · linear fallback") : ""}\n\n`,
     );
     io.stderr.write(`${renderDag(manifest, theme)}\n\n`);
 
@@ -377,6 +384,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         pending: manifest.tasks.length,
         running: 0,
         cost_usd: 0,
+        input_tokens: 0,
+        output_tokens: 0,
       },
       tasks: Object.fromEntries(
         manifest.tasks.map((task) => [

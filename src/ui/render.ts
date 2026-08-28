@@ -1,6 +1,12 @@
 import type { LogLine } from "../log/index.js";
 import type { Theme } from "./theme.js";
-import { DEFAULT_WIDTH, firstLine, formatDuration, wrap } from "./text.js";
+import {
+  DEFAULT_WIDTH,
+  firstLine,
+  formatDuration,
+  formatTokens,
+  wrap,
+} from "./text.js";
 
 /**
  * Composes the terminal narrative from structured log fields (logging.md rule
@@ -17,7 +23,17 @@ export interface RendererOptions {
 }
 
 const INDENT = "  ";
-const PREFIX_WIDTH = 12;
+const PREFIX_WIDTH = 20;
+
+/**
+ * The attribution column. Padded to a fixed width so the `│` gutter lines up;
+ * over-long ids are cut with an ellipsis so a truncated name reads as
+ * truncated, not as a typo ("create-number-gen…" not "create-number-gen").
+ */
+function taskLabel(taskId: string): string {
+  if (taskId.length <= PREFIX_WIDTH) return taskId.padEnd(PREFIX_WIDTH);
+  return `${taskId.slice(0, PREFIX_WIDTH - 1)}…`;
+}
 
 function str(line: LogLine, key: string): string {
   const value = line[key];
@@ -42,7 +58,7 @@ export function createEventRenderer(
     body: string,
     style: (t: string) => string,
   ): string => {
-    const label = theme.taskId(taskId.padEnd(PREFIX_WIDTH).slice(0, PREFIX_WIDTH));
+    const label = theme.taskId(taskLabel(taskId));
     return wrap(body, width - PREFIX_WIDTH - 5)
       .map((row) => `${INDENT}${label} ${theme.pending("│")} ${style(row)}`)
       .join("\n");
@@ -51,7 +67,7 @@ export function createEventRenderer(
   /** Notes wrap under the task they belong to, so the association survives. */
   const noteLine = (glyph: string, taskId: string, message: string): string => {
     const rows = wrap(message, width - PREFIX_WIDTH - 8);
-    const head = `${INDENT}${INDENT}${glyph} ${theme.taskId(taskId.padEnd(PREFIX_WIDTH))} ${rows[0] ?? ""}`;
+    const head = `${INDENT}${INDENT}${glyph} ${theme.taskId(taskLabel(taskId))} ${rows[0] ?? ""}`;
     const rest = rows
       .slice(1)
       .map((row) => `${INDENT}${INDENT}  ${" ".repeat(PREFIX_WIDTH)} ${row}`);
@@ -62,8 +78,25 @@ export function createEventRenderer(
     const taskId = str(line, "task_id");
     const provider = str(line, "provider");
     const duration = num(line, "duration_ms");
+    const model = str(line, "model");
 
     switch (line.event) {
+      case "run.agent": {
+        const planner = str(line, "planner_provider");
+        const plannerModel = str(line, "planner_model");
+        const agent = `${theme.provider(provider)}${model ? ` ${model}` : theme.note(" (provider default)")}`;
+        const plannerPart =
+          planner && planner !== provider
+            ? ` · planner ${theme.provider(planner)}${plannerModel ? ` ${plannerModel}` : ""}`
+            : "";
+        return `${INDENT}${theme.status("run")} agent ${agent}${plannerPart}`;
+      }
+
+      case "task.spawned": {
+        if (quiet) return null;
+        return `${INDENT}${theme.status("run")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${model ? model : theme.note("(provider default)")}`;
+      }
+
       case "provider.text":
         return quiet ? null : prefixed(taskId, str(line, "text"), (t) => t);
 
@@ -80,17 +113,19 @@ export function createEventRenderer(
       case "task.succeeded": {
         if (quiet) return null;
         const summary = firstLine(str(line, "summary"));
-        return `${INDENT}${theme.status("ok")} ${theme.taskId(taskId.padEnd(PREFIX_WIDTH))} ${theme.provider(provider.padEnd(9))} ${(duration === null ? "" : formatDuration(duration)).padStart(7)}  ${summary}`;
+        const tokens = (num(line, "input_tokens") ?? 0) + (num(line, "output_tokens") ?? 0);
+        const meter = tokens > 0 ? theme.note(` · ${formatTokens(tokens)} tok`) : "";
+        return `${INDENT}${theme.status("ok")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${(duration === null ? "" : formatDuration(duration)).padStart(7)}${meter}  ${summary}`;
       }
 
       case "task.failed":
-        return `${INDENT}${theme.status("fail")} ${theme.taskId(taskId.padEnd(PREFIX_WIDTH))} ${theme.provider(provider.padEnd(9))} ${(duration === null ? "" : formatDuration(duration)).padStart(7)}  ${theme.fail(firstLine(str(line, "message")))}`;
+        return `${INDENT}${theme.status("fail")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${(duration === null ? "" : formatDuration(duration)).padStart(7)}  ${theme.fail(firstLine(str(line, "message")))}`;
 
       case "task.parked":
-        return `${INDENT}${theme.status("park")} ${theme.taskId(taskId.padEnd(PREFIX_WIDTH))} ${theme.provider(provider.padEnd(9))} ${theme.park(firstLine(str(line, "question")))}`;
+        return `${INDENT}${theme.status("park")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${theme.park(firstLine(str(line, "question")))}`;
 
       case "task.skipped":
-        return `${INDENT}${theme.status("skip")} ${theme.taskId(taskId.padEnd(PREFIX_WIDTH))} ${theme.skip(`depends on ${str(line, "blocked_by")}`)}`;
+        return `${INDENT}${theme.status("skip")} ${theme.taskId(taskLabel(taskId))} ${theme.skip(`depends on ${str(line, "blocked_by")}`)}`;
 
       case "task.note": {
         const severity = str(line, "severity");

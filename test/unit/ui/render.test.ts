@@ -14,6 +14,53 @@ const line = (event: string, fields: Record<string, unknown> = {}): LogLine => (
   ...fields,
 });
 
+describe("startup", () => {
+  it("names the agent and model before anything runs", () => {
+    const out = render(
+      line("run.agent", {
+        provider: "codex",
+        model: "gpt-5-codex",
+        planner_provider: "codex",
+        planner_model: "gpt-5-codex",
+      }),
+    );
+    expect(out).toContain("agent");
+    expect(out).toContain("codex");
+    expect(out).toContain("gpt-5-codex");
+  });
+
+  it("says (provider default) when no model is pinned", () => {
+    const out = render(line("run.agent", { provider: "codex", model: "" }));
+    expect(out).toContain("(provider default)");
+  });
+
+  it("announces each task as it spawns, with its provider and model", () => {
+    const out = render(
+      line("task.spawned", {
+        task_id: "gen-schema",
+        provider: "codex",
+        model: "gpt-5-codex",
+      }),
+    );
+    expect(out).toContain("gen-schema");
+    expect(out).toContain("codex");
+    expect(out).toContain("gpt-5-codex");
+  });
+});
+
+describe("attribution column", () => {
+  it("truncates an over-long task id with an ellipsis, so it reads as cut", () => {
+    const out = render(
+      line("provider.text", {
+        task_id: "create-number-generator-with-a-very-long-name",
+        text: "hi",
+      }),
+    );
+    expect(out).toContain("…");
+    expect(out).not.toContain("create-number-generator-with-a-very-long-name");
+  });
+});
+
 describe("live provider output", () => {
   it("prefixes assistant prose with the task id — attribution is mandatory", () => {
     const out = render(
@@ -71,6 +118,20 @@ describe("completion lines", () => {
     expect(out).toContain("8.1s");
     expect(out).not.toContain("second line");
     expect(out?.length).toBeLessThan(200);
+  });
+
+  it("shows the token meter on a success line when the provider reported usage", () => {
+    const out = render(
+      line("task.succeeded", {
+        task_id: "gen-schema",
+        provider: "codex",
+        duration_ms: 8112,
+        summary: "done",
+        input_tokens: 122_271,
+        output_tokens: 1570,
+      }),
+    );
+    expect(out).toContain("124k tok");
   });
 
   it("marks a failure with its own glyph, not colour alone", () => {
