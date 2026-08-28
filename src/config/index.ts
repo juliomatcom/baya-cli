@@ -12,6 +12,7 @@ export { bayaDir, projectConfigPath, userConfigPath } from "./paths.js";
 export {
   ConfigError,
   LAYER_NAMES,
+  binOverrides,
   loadConfig,
   readUserConfig,
   setConfigValue,

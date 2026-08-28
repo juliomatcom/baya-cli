@@ -41,6 +41,7 @@ import {
 } from "../ui/index.js";
 import { createTheme } from "../ui/theme.js";
 import {
+  binOverrides as binOverridesFrom,
   loadConfig,
   nonInteractiveDefault,
   runWizard,
@@ -104,11 +105,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     },
   });
 
-  const binOverrides: Partial<Record<ProviderId, string>> = Object.fromEntries(
-    Object.entries(loaded.config.providers)
-      .filter(([, settings]) => settings.bin !== undefined)
-      .map(([id, settings]) => [id, settings.bin as string]),
-  );
+  const binOverrides = binOverridesFrom(loaded.config);
 
   const statuses = await registry.resolveAll({ binOverrides, env, probe: false });
 

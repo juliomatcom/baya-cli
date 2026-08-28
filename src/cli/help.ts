@@ -8,10 +8,18 @@ import type { Theme } from "../ui/theme.js";
  * doubles as a first-line sanity check.
  */
 export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
+  // Version strings are whatever the CLI prints — `codex-cli 0.148.0` today,
+  // something else next release. Size the column to the widest one rather than
+  // guessing a width, so the paths stay aligned instead of ragged.
+  const versionWidth = Math.max(
+    0,
+    ...statuses.map((status) => status.resolved?.version.length ?? 0),
+  );
+
   const providerLines = statuses.map((status) => {
     const id = status.id.padEnd(11);
     if (status.resolved) {
-      return `  ${id}${theme.status("ok")} ${status.resolved.version.padEnd(7)} ${status.resolved.bin}`;
+      return `  ${id}${theme.status("ok")} ${status.resolved.version.padEnd(versionWidth)}  ${status.resolved.bin}`;
     }
     return `  ${id}${theme.status("fail")} ${theme.skip(`not found — ${status.adapter.installHint}`)}`;
   });

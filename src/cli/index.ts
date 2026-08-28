@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   ConfigError,
+  binOverrides,
   loadConfig,
   setConfigValue,
   userConfigPath,
@@ -71,7 +72,20 @@ export async function main(options: MainOptions = {}): Promise<number> {
   try {
     switch (args.command) {
       case "help": {
-        const statuses = await registry.resolveAll({ env, probe: false });
+        // Probed, not skipped: the version is half of what makes the provider
+        // block a first-line sanity check, and `<bin> --version` costs ~20ms
+        // per adapter with the probes running concurrently.
+        //
+        // A broken config must not take help down with it — help is the one
+        // command that has to work when everything else is misconfigured, so
+        // an unreadable config costs the overrides, not the output.
+        let overrides: Partial<Record<ProviderId, string>> = {};
+        try {
+          overrides = binOverrides(loadConfig({ cwd, env }).config);
+        } catch {
+          overrides = {};
+        }
+        const statuses = await registry.resolveAll({ binOverrides: overrides, env });
         io.stdout.write(renderHelp(statuses, theme));
         return 0;
       }
@@ -80,13 +94,13 @@ export async function main(options: MainOptions = {}): Promise<number> {
         // The config override is the first link of the resolution chain, so
         // `doctor` must consult it — otherwise it reports "not found" for a
         // provider the very next run would resolve.
-        const loaded = loadConfig({ cwd, env });
-        const binOverrides = Object.fromEntries(
-          Object.entries(loaded.config.providers)
-            .filter(([, settings]) => settings.bin !== undefined)
-            .map(([id, settings]) => [id, settings.bin as string]),
-        ) as Partial<Record<ProviderId, string>>;
-        const report = await doctor({ registry, cwd, theme, env, binOverrides });
+        const report = await doctor({
+          registry,
+          cwd,
+          theme,
+          env,
+          binOverrides: binOverrides(loadConfig({ cwd, env }).config),
+        });
         io.stdout.write(`${report.text}\n`);
         return report.exitCode;
       }

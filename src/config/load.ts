@@ -203,6 +203,22 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
   };
 }
 
+/**
+ * The `providers.<id>.bin` overrides in the shape the provider registry takes.
+ * Every command that resolves a binary needs these — a configured path is the
+ * first link of the resolution chain, and a command that skips it reports "not
+ * found" for a provider the very next run would resolve.
+ */
+export function binOverrides(
+  config: ResolvedConfig,
+): Partial<Record<ProviderId, string>> {
+  return Object.fromEntries(
+    Object.entries(config.providers)
+      .filter(([, settings]) => settings.bin !== undefined)
+      .map(([id, settings]) => [id, settings.bin as string]),
+  ) as Partial<Record<ProviderId, string>>;
+}
+
 /** Atomic write (config.md), like `state.json`: no torn file is ever observable. */
 export function writeConfigFile(path: string, values: ConfigFile): void {
   mkdirSync(dirname(path), { recursive: true });
