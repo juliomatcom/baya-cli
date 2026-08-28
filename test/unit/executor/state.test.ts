@@ -36,6 +36,8 @@ function initialState(taskIds: string[]): RunState {
       pending: taskIds.length,
       running: 0,
       cost_usd: 0,
+      input_tokens: 0,
+      output_tokens: 0,
     },
     tasks: Object.fromEntries(taskIds.map((id) => [id, emptyTaskEntry()])),
   };

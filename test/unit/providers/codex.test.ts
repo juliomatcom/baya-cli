@@ -197,4 +197,22 @@ describe("codexAdapter.extractUsage", () => {
       output_tokens: 4,
     });
   });
+
+  it("sums usage across turns when a task was resumed", () => {
+    const events = codexAdapter.parseEvents(
+      [
+        '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":4}}',
+        '{"type":"turn.completed","usage":{"input_tokens":7,"output_tokens":2}}',
+      ].join("\n"),
+    );
+    expect(codexAdapter.extractUsage?.(events)).toEqual({
+      input_tokens: 17,
+      output_tokens: 6,
+    });
+  });
+
+  it("returns nothing when codex emitted no usage line", () => {
+    const events = codexAdapter.parseEvents('{"type":"turn.started"}');
+    expect(codexAdapter.extractUsage?.(events)).toEqual({});
+  });
 });

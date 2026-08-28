@@ -63,6 +63,8 @@ export const TaskStateEntrySchema = z
     notes: z.array(NoteSchema).default([]),
     files_changed: z.array(z.string()).default([]),
     cost_usd: z.number().default(0),
+    input_tokens: z.number().default(0),
+    output_tokens: z.number().default(0),
     /** Which rung of the degradation ladder produced the result. */
     result_rung: z.string().nullable().default(null),
     /** For `skipped`: the failed ancestor that caused it. */
@@ -108,6 +110,8 @@ export const RunStateSchema = z
         pending: z.number().int(),
         running: z.number().int(),
         cost_usd: z.number(),
+        input_tokens: z.number().default(0),
+        output_tokens: z.number().default(0),
       })
       .strict(),
     tasks: z.record(z.string(), TaskStateEntrySchema),
@@ -128,9 +132,13 @@ function recomputeTotals(state: RunState): void {
     pending: 0,
     running: 0,
     cost_usd: 0,
+    input_tokens: 0,
+    output_tokens: 0,
   };
   for (const entry of Object.values(state.tasks)) {
     totals.cost_usd += entry.cost_usd;
+    totals.input_tokens += entry.input_tokens;
+    totals.output_tokens += entry.output_tokens;
     if (entry.state in totals) {
       totals[entry.state as keyof typeof totals] += 1;
     }

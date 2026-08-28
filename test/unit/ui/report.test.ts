@@ -58,6 +58,8 @@ function state(overrides: Partial<RunState> = {}): RunState {
       pending: 0,
       running: 0,
       cost_usd: 0.42,
+      input_tokens: 0,
+      output_tokens: 0,
     },
     tasks: {
       "gen-schema": emptyTaskEntry({
@@ -153,6 +155,20 @@ describe("renderReport", () => {
     expect(text.indexOf("STRIPE_WEBHOOK_SECRET")).toBeLessThan(
       text.indexOf("locks users"),
     );
+  });
+
+  it("reports token usage, and drops the $ figure when no provider gave one", () => {
+    const withTokens = state({
+      totals: {
+        ...state().totals,
+        cost_usd: 0,
+        input_tokens: 122_271,
+        output_tokens: 1570,
+      },
+    });
+    const text = renderReport(report(withTokens), theme);
+    expect(text).toContain("124k tokens");
+    expect(text).not.toContain("$0.00");
   });
 
   it("always points at the outputs directory", () => {

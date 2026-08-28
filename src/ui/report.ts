@@ -1,7 +1,7 @@
 import type { Manifest, Note, NoteSeverity } from "../manifest/index.js";
 import type { RunState } from "../executor/state.js";
 import type { Theme } from "./theme.js";
-import { formatCost, formatDuration, wrap } from "./text.js";
+import { formatCost, formatDuration, formatTokens, wrap } from "./text.js";
 
 /**
  * End-of-run report (cli.md §End-of-run report).
@@ -28,6 +28,9 @@ export interface ReportTask {
   files_changed: string[];
   failure: RunState["tasks"][string]["failure"];
   output_path: string | null;
+  cost_usd: number;
+  input_tokens: number;
+  output_tokens: number;
 }
 
 export interface RunReport {
@@ -71,6 +74,9 @@ export function buildReport(
       files_changed: entry?.files_changed ?? [],
       failure: entry?.failure ?? null,
       output_path: entry?.artifacts["output"] ?? null,
+      cost_usd: entry?.cost_usd ?? 0,
+      input_tokens: entry?.input_tokens ?? 0,
+      output_tokens: entry?.output_tokens ?? 0,
     };
   });
 
@@ -118,8 +124,16 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   if (totals.parked > 0) parts.push(theme.park(`${totals.parked} parked`));
 
   const headline = report.totals.failed > 0 ? "Run finished" : "Run complete";
+  // codex and claude report tokens, not dollars — show what we actually have.
+  // The `$` figure stays only when a provider gave us one (cli.md: no fabricated
+  // cost). See spec §Non-goals — cost accounting is v1.1.
+  const tokens = (totals.input_tokens ?? 0) + (totals.output_tokens ?? 0);
+  const meter: string[] = [];
+  if (tokens > 0) meter.push(`${formatTokens(tokens)} tokens`);
+  if (totals.cost_usd > 0) meter.push(formatCost(totals.cost_usd));
+  const meterTail = meter.length > 0 ? ` · ${meter.join(" · ")}` : "";
   lines.push(
-    `  ${theme.taskId(headline)} · ${parts.join(" · ")} · ${formatDuration(report.duration_ms)} · ${formatCost(totals.cost_usd)}`,
+    `  ${theme.taskId(headline)} · ${parts.join(" · ")} · ${formatDuration(report.duration_ms)}${meterTail}`,
   );
 
   if (report.flagged.length > 0) {

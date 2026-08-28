@@ -197,6 +197,8 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       notes: result.notes,
       files_changed: result.files_changed,
       cost_usd: execution.usage.cost_usd ?? 0,
+      input_tokens: execution.usage.input_tokens ?? 0,
+      output_tokens: execution.usage.output_tokens ?? 0,
     };
 
     if (result.status === "ok") {
@@ -204,10 +206,14 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       logger.info("task.succeeded", {
         task_id: taskId,
         provider,
+        model,
         duration_ms: execution.durationMs,
         summary: result.summary,
         files_changed: result.files_changed.length,
         note_count: result.notes.length,
+        input_tokens: execution.usage.input_tokens ?? 0,
+        output_tokens: execution.usage.output_tokens ?? 0,
+        cost_usd: execution.usage.cost_usd ?? 0,
       });
       options.onTaskSettled?.(taskId, "succeeded", result);
       continue;

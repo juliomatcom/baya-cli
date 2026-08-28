@@ -192,6 +192,10 @@ export const codexAdapter: ProviderAdapter = {
   extractUsage(events: ProviderEvent[]): ProviderUsage {
     // `turn.completed` lands in `unknown`; usage is read back out here rather
     // than widening the ProviderEvent union for one provider's accounting.
+    // A resumed task emits several `turn.completed` lines — codex reports each
+    // turn's own usage, so they sum. (codex has no `cost_usd` field of its
+    // own; a run's dollar figure stays 0 until a provider that reports it.)
+    const out: ProviderUsage = {};
     for (const event of events) {
       if (event.t !== "unknown") continue;
       let parsed: unknown;
@@ -205,12 +209,16 @@ export const codexAdapter: ProviderAdapter = {
       const usage = obj["usage"];
       if (!usage || typeof usage !== "object") continue;
       const u = usage as Record<string, unknown>;
-      const out: ProviderUsage = {};
-      if (typeof u["input_tokens"] === "number") out.input_tokens = u["input_tokens"];
-      if (typeof u["output_tokens"] === "number") out.output_tokens = u["output_tokens"];
-      if (typeof u["cost_usd"] === "number") out.cost_usd = u["cost_usd"];
-      return out;
+      if (typeof u["input_tokens"] === "number") {
+        out.input_tokens = (out.input_tokens ?? 0) + u["input_tokens"];
+      }
+      if (typeof u["output_tokens"] === "number") {
+        out.output_tokens = (out.output_tokens ?? 0) + u["output_tokens"];
+      }
+      if (typeof u["cost_usd"] === "number") {
+        out.cost_usd = (out.cost_usd ?? 0) + u["cost_usd"];
+      }
     }
-    return {};
+    return out;
   },
 };
