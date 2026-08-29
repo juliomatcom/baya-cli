@@ -7,6 +7,7 @@ export {
   machineTheme,
   theme,
 } from "./theme.js";
+export { renderBanner } from "./banner.js";
 export {
   createProgress,
   restoreCursor,
