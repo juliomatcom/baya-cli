@@ -46,6 +46,37 @@ describe("startup", () => {
     expect(out).toContain("codex");
     expect(out).toContain("gpt-5-codex");
   });
+
+  it("shows the exact provider command, flags and all, prompt collapsed", () => {
+    const prompt = "You are executing one task in a Baya run. ".repeat(10);
+    const out = render(
+      line("task.spawned", {
+        task_id: "gen-schema",
+        provider: "copilot",
+        model: "gpt-5.6-luna",
+        prompt_bytes: Buffer.byteLength(prompt),
+        argv: [
+          "copilot",
+          "-p",
+          prompt,
+          "--output-format",
+          "json",
+          "--model",
+          "gpt-5.6-luna",
+        ],
+      }),
+    );
+    expect(out).toContain("$ copilot -p <prompt> --output-format json");
+    expect(out).toContain("--model gpt-5.6-luna");
+    expect(out).not.toContain("You are executing");
+  });
+
+  it("has no command line when argv is absent", () => {
+    const out = render(
+      line("task.spawned", { task_id: "t", provider: "codex", model: "m" }),
+    );
+    expect(out).not.toContain("$ ");
+  });
 });
 
 describe("attribution column", () => {

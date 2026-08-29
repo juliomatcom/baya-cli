@@ -1,6 +1,13 @@
 import type { LogLine } from "../log/index.js";
 import type { Theme } from "./theme.js";
-import { DEFAULT_WIDTH, firstLine, formatDuration, formatTokens, wrap } from "./text.js";
+import {
+  DEFAULT_WIDTH,
+  firstLine,
+  formatCommand,
+  formatDuration,
+  formatTokens,
+  wrap,
+} from "./text.js";
 
 /**
  * Composes the terminal narrative from structured log fields (logging.md rule
@@ -37,6 +44,13 @@ function str(line: LogLine, key: string): string {
 function num(line: LogLine, key: string): number | null {
   const value = line[key];
   return typeof value === "number" ? value : null;
+}
+
+function strArray(line: LogLine, key: string): string[] {
+  const value = line[key];
+  return Array.isArray(value) && value.every((v) => typeof v === "string")
+    ? (value as string[])
+    : [];
 }
 
 export function createEventRenderer(
@@ -88,7 +102,18 @@ export function createEventRenderer(
 
       case "task.spawned": {
         if (quiet) return null;
-        return `${INDENT}${theme.status("run")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${model ? model : theme.note("(provider default)")}`;
+        const head = `${INDENT}${theme.status("run")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${model ? model : theme.note("(provider default)")}`;
+        const argv = strArray(line, "argv");
+        if (argv.length === 0) return head;
+        // The exact command that spawns the provider — flags and all, prompt
+        // collapsed — so a run is never opaque about what it actually invoked.
+        const promptBytes = num(line, "prompt_bytes");
+        const command = formatCommand(argv, {
+          ...(promptBytes !== null ? { promptBytes } : {}),
+        });
+        // One unwrapped line — this is meant to be copied and re-run verbatim.
+        const gutter = `${INDENT}${theme.taskId(taskLabel(taskId))} ${theme.pending("│")} `;
+        return `${head}\n${gutter}${theme.note(`$ ${command}`)}`;
       }
 
       case "provider.text":

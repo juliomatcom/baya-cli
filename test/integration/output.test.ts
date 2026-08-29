@@ -55,6 +55,19 @@ describe("provider output bubbles up as info", () => {
     }
   });
 
+  it("prints the exact provider command, with flags, as each task spawns", async () => {
+    const result = await runCli(["./tasks.md", "--yes"], { scenario: chatty });
+    const cmd = result.stderr
+      .split("\n")
+      .find((l) => l.includes("gen-schema") && l.includes("$ "));
+    expect(cmd).toBeDefined();
+    expect(cmd).toContain("exec");
+    expect(cmd).toContain("--output-schema");
+    expect(cmd).toContain("-s read-only");
+    // codex takes the prompt on stdin, so it is simply absent from the command
+    expect(cmd).not.toContain("do gen-schema");
+  });
+
   it("hides session ids and unknown events from the terminal by default", async () => {
     const result = await runCli(["./tasks.md", "--yes"], { scenario: chatty });
     expect(result.stderr).not.toContain("t-1");
