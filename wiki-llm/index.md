@@ -3,7 +3,7 @@
 > **Maintenance Invariant:** Routing table only. One row per page. Prohibit orphan pages. Prohibit content here — content lives in the page. Update this row set in the SAME commit as any new/renamed page.
 > **Answers:** Which wiki page answers my question?
 
-Baya is a local multi-provider CLI orchestrator: freeform Markdown → LLM-planned JSON DAG → parallel dispatch to local agent CLIs (`opencode`, `codex`, `claude`, `copilot`) over a strict JSON protocol.
+Baya is a local multi-provider CLI orchestrator: a freeform task list (Markdown, plain text, YAML, any UTF-8 text) → LLM-planned JSON DAG → parallel dispatch to local agent CLIs (`opencode`, `codex`, `claude`, `copilot`) over a strict JSON protocol.
 
 | Page                               | Answers                                                                                                                      |
 | :--------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- |

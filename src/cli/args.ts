@@ -6,8 +6,9 @@ import { LOG_LEVELS, type LogLevel } from "../log/index.js";
  * than to bend a parser library around.
  *
  * **Resolution rule:** if the first positional matches a known subcommand it
- * is dispatched as that subcommand; otherwise it is the Markdown path for
- * `run`. A file literally named `doctor` is disambiguated as `./doctor`.
+ * is dispatched as that subcommand; otherwise it is the task-list path for
+ * `run` (any UTF-8 text file — Markdown, `.txt`, YAML, …). A file literally
+ * named `doctor` is disambiguated as `./doctor`.
  */
 export const COMMANDS = [
   "run",
@@ -46,7 +47,7 @@ export interface RunFlags {
 
 export interface ParsedArgs {
   command: Command;
-  /** The Markdown path for `run`/`plan`. */
+  /** The task-list path for `run`/`plan` — any UTF-8 text file. */
   file: string | null;
   /** `--show` | `path` | `set` | wizard (undefined). */
   configAction?: "show" | "path" | "set" | "refresh-models";

@@ -32,7 +32,10 @@ export interface Workspace {
 
 export interface CliOptions {
   scenario?: Record<string, FakeProviderScenario> | FakeProviderScenario;
-  markdown?: string;
+  /** Contents of the task-list file written into the workspace. */
+  taskList?: string;
+  /** Basename for the task-list file (default `tasks.md`). */
+  taskFile?: string;
   /** Extra project `.baya/config.json` values merged over the defaults. */
   config?: Record<string, unknown>;
   stdinIsTty?: boolean;
@@ -48,8 +51,8 @@ export function makeWorkspace(options: CliOptions = {}): Workspace {
   mkdirSync(join(cwd, ".baya"), { recursive: true });
   mkdirSync(home, { recursive: true });
 
-  const tasksPath = join(cwd, "tasks.md");
-  writeFileSync(tasksPath, options.markdown ?? "# Design the API\n\nDesign it.\n");
+  const tasksPath = join(cwd, options.taskFile ?? "tasks.md");
+  writeFileSync(tasksPath, options.taskList ?? "# Design the API\n\nDesign it.\n");
 
   const scenarioPath = join(root, "scenario.json");
   const scenario =

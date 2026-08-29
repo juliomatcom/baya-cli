@@ -1,13 +1,13 @@
 # baya
 
-**Orchestrate local AI coding CLIs from a plain Markdown task list.**
+**Orchestrate local AI coding CLIs from a plain-text task list.**
 
 [![CI](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Write what you want done in ordinary Markdown. Baya asks a model to turn it into a dependency graph, then routes each task to the AI coding CLI you already have installed and logged in — `codex`, `claude`, `copilot`, `opencode` — running independent work in parallel and piping each task's output into the ones that depend on it.
+Write what you want done in an ordinary text file — Markdown, a bare to-do list, YAML, whatever you already keep tasks in. Baya asks a model to turn it into a dependency graph, then routes each task to the AI coding CLI you already have installed and logged in — `codex`, `claude`, `copilot`, `opencode` — running independent work in parallel and piping each task's output into the ones that depend on it.
 
-No YAML. No DSL. No API keys for every provider — it drives the CLIs you already pay for.
+No config format to learn. No DSL. No API keys for every provider — it drives the CLIs you already pay for.
 
 > [!WARNING]
 > **Status: early.** The walking skeleton (M1) and provider breadth (M3) have landed — `codex`, `claude`, `opencode`, and `copilot` adapters, model-catalog resolution, and a sequential executor. Concurrency, resume, and packaging are still in progress; not yet published to npm. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
@@ -39,7 +39,7 @@ baya config                        # change your default provider
 
 On first run baya asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
 
-A `tasks.md` is just Markdown:
+The task list is just text — any UTF-8 file. Markdown:
 
 ```markdown
 # Ship the orders endpoint
@@ -49,6 +49,17 @@ A `tasks.md` is just Markdown:
 - Build the React table that consumes it — run this with codex.
 - Once the schema and UI are done, write integration tests.
 ```
+
+…or a bare `TODO.txt`, one task per line:
+
+```text
+1 Design the REST API for orders. Use Sonnet.
+2 Generate the DB schema from that design.
+3 Build the React table that consumes it — run this with codex.
+4 Once the schema and UI are done, write integration tests.
+```
+
+Baya's planner reads whichever you give it for intent. Empty or binary files are rejected before planning; if the planner can't produce a graph, a deterministic splitter falls back to a linear chain in the order you wrote the tasks.
 
 ### Example — a task per model, resolved automatically
 
@@ -85,7 +96,7 @@ $ baya ./tasks.md --yes
 
 ```mermaid
 flowchart TB
-    MD["📄 tasks.md<br/><i>freeform Markdown</i>"] --> P["Planner<br/><i>an LLM CLI</i>"]
+    MD["📄 tasks.md<br/><i>freeform text</i>"] --> P["Planner<br/><i>an LLM CLI</i>"]
     P -->|JSON manifest| V["Validate<br/><i>schema · cycles · deps</i>"]
     V -->|invalid| R["Repair ×1<br/>→ linear fallback"]
     R --> V

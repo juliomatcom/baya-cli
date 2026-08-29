@@ -215,3 +215,26 @@ describe("the plan gate", () => {
     expect(result.stderr).toContain("--yes");
   });
 });
+
+describe("task-list file format", () => {
+  it("plans and runs a plain-text (.txt) task list, not just Markdown", async () => {
+    const result = await runCli(["./TODO.txt", "--yes"], {
+      scenario,
+      taskFile: "TODO.txt",
+      taskList: "1 design the api\n2 generate the db schema from that design\n",
+    });
+    expect(result.code).toBe(0);
+    const state = result.readJson(result.paths!.state) as { status: string };
+    expect(state.status).toBe("completed");
+  });
+
+  it("rejects a binary file with a clear message instead of feeding it to the planner", async () => {
+    const result = await runCli(["./tasks.bin", "--yes"], {
+      scenario,
+      taskFile: "tasks.bin",
+      taskList: "PK\u0000\u0003\u0004 binary payload",
+    });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("does not look like a text file");
+  });
+});

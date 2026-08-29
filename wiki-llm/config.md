@@ -30,7 +30,7 @@ Wizard writes **layer 4**. `defaults`/`planner`/`providers` merge per key; `mode
 }
 ```
 
-- `model: null` ⇒ provider's own default. `defaults` = task fallback; `planner` = parses Markdown → DAG. Wizard sets both from one answer; edit the file to split.
+- `model: null` ⇒ provider's own default. `defaults` = task fallback; `planner` = parses the task list → DAG. Wizard sets both from one answer; edit the file to split.
 - `modelAliases` — `nickname → real id`. `baya config set modelAliases.<name> <id>` (`… null` drops).
 - `modelCatalog` — resolution catalog, written at first run: hardcoded `codex`/`claude`/`copilot` lists (`src/providers/catalog.ts`) + live `opencode models`. `baya config refresh-models` rewrites it. See **Model resolution**.
 

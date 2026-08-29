@@ -15,7 +15,8 @@ import {
 } from "../log/index.js";
 import { FileLock } from "../lock/index.js";
 import {
-  plan as planMarkdown,
+  checkTaskText,
+  plan as planTaskList,
   readSource,
   runPlannerProvider,
 } from "../planner/index.js";
@@ -295,9 +296,15 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         );
         return 2;
       }
+      const contentProblem = checkTaskText(read.taskText, sourcePath);
+      if (contentProblem !== null) {
+        logger.error("source.unusable", { path: sourcePath, reason: contentProblem });
+        io.stderr.write(`${theme.status("fail")} ${theme.fail(contentProblem)}\n`);
+        return 2;
+      }
       logger.info("source.read", {
         path: sourcePath,
-        bytes: Buffer.byteLength(read.markdown, "utf8"),
+        bytes: Buffer.byteLength(read.taskText, "utf8"),
         sha256: read.source.sha256,
       });
 
@@ -317,8 +324,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       }
 
       progress.start(`planning with ${plannerProvider}…`);
-      const planned = await planMarkdown({
-        markdown: read.markdown,
+      const planned = await planTaskList({
+        taskText: read.taskText,
         source: read.source,
         runner: runPlannerProvider({
           adapter: plannerAdapter,
