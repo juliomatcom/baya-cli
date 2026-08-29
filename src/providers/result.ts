@@ -54,3 +54,50 @@ export function parseResultJson(taskId: string, raw: string): TaskResult | null 
   const parsed = TaskResultSchema.safeParse(candidate);
   return parsed.success ? parsed.data : null;
 }
+
+/**
+ * Rung 3 support: the body of the **last** fenced code block that looks like
+ * JSON. Last, not first, because a model often shows a draft then a corrected
+ * final block, and the final one is the answer. The info string is optional —
+ * ` ```json ` and a bare ` ``` ` wrapping `{ … }` both count; prose fences do
+ * not.
+ */
+export function lastJsonFence(text: string): string | null {
+  const clean = stripAnsi(text);
+  const fence = /```[ \t]*([A-Za-z0-9_-]*)[ \t]*\r?\n([\s\S]*?)\r?\n?```/g;
+  let last: string | null = null;
+  for (const match of clean.matchAll(fence)) {
+    const lang = (match[1] ?? "").toLowerCase();
+    const body = (match[2] ?? "").trim();
+    if (lang !== "" && lang !== "json") continue;
+    if (!body.startsWith("{") || !body.endsWith("}")) continue;
+    last = body;
+  }
+  return last;
+}
+
+/**
+ * Rungs 2–3 of the degradation ladder (protocol.md §4), for the providers that
+ * enforce no schema (`opencode`, `copilot`). Given the final assistant message:
+ *
+ *   2. **Verbatim** — the whole message parses as a conforming `task_result`.
+ *   3. **Fenced** — the last ` ```json ` block does.
+ *
+ * Returns `null` when neither rung lands; the caller falls to rung 5
+ * (`synthesizeFailure`). Rung 4, the repair round-trip, is `later` — v1 skips it.
+ */
+export function extractResultFromText(taskId: string, text: string): ParsedResult | null {
+  const trimmed = stripAnsi(text).trim();
+  if (trimmed === "") return null;
+
+  const verbatim = parseResultJson(taskId, trimmed);
+  if (verbatim) return { result: verbatim, rung: "verbatim" };
+
+  const fenced = lastJsonFence(trimmed);
+  if (fenced !== null) {
+    const parsed = parseResultJson(taskId, fenced);
+    if (parsed) return { result: parsed, rung: "fenced" };
+  }
+
+  return null;
+}

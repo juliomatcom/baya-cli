@@ -25,3 +25,11 @@ export {
   type RunReport,
 } from "./report.js";
 export { confirmPlan, type ConfirmOutcome, type ConfirmPlanOptions } from "./confirm.js";
+export {
+  planModelGate,
+  runModelGate,
+  type ModelGateOptions,
+  type ModelGateOutcome,
+  type ModelGatePlan,
+  type TaskModelAsk,
+} from "./model-gate.js";

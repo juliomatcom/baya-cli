@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`claudeAdapter.buildRun argv builds a resume around the session id 1`] = `
+[
+  "/usr/local/bin/claude",
+  "--resume",
+  "sess-9",
+  "-p",
+  "--output-format",
+  "json",
+  "--json-schema",
+  "{"type":"object","properties":{"status":{"type":"string"}}}",
+  "--permission-mode",
+  "plan",
+]
+`;
+
+exports[`claudeAdapter.buildRun argv matches the recorded surface 1`] = `
+[
+  "/usr/local/bin/claude",
+  "-p",
+  "--output-format",
+  "json",
+  "--json-schema",
+  "{"type":"object","properties":{"status":{"type":"string"}}}",
+  "--permission-mode",
+  "plan",
+]
+`;

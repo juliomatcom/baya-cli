@@ -7,9 +7,76 @@ Write what you want done in ordinary Markdown. Baya asks a model to turn it into
 No YAML. No DSL. No API keys for every provider — it drives the CLIs you already pay for.
 
 > [!WARNING]
-> **Status: pre-implementation.** The design is complete and provider surfaces are verified, but no code has landed yet. Nothing below is installable today. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
+> **Status: early.** The walking skeleton (M1) and provider breadth (M3) have landed — `codex`, `claude`, `opencode`, and `copilot` adapters, model-catalog resolution, and a sequential executor. Concurrency, resume, and packaging are still in progress; not yet published to npm. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
 
 ---
+
+## Install
+
+> Not yet published.
+
+```bash
+npm install -g baya-cli   # binary: baya
+```
+
+Requires **Node 24+** and at least one supported CLI on your machine. Run `baya doctor` to see what it found.
+
+## Usage
+
+```bash
+baya ./tasks.md                    # plan it, show it, run it
+baya ./tasks.md --dry-run          # show the plan, run nothing
+baya ./tasks.md --max-parallel 4
+baya runs                          # list interrupted runs
+baya resume <runId>                # continue one of them
+baya resume <runId> --provider claude   # ...on a different provider
+baya doctor                        # check provider installs
+baya config                        # change your default provider
+```
+
+On first run baya asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
+
+A `tasks.md` is just Markdown:
+
+```markdown
+# Ship the orders endpoint
+
+- Design the REST API for orders. Use Sonnet.
+- Generate the DB schema from that design.
+- Build the React table that consumes it — run this with codex.
+- Once the schema and UI are done, write integration tests.
+```
+
+### Example — a task per model, resolved automatically
+
+```markdown
+1 which model are you? - luna
+2 which model are you? - terra
+3 which model are you? - sonnet
+```
+
+```console
+$ baya ./tasks.md --yes
+
+  baya · ./tasks.md · 3 tasks · claude
+
+  layer 1
+    · which-model-luna    codex  gpt-5.6-luna     Which model are you? (luna)
+    · which-model-terra   codex  gpt-5.6-terra    Which model are you? (terra)
+    · which-model-sonnet  claude claude-sonnet-5  Which model are you? (sonnet)
+
+  resolved which-model-luna:   "luna"   → codex gpt-5.6-luna     (alias)
+  resolved which-model-terra:  "terra"  → codex gpt-5.6-terra    (alias)
+  resolved which-model-sonnet: "sonnet" → claude claude-sonnet-5 (alias)
+
+  ✓ which-model-luna    codex   17.0s · 56k tok  I am OpenAI Codex, based on the GPT-5 model family.
+  ✓ which-model-terra   codex    4.2s · 18k tok  I am GPT-5.6 Terra, provided by OpenAI.
+  ✓ which-model-sonnet  claude  13.4s · 28k tok  I am Claude Sonnet 5 (model ID claude-sonnet-5).
+
+  Run complete · 3 succeeded · 34.6s · 102k tokens · $0.05
+```
+
+`luna`, `terra`, and `sonnet` are short names — Baya resolves each against its model catalog to the real id and the provider that serves it (`luna`/`terra` → `codex`, `sonnet` → `claude`), then runs all three independently. A name it can't resolve stops at the plan gate instead of failing mid-run; it is never silently swapped for the default. See [`wiki-llm/config.md`](wiki-llm/config.md#model-resolution).
 
 ## How it works
 
@@ -57,42 +124,6 @@ Four ideas do most of the work:
 - **The planner picks a provider, never a command.** Manifests carry a provider name from a closed enum; adapters alone build `argv`. `shell: true` is banned repo-wide.
 - **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume <runId> --provider claude` picks up exactly where it stopped.
 - **Providers are watched, not trusted.** Their flag surfaces are live-probed and contract-tested, their output is ANSI-stripped and schema-validated.
-
-## Install
-
-> Not yet published.
-
-```bash
-npm install -g baya-cli   # binary: baya
-```
-
-Requires **Node 24+** and at least one supported CLI on your machine. Run `baya doctor` to see what it found.
-
-## Usage
-
-```bash
-baya ./tasks.md                    # plan it, show it, run it
-baya ./tasks.md --dry-run          # show the plan, run nothing
-baya ./tasks.md --max-parallel 4
-baya runs                          # list interrupted runs
-baya resume <runId>                # continue one of them
-baya resume <runId> --provider claude   # ...on a different provider
-baya doctor                        # check provider installs
-baya config                        # change your default provider
-```
-
-On first run baya asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
-
-A `tasks.md` is just Markdown:
-
-```markdown
-# Ship the orders endpoint
-
-- Design the REST API for orders. Use Sonnet.
-- Generate the DB schema from that design.
-- Build the React table that consumes it — run this with codex.
-- Once the schema and UI are done, write integration tests.
-```
 
 ## Providers
 

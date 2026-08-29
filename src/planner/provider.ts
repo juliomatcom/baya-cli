@@ -69,6 +69,7 @@ export function runPlannerProvider(
       model: options.model,
       cwd: options.cwd,
       schemaPath: options.schemaPath,
+      schemaContents: readFileSync(options.schemaPath, "utf8"),
       resultFile: options.resultFile,
       prompt,
     });

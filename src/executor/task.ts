@@ -84,6 +84,8 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
     model: options.model,
     cwd: options.cwd,
     schemaPath: options.schemaPath,
+    // Inline schema for providers that reject a file path (`claude --json-schema`).
+    schemaContents: readFileSync(options.schemaPath, "utf8"),
     resultFile: paths.result(taskId),
     prompt,
     ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),

@@ -1,5 +1,8 @@
 import type { ProviderId } from "../manifest/index.js";
+import { claudeAdapter } from "./claude.js";
 import { codexAdapter } from "./codex.js";
+import { copilotAdapter } from "./copilot.js";
+import { opencodeAdapter } from "./opencode.js";
 import { probeVersion, resolveBinary } from "./resolve.js";
 import type { ProviderAdapter, ResolvedProvider } from "./types.js";
 
@@ -85,8 +88,18 @@ export function createRegistry(adapters: readonly ProviderAdapter[]): Registry {
   };
 }
 
-/** The v1 adapter set. M3 widens it to opencode, claude, and copilot. */
-export const V1_ADAPTERS: readonly ProviderAdapter[] = [codexAdapter];
+/**
+ * The v1 adapter set. Order is display order for `--help`, `doctor`, and the
+ * wizard: `codex` and `claude` first (verified surfaces, run on the reference
+ * machine), then `opencode` and `copilot` (adapters landed M3, success paths
+ * pending a local environment fix / quota reset).
+ */
+export const V1_ADAPTERS: readonly ProviderAdapter[] = [
+  codexAdapter,
+  claudeAdapter,
+  opencodeAdapter,
+  copilotAdapter,
+];
 
 /**
  * A fresh registry per invocation. Resolution is cached *within* a registry —

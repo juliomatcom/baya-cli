@@ -16,7 +16,14 @@ export default {
       },
     ],
   },
-  testPathIgnorePatterns: ["/node_modules/", "/dist/", "<rootDir>/test/fixtures/"],
+  // `test/contract/` runs the real provider binaries and makes real calls;
+  // it is opt-in via `npm run test:contract` and never part of offline CI.
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    "/dist/",
+    "<rootDir>/test/fixtures/",
+    "<rootDir>/test/contract/",
+  ],
   setupFiles: ["<rootDir>/test/setup/force-color-off.ts"],
   clearMocks: true,
   // The pure layers carry the bulk of the logic and are cheap to cover

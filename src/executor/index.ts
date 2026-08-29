@@ -22,6 +22,7 @@ export {
   type RunProcessOptions,
   type SpawnResult,
 } from "./spawn.js";
+export { classifyFailure, type ClassifyInput } from "./classify.js";
 export { renderPrompt } from "./prompt.js";
 export { executeTask, type ExecuteTaskOptions, type TaskExecution } from "./task.js";
 export {

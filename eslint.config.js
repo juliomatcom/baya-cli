@@ -41,6 +41,7 @@ export default tseslint.config(
       "src/ui/progress.ts",
       "src/config/wizard.ts",
       "src/ui/confirm.ts",
+      "src/ui/model-gate.ts",
       "test/unit/esm-spike.test.ts",
     ],
     rules: {

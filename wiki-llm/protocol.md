@@ -102,12 +102,14 @@ Valid on **any** status — a `failed` task often has the most useful notes. Emp
 
 Apply in order; stop at first success:
 
-1. **Native schema.** `codex --output-schema … -o result.json` → read the file. Strongest; no parsing.
+1. **Native schema.** `codex --output-schema … -o result.json` → read the file. Strongest; no parsing. `claude` `.structured_output` is rung 1 too.
 2. **Verbatim.** Final assistant message parses as JSON matching the schema.
-3. **Fenced extract.** Last ` ```json ` block in the final message.
+3. **Fenced extract.** *Last* ` ```json ` block in the final message (last, not first — a model often shows a draft then a correction).
 4. **One repair round-trip.** Resume the session: *"Return only the JSON object matching the schema. No prose."* `later` — v1 goes straight to step 5.
    Only `opencode` and `copilot` can reach rungs 2–4; `codex` and `claude` enforce the schema up front.
 5. **Synthesize failure.** `status:"failed"`, `error.message:"unparseable result"`, raw stdout preserved as an artifact.
+
+Rungs 2–3 are `extractResultFromText(taskId, text)` and rung 5 is `synthesizeFailure` (`src/providers/result.ts`, M2.6). Both normalize `task_id` to the requested id so a provider echoing the wrong id cannot misroute a result. `opencode`/`copilot` call `extractResultFromText` over their concatenated assistant text; `claude` calls it over `.result`.
 
 **Never regex prose for meaning.** A question is the `needs_input` status field — not a question mark spotted in a stream. This is what makes escalation structural rather than heuristic.
 

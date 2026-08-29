@@ -1,0 +1,31 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`copilotAdapter.buildRun argv builds a resume around the pre-assigned session id 1`] = `
+[
+  "/home/u/.nvm/versions/node/v24/bin/copilot",
+  "-p",
+  "use postgres",
+  "--resume",
+  "sess-9",
+  "--output-format",
+  "json",
+  "-C",
+  "/work",
+  "--no-color",
+  "--no-ask-user",
+]
+`;
+
+exports[`copilotAdapter.buildRun argv matches the recorded surface 1`] = `
+[
+  "/home/u/.nvm/versions/node/v24/bin/copilot",
+  "-p",
+  "do the thing",
+  "--output-format",
+  "json",
+  "-C",
+  "/work",
+  "--no-color",
+  "--no-ask-user",
+]
+`;
