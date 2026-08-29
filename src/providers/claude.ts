@@ -342,13 +342,14 @@ export const claudeAdapter: ProviderAdapter = {
       const usage = obj.usage as Record<string, unknown>;
       const num = (key: string): number =>
         typeof usage[key] === "number" ? (usage[key] as number) : 0;
-      const input =
-        num("input_tokens") +
-        num("cache_creation_input_tokens") +
-        num("cache_read_input_tokens");
+      const write = num("cache_creation_input_tokens");
+      const read = num("cache_read_input_tokens");
+      const input = num("input_tokens") + write + read;
       const output = num("output_tokens");
       if (input > 0) out.input_tokens = input;
       if (output > 0) out.output_tokens = output;
+      if (write > 0) out.cache_write_input_tokens = write;
+      if (read > 0) out.cached_input_tokens = read;
     }
     return out;
   },

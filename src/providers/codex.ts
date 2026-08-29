@@ -310,6 +310,16 @@ export const codexAdapter: ProviderAdapter = {
       if (typeof u["input_tokens"] === "number") {
         out.input_tokens = (out.input_tokens ?? 0) + u["input_tokens"];
       }
+      // codex reports the cache split on the same line; ignoring it hid that a
+      // continued turn reads ~96k of transcript to do 35k of work.
+      if (typeof u["cached_input_tokens"] === "number") {
+        out.cached_input_tokens =
+          (out.cached_input_tokens ?? 0) + u["cached_input_tokens"];
+      }
+      if (typeof u["cache_write_input_tokens"] === "number") {
+        out.cache_write_input_tokens =
+          (out.cache_write_input_tokens ?? 0) + u["cache_write_input_tokens"];
+      }
       if (typeof u["output_tokens"] === "number") {
         out.output_tokens = (out.output_tokens ?? 0) + u["output_tokens"];
       }

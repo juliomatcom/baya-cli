@@ -91,10 +91,22 @@ export interface ExtractContext {
   transcript?: string | null;
 }
 
+/**
+ * Input tokens come at three prices — fresh, written-to-cache (a premium), and
+ * read-from-cache (about a tenth). Collapsing them into one number is what made
+ * a run that cost *more* look 52% cheaper, so all three are kept.
+ *
+ * `input_tokens` stays the gross total, of which `cache_write_input_tokens` and
+ * `cached_input_tokens` are parts; fresh input is the remainder.
+ */
 export interface ProviderUsage {
   cost_usd?: number;
   input_tokens?: number;
   output_tokens?: number;
+  /** Input served from the provider's prompt cache (cheapest). */
+  cached_input_tokens?: number;
+  /** Input written into the cache (dearer than fresh input on Anthropic). */
+  cache_write_input_tokens?: number;
 }
 
 export interface ProviderAdapter {

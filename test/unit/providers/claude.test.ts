@@ -341,6 +341,31 @@ describe("claudeAdapter.extractUsage", () => {
   });
 });
 
+describe("claude usage accounting", () => {
+  it("reports the cache split as well as the gross input total", () => {
+    const events = claudeAdapter.parseEvents(
+      JSON.stringify({
+        session_id: "s",
+        result: "done",
+        total_cost_usd: 0.39,
+        usage: {
+          input_tokens: 8,
+          cache_creation_input_tokens: 60683,
+          cache_read_input_tokens: 313029,
+          output_tokens: 16636,
+        },
+      }),
+    );
+    expect(claudeAdapter.extractUsage?.(events)).toMatchObject({
+      cost_usd: 0.39,
+      input_tokens: 8 + 60683 + 313029,
+      cache_write_input_tokens: 60683,
+      cached_input_tokens: 313029,
+      output_tokens: 16636,
+    });
+  });
+});
+
 describe("claude observations", () => {
   const ctx = (transcript: string | null) => ({
     taskId: "t1",

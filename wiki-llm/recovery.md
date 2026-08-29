@@ -58,6 +58,10 @@
       "notes": [{ "severity": "warn", "message": "…" }],
       "files_changed": [],
       "cost_usd": 0.0,
+      "input_tokens": 0,
+      "cached_input_tokens": 0,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 0,
       "result_rung": null,
       "blocked_by": null,
       "continued_from": null
@@ -70,6 +74,7 @@
 - `pid` — the child's process-group leader, checkpointed **before** the spawn so `baya doctor` can find a stray group after a crash.
 - `blocked_by` — the failed ancestor that caused a `skipped` state.
 - `result_rung` — which degradation-ladder rung produced the result (`protocol.md` §4).
+- `cached_input_tokens` / `cache_write_input_tokens` — parts of `input_tokens`, kept apart because they are priced differently: a cache read costs about a tenth of fresh input, a write more than it. Fresh input is the remainder. **A single input figure is not a cost proxy** — collapsing the three made a run that cost 14% more read as 52% cheaper.
 - `continued_from` — the task whose provider session this one continued (execution.md §Session reuse), or `null` for a cold start. A resume must treat a captured session as possibly gone: `--provider` may change, and the cache is long dead by then, so a resumed task always starts cold.
 
 ## One Baya per directory

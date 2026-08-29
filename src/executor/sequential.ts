@@ -342,6 +342,8 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       cost_usd: execution.usage.cost_usd ?? 0,
       input_tokens: execution.usage.input_tokens ?? 0,
       output_tokens: execution.usage.output_tokens ?? 0,
+      cached_input_tokens: execution.usage.cached_input_tokens ?? 0,
+      cache_write_input_tokens: execution.usage.cache_write_input_tokens ?? 0,
     };
 
     if (result.status === "ok") {
@@ -372,6 +374,8 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
         note_count: result.notes.length,
         input_tokens: execution.usage.input_tokens ?? 0,
         output_tokens: execution.usage.output_tokens ?? 0,
+        cached_input_tokens: execution.usage.cached_input_tokens ?? 0,
+        cache_write_input_tokens: execution.usage.cache_write_input_tokens ?? 0,
         cost_usd: execution.usage.cost_usd ?? 0,
       });
       options.onTaskSettled?.(taskId, "succeeded", result);

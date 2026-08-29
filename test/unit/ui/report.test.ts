@@ -63,6 +63,8 @@ function state(overrides: Partial<RunState> = {}): RunState {
       cost_usd: 0.42,
       input_tokens: 0,
       output_tokens: 0,
+      cached_input_tokens: 0,
+      cache_write_input_tokens: 0,
     },
     tasks: {
       "gen-schema": emptyTaskEntry({
@@ -167,6 +169,8 @@ describe("renderReport", () => {
         cost_usd: 0,
         input_tokens: 122_271,
         output_tokens: 1570,
+        cached_input_tokens: 0,
+        cache_write_input_tokens: 0,
       },
     });
     const text = renderReport(report(withTokens), theme);

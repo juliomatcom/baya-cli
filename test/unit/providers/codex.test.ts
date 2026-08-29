@@ -256,6 +256,23 @@ describe("codexAdapter.extractUsage", () => {
   });
 });
 
+describe("codex usage accounting", () => {
+  it("keeps the cache split, which decides whether a continuation was cheap", () => {
+    // Discarding these made a continued turn that read 96k of transcript look
+    // like a straight 3.5x regression instead of a mostly-cached one.
+    const events = codexAdapter.parseEvents(
+      '{"type":"turn.completed","usage":{"input_tokens":123952,' +
+        '"cached_input_tokens":95763,"cache_write_input_tokens":28171,"output_tokens":2112}}',
+    );
+    expect(codexAdapter.extractUsage?.(events)).toMatchObject({
+      input_tokens: 123952,
+      cached_input_tokens: 95763,
+      cache_write_input_tokens: 28171,
+      output_tokens: 2112,
+    });
+  });
+});
+
 describe("codex observations", () => {
   const ctx = (events: ReturnType<typeof codexAdapter.parseEvents>) => ({
     taskId: "t1",
