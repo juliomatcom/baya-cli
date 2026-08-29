@@ -34,6 +34,38 @@ export function firstLine(text: string, max = 120): string {
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
+/** Single-quote an argv token for display when it holds anything shell-special. */
+function shellQuote(arg: string): string {
+  if (arg === "") return "''";
+  if (/^[A-Za-z0-9,._+:@%/=-]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Render a spawn argv as a copy-pasteable command line, with the bulky
+ * arguments (the prompt, an inlined JSON schema) collapsed to a marker so the
+ * flags stay readable. `promptBytes` — from the elided `task.spawned` line —
+ * lets the exact prompt argument be labelled `<prompt>` rather than `<N chars>`.
+ */
+export function formatCommand(
+  argv: readonly string[],
+  opts: { promptBytes?: number } = {},
+): string {
+  return argv
+    .map((arg) => {
+      // Collapse only the genuinely bulky arguments — a prose prompt (always
+      // has whitespace) or an inlined JSON blob (very long). A long but
+      // whitespace-free token is a path/URL/id and stays readable in full.
+      const bulky = /\s/.test(arg) ? arg.length > 100 : arg.length > 400;
+      if (!bulky) return shellQuote(arg);
+      const bytes = Buffer.byteLength(arg, "utf8");
+      return opts.promptBytes !== undefined && bytes === opts.promptBytes
+        ? "<prompt>"
+        : `<${arg.length} chars>`;
+    })
+    .join(" ");
+}
+
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   const seconds = ms / 1000;
