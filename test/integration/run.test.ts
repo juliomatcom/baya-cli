@@ -14,7 +14,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: [],
-      writes: false,
+      access: "read-only",
       cwd: null,
     },
     {
@@ -24,7 +24,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: ["design-api"],
-      writes: true,
+      access: "read-write",
       cwd: null,
     },
   ],

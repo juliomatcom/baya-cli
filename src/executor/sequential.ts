@@ -203,7 +203,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       task: { id: task.id, title: task.title, instruction: task.instruction },
       workspace: {
         cwd: task.cwd ?? options.cwd,
-        writable: task.writes,
+        access: task.access,
         isolation: "shared",
       },
       context,

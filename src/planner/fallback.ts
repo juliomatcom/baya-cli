@@ -141,9 +141,10 @@ export function linearFallback(
       provider: null,
       model: null,
       depends_on: index === 0 ? [] : [],
-      // `writes` is unknowable without a model reading the text. Assume true:
+      // `access` is unknowable without a model reading the text. Assume the
+      // permissive level:
       // a read-only task denied a write fails loudly, which is the safer error.
-      writes: true,
+      access: "read-write",
       cwd: null,
     };
   });

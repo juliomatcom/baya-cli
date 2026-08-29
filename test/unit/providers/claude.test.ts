@@ -20,7 +20,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   provider: "claude",
   model: null,
   depends_on: [],
-  writes: false,
+  access: "read-only",
   cwd: null,
   ...overrides,
 });
@@ -30,7 +30,7 @@ const request: TaskRequest = {
   kind: "task_request",
   run_id: "run-1",
   task: { id: "gen-schema", title: "t", instruction: "i" },
-  workspace: { cwd: "/work", writable: false, isolation: "shared" },
+  workspace: { cwd: "/work", access: "read-only", isolation: "shared" },
   context: [],
   response_contract: { schema_path: "/work/.baya/schema/task_result.schema.json" },
   constraints: { max_runtime_s: 900 },
@@ -77,16 +77,18 @@ describe("claudeAdapter.buildRun argv", () => {
   // The two regressions this pins: `acceptEdits` pre-approves edits only and
   // `plan` refuses every non-readonly tool, so under `-p` — with nobody to
   // answer a prompt — both had Bash denied outright.
-  it("uses auto whether or not the task writes", () => {
+  it("uses auto at either access level", () => {
     const ro = claudeAdapter.buildRun(input()).argv;
     expect(ro[ro.indexOf("--permission-mode") + 1]).toBe("auto");
-    const rw = claudeAdapter.buildRun(input({ task: task({ writes: true }) })).argv;
+    const rw = claudeAdapter.buildRun(
+      input({ task: task({ access: "read-write" }) }),
+    ).argv;
     expect(rw[rw.indexOf("--permission-mode") + 1]).toBe("auto");
     expect([...ro, ...rw]).not.toContain("acceptEdits");
     expect([...ro, ...rw]).not.toContain("plan");
   });
 
-  // `writes:false` bounds what a task may mutate, not whether it may act: a
+  // `access: "read-only"` bounds what a task may mutate, not whether it may act: a
   // task that runs the suite and reports back needs Bash and writes nothing.
   it("withholds the editing tools from a read-only task, but never Bash", () => {
     const argv = claudeAdapter.buildRun(input()).argv;
@@ -96,7 +98,9 @@ describe("claudeAdapter.buildRun argv", () => {
   });
 
   it("withholds nothing from a writing task", () => {
-    const argv = claudeAdapter.buildRun(input({ task: task({ writes: true }) })).argv;
+    const argv = claudeAdapter.buildRun(
+      input({ task: task({ access: "read-write" }) }),
+    ).argv;
     expect(argv).not.toContain("--disallowed-tools");
   });
 

@@ -17,7 +17,7 @@ const manifest: Manifest = {
       provider: "codex",
       model: null,
       depends_on: [],
-      writes: true,
+      access: "read-write",
       cwd: null,
     },
     {
@@ -27,7 +27,7 @@ const manifest: Manifest = {
       provider: "codex",
       model: null,
       depends_on: ["gen-schema"],
-      writes: true,
+      access: "read-write",
       cwd: null,
     },
   ],

@@ -33,7 +33,7 @@ function withoutSchemaKey(schemaContents: string): Record<string, unknown> {
 }
 
 /**
- * The editing tools, withheld from a task that declared it writes nothing.
+ * The editing tools, withheld from a task granted only `read-only` access.
  * Bash is deliberately NOT in this list — see `permissionModeFor`.
  */
 const EDIT_TOOLS = ["Write", "Edit", "NotebookEdit"] as const;
@@ -42,27 +42,21 @@ const EDIT_TOOLS = ["Write", "Edit", "NotebookEdit"] as const;
  * Non-interactive `-p` cannot prompt, so the mode has to pre-decide everything
  * — and both halves of the old map pre-decided wrong.
  *
- * `writes` says whether a task may **mutate the tree**, not whether it may act
- * at all: a task that runs the suite and reports back writes nothing and still
- * needs Bash. codex has always read the bit that way — its `read-only` sandbox
- * executes commands freely and blocks mutation at the OS level — so the two
- * providers disagreed about what the same manifest meant.
- *
  * - `acceptEdits` pre-approves file edits *only*; Bash still wants a prompt
  *   `-p` has nobody to answer, so every command was denied. Measured: a real
  *   12-task run logged 54 `Bash` denials — `npm test`, `tsc`, bare `grep` —
  *   and shipped unverified work with an apology in the summary.
- * - `plan` is worse: it refuses every non-readonly tool, so a `writes:false`
- *   task could not run a test or a linter, and plan mode bends the output into
- *   a plan proposal on top of that.
+ * - `plan` is worse: it refuses every non-readonly tool, so a task could not
+ *   run a test or a linter, and plan mode bends the output into a plan
+ *   proposal on top of that.
  *
- * Hence `auto` for both, with `writes:false` enforced by removing the editing
+ * Hence `auto` for both, with `read-only` enforced by removing the editing
  * tools rather than by muzzling the session.
  *
- * ⚠️ That guard is narrower than codex's. `read-only` is an OS sandbox; this is
- * a tool withdrawal, so a `writes:false` task can still mutate the tree through
- * a shell redirect. `auto` classifies those calls, but the enforcement is not
- * equivalent — a task that must not touch the tree belongs on codex.
+ * ⚠️ That guard is narrower than codex's. `read-only` is an OS sandbox there;
+ * here it is a tool withdrawal, so a `read-only` task can still mutate the tree
+ * through a shell redirect. `auto` classifies those calls, but the enforcement
+ * is not equivalent — a task that must not touch the tree belongs on codex.
  */
 function permissionModeFor(input: BuildRunInput): string {
   return input.dangerouslyAllowAll ? "bypassPermissions" : "auto";
@@ -91,7 +85,7 @@ function commonFlags(input: BuildRunInput, resuming = false): string[] {
   ];
   // Comma-joined, not spread: `--disallowed-tools` is variadic and would
   // otherwise swallow whatever flag follows it.
-  if (!input.task.writes && !input.dangerouslyAllowAll) {
+  if (input.task.access === "read-only" && !input.dangerouslyAllowAll) {
     argv.push("--disallowed-tools", EDIT_TOOLS.join(","));
   }
   if (input.model !== null) argv.push("--model", input.model);

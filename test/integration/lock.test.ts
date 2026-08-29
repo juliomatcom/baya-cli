@@ -19,7 +19,7 @@ const scenario = {
           provider: "codex",
           model: null,
           depends_on: [],
-          writes: false,
+          access: "read-only",
           cwd: null,
         },
       ],

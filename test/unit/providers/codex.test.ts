@@ -14,7 +14,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   provider: "codex",
   model: null,
   depends_on: [],
-  writes: false,
+  access: "read-only",
   cwd: null,
   ...overrides,
 });
@@ -24,7 +24,7 @@ const request: TaskRequest = {
   kind: "task_request",
   run_id: "run-1",
   task: { id: "gen-schema", title: "t", instruction: "i" },
-  workspace: { cwd: "/work", writable: false, isolation: "shared" },
+  workspace: { cwd: "/work", access: "read-only", isolation: "shared" },
   context: [],
   response_contract: { schema_path: "/work/.baya/schema/task_result.schema.json" },
   constraints: { max_runtime_s: 900 },
@@ -48,9 +48,9 @@ describe("codexAdapter.buildRun argv", () => {
     expect(codexAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
-  it("uses workspace-write only when the task writes", () => {
+  it("uses the workspace-write sandbox only for read-write access", () => {
     expect(
-      codexAdapter.buildRun(input({ task: task({ writes: true }) })).argv,
+      codexAdapter.buildRun(input({ task: task({ access: "read-write" }) })).argv,
     ).toMatchSnapshot();
   });
 

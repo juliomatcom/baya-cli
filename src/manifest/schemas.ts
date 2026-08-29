@@ -23,6 +23,10 @@ export const SUMMARY_MAX_CHARS = 2000;
 
 // ---------------------------------------------------------------- manifest
 
+export const ACCESS_LEVELS = ["read-only", "read-write"] as const;
+export const AccessSchema = z.enum(ACCESS_LEVELS);
+export type Access = z.infer<typeof AccessSchema>;
+
 export const TaskSchema = z
   .object({
     id: z.string(),
@@ -33,7 +37,15 @@ export const TaskSchema = z
     /** `null` => the provider's own default. Never hard-code a model id. */
     model: z.string().min(1).nullable().default(null),
     depends_on: z.array(z.string()).default([]),
-    writes: z.boolean().default(false),
+    /**
+     * What the task needs permission to **do**, not what it edits. A task that
+     * runs the suite and reports back changes no source and is still
+     * `read-write`: jest drops a cache, and a provider that cannot act cannot
+     * verify anything. Named for the permission because the old boolean —
+     * `writes` — was read as "this modifies my code" and alarmed people about
+     * tasks that only ran a test.
+     */
+    access: AccessSchema.default("read-only"),
     cwd: z.string().nullable().default(null),
   })
   .strict();
@@ -78,7 +90,7 @@ export const TaskRequestSchema = z
     workspace: z
       .object({
         cwd: z.string(),
-        writable: z.boolean(),
+        access: AccessSchema,
         isolation: z.enum(["shared", "worktree"]),
       })
       .strict(),

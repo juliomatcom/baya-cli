@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  ACCESS_LEVELS,
   NOTE_SEVERITIES,
   PROTOCOL_VERSION,
   PROVIDER_IDS,
@@ -142,7 +143,7 @@ export function planDraftJsonSchema(): Record<string, unknown> {
             "provider",
             "model",
             "depends_on",
-            "writes",
+            "access",
             "cwd",
           ],
           properties: {
@@ -171,9 +172,11 @@ export function planDraftJsonSchema(): Record<string, unknown> {
               items: { type: "string" },
               description: "Task ids that must succeed first. Must be acyclic.",
             },
-            writes: {
-              type: "boolean",
-              description: "true if the task creates or modifies files",
+            access: {
+              type: "string",
+              enum: [...ACCESS_LEVELS],
+              description:
+                "read-write if the task modifies the workspace OR runs anything that writes as a side effect (a test suite, a build, a linter, an install). read-only only for pure reading.",
             },
             cwd: { type: ["string", "null"] },
           },

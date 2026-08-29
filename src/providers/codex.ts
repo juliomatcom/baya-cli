@@ -24,7 +24,7 @@ import type {
 
 function sandboxFor(input: BuildRunInput): string {
   if (input.dangerouslyAllowAll) return "danger-full-access";
-  return input.task.writes ? "workspace-write" : "read-only";
+  return input.task.access === "read-write" ? "workspace-write" : "read-only";
 }
 
 /** Flags shared by `exec` and `exec resume`, in a fixed order for the snapshot. */

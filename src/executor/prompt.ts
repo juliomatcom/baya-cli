@@ -70,7 +70,7 @@ export function renderPrompt(
     "# Workspace",
     "",
     `Working directory: ${request.workspace.cwd}`,
-    request.workspace.writable
+    request.workspace.access === "read-write"
       ? "You may create and modify files in this directory."
       : "This task is read-only. Do not modify any file.",
     "",

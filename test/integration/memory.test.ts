@@ -18,7 +18,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: [],
-      writes: false,
+      access: "read-only",
       cwd: null,
     },
     {
@@ -28,7 +28,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: [],
-      writes: false,
+      access: "read-only",
       cwd: null,
     },
     {
@@ -40,7 +40,7 @@ const PLAN = {
       // A fan-in, so this task is never a session continuation and therefore
       // always receives memory in its prompt rather than in its transcript.
       depends_on: ["probe-tests", "probe-docs"],
-      writes: true,
+      access: "read-write",
       cwd: null,
     },
   ],
@@ -155,7 +155,7 @@ describe("a continuation the CLI refuses", () => {
         provider: "codex",
         model: null,
         depends_on: [],
-        writes: false,
+        access: "read-only",
         cwd: null,
       },
       {
@@ -165,7 +165,7 @@ describe("a continuation the CLI refuses", () => {
         provider: "codex",
         model: null,
         depends_on: ["first"],
-        writes: true,
+        access: "read-write",
         cwd: null,
       },
     ],

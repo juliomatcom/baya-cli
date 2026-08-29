@@ -6,7 +6,7 @@ const request = (context: TaskRequest["context"] = []): TaskRequest => ({
   kind: "task_request",
   run_id: "run-1",
   task: { id: "gen-schema", title: "Generate DB schema", instruction: "Create tables." },
-  workspace: { cwd: "/work", writable: true, isolation: "shared" },
+  workspace: { cwd: "/work", access: "read-write", isolation: "shared" },
   context,
   response_contract: { schema_path: "/work/.baya/schema/task_result.schema.json" },
   constraints: { max_runtime_s: 900 },

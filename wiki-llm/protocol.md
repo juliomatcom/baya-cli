@@ -19,21 +19,21 @@
       "provider": "codex",
       "model": null,
       "depends_on": ["design-api"],
-      "writes": true,
+      "access": "read-write",
       "cwd": null
     }
   ]
 }
 ```
 
-| Field         | Rule                                                                                                                                                                                                                                                                                                 |
-| :------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | kebab-case, unique, `^[a-z0-9][a-z0-9-]{0,63}$`.                                                                                                                                                                                                                                                     |
-| `instruction` | Non-empty. Self-contained; upstream context arrives via `context[]`.                                                                                                                                                                                                                                 |
-| `provider`    | Closed enum ∩ configured allowlist. Unknown ⇒ validation error. `null` ⇒ run default (or model-alias routing).                                                                                                                                                                                       |
-| `model`       | Free string or `null`. `null` ⇒ provider's own default. **Never hard-code model ids.** A named model is resolved against the catalog before the run (`config.md` §Model resolution).                                                                                                                 |
-| `depends_on`  | Every entry must resolve. Graph must be acyclic.                                                                                                                                                                                                                                                     |
-| `writes`      | **Needs a writable workspace** — modifies files, _or_ runs anything that writes as a side effect (test suite, build, linter, install: all drop caches/temp). `false` only for pure reading. Drives the per-provider sandbox/permission mode and one prompt line; **gates no lock**. Default `false`. |
+| Field         | Rule                                                                                                                                                                                                                                                                                                                                                                                 |
+| :------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | kebab-case, unique, `^[a-z0-9][a-z0-9-]{0,63}$`.                                                                                                                                                                                                                                                                                                                                     |
+| `instruction` | Non-empty. Self-contained; upstream context arrives via `context[]`.                                                                                                                                                                                                                                                                                                                 |
+| `provider`    | Closed enum ∩ configured allowlist. Unknown ⇒ validation error. `null` ⇒ run default (or model-alias routing).                                                                                                                                                                                                                                                                       |
+| `model`       | Free string or `null`. `null` ⇒ provider's own default. **Never hard-code model ids.** A named model is resolved against the catalog before the run (`config.md` §Model resolution).                                                                                                                                                                                                 |
+| `depends_on`  | Every entry must resolve. Graph must be acyclic.                                                                                                                                                                                                                                                                                                                                     |
+| `access`      | `"read-only"` \| `"read-write"`. **What the task needs permission to do, not what it edits** — `read-write` if it modifies files _or_ runs anything that writes as a side effect (test suite, build, linter, install: all drop caches/temp). `false` only for pure reading. Drives the per-provider sandbox/permission mode and one prompt line; **gates no lock**. Default `false`. |
 
 **Privilege boundary:** the manifest may never contain argv, shell strings, env vars, or executable paths. The planner selects _which_ provider; the adapter alone decides _how_.
 
@@ -49,7 +49,7 @@ Written to `runs/<runId>/tasks/<id>/request.json`, delivered by file/stdin (see 
   "kind": "task_request",
   "run_id": "20260828T2152Z-a1f4c9",
   "task": { "id": "gen-schema", "title": "…", "instruction": "…" },
-  "workspace": { "cwd": "/abs/path", "writable": true, "isolation": "shared" },
+  "workspace": { "cwd": "/abs/path", "access": "read-write", "isolation": "shared" },
   "context": [
     {
       "task_id": "design-api",

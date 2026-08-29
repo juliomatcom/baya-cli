@@ -68,7 +68,7 @@ Run tests via `npm test`, never bare `npx jest` (needs `--experimental-vm-module
 2. **Failure isolation** — mid-graph failure marks only descendants `skipped`; a parallel independent branch still `succeeds`; exit `1`.
 3. **Park and resume** — `needs_input` parks one node, other branches run, injected answer resumes the session, run completes `0`.
 4. **SIGINT teardown** — long fakes spawning grandchildren; SIGINT ⇒ exit `130` + **zero surviving pids** (verify via `ps`, not the promise).
-5. **Write serialization** — two independent `writes:true` tasks never overlap; two readers do.
+5. **Write serialization** — two independent `access:"read-write"` tasks never overlap; two readers do.
 6. **Context budgeting** — 200 KB upstream ⇒ `link-only` entry, `inline: null`, valid `output_path`.
 7. **Malformed plan recovery** — planner returns cycle → dangling → valid; assert the repair path + linear fallback.
 8. **Result degradation** — prose-wrapped, fenced, garbage each land on the right rung.

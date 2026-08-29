@@ -80,7 +80,7 @@ describeContract("provider contract", () => {
           provider: id,
           model: null,
           depends_on: [],
-          writes: false,
+          access: "read-only",
           cwd: null,
         };
         const request: TaskRequest = {
@@ -88,7 +88,7 @@ describeContract("provider contract", () => {
           kind: "task_request",
           run_id: "contract",
           task: { id: task.id, title: task.title, instruction: task.instruction },
-          workspace: { cwd: dir, writable: false, isolation: "shared" },
+          workspace: { cwd: dir, access: "read-only", isolation: "shared" },
           context: [],
           response_contract: { schema_path: schemaPath },
           constraints: { max_runtime_s: 150 },

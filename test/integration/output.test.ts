@@ -10,7 +10,7 @@ const plan = (ids: string[]) => ({
     provider: "codex",
     model: null,
     depends_on: index === 0 ? [] : [ids[index - 1] as string],
-    writes: false,
+    access: "read-only",
     cwd: null,
   })),
 });

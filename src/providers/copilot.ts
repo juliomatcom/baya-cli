@@ -28,7 +28,7 @@ import type {
  */
 
 function needsAllTools(input: BuildRunInput): boolean {
-  return input.dangerouslyAllowAll || input.task.writes;
+  return input.dangerouslyAllowAll || input.task.access === "read-write";
 }
 
 /** Flags shared by `-p` and `--resume`, in a fixed order for the snapshot. */

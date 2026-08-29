@@ -16,7 +16,7 @@ Per-provider caps conservative — consumer subscriptions throttle. Raise via `.
 
 ## Workspace isolation
 
-**v1 — `--isolation shared` (default).** `writes:false` tasks run fully parallel. Any `writes:true` task takes the **single-writer semaphore** — writers serialize against each other, readers continue.
+**v1 — `--isolation shared` (default).** `access:"read-only"` tasks run fully parallel. Any `access:"read-write"` task takes the **single-writer semaphore** — writers serialize against each other, readers continue.
 
 Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per directory ([recovery.md](recovery.md)) means no second process to coordinate with.
 
@@ -24,7 +24,7 @@ Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per di
 
 ## Permissions
 
-Never guessed. Task policy → adapter mapping: `writes:false` ⇒ read-only; `writes:true` ⇒ workspace-write. Full bypass requires explicit `--dangerously-allow-all` on the `baya` invocation — **never inferred from the task list**. Per-adapter flags: `providers.md`.
+Never guessed. Task policy → adapter mapping: `access:"read-only"` ⇒ read-only; `access:"read-write"` ⇒ workspace-write. Full bypass requires explicit `--dangerously-allow-all` on the `baya` invocation — **never inferred from the task list**. Per-adapter flags: `providers.md`.
 
 ## Context bus
 
