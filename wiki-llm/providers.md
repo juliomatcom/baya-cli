@@ -80,7 +80,7 @@ Flags: `-m/--model` · `-C/--cd <DIR>` · `--add-dir` · `-s/--sandbox {read-onl
 
 ⚠️ **`-p` is `--profile`, NOT prompt.** Canonical drift trap.
 
-Events (`--json`): `thread.started`→`thread_id` · `turn.started` · `item.completed`→`item.type:"agent_message"`/`item.text` · `turn.completed`→`usage`.
+Events (`--json`): `thread.started`→`thread_id` · `turn.started` · `item.completed`→`item.type:"agent_message"`/`item.text`, `item.type:"error"`→error event (full message, e.g. an unknown-model metadata warning) · top-level `type:"error"`→error event · `turn.completed`→`usage`.
 
 Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-file'` · `sessionId 'capture'` · `resume 'session'` · `cwdFlag true` · `maxConcurrency 2`.
 
@@ -168,7 +168,7 @@ CLIs ship weekly; `codex -p` will recur.
 
 ## Model catalog, routing, failure classification
 
-- **Model catalog** (`src/providers/catalog.ts`, M3.6). `codex`/`claude`/`copilot` have no "list models" command — `{ id, aliases, description }` lists hardcoded here, edit on drift. `opencode` enumerates live (`opencode models`). Wizard writes the merged catalog to config `modelCatalog`; `baya config refresh-models` rewrites the `opencode` part. Known ids: codex `gpt-5.6-{sol,terra,luna}`; claude `claude-{fable-5,opus-5,sonnet-5,haiku-4-5-20251001}`; copilot ⚠️ slugs UNVERIFIED (docs list display names, no list command).
+- **Model catalog** (`src/providers/catalog.ts`, M3.6). `codex`/`claude`/`copilot` have no "list models" command — `{ id, aliases, description }` lists hardcoded here, edit on drift. `opencode` enumerates live (`opencode models`). Config `modelCatalog` stores the live `opencode` list + user-authored entries only — **never a `BUILTIN_CATALOG` snapshot** (`withoutBuiltinEntries` migrates a stored one out on rewrite; config.md §What the file stores). Wizard and `baya config refresh-models` both write it. Known ids: codex `gpt-5.6-{sol,terra,luna}`; claude `claude-{fable-5,opus-5,sonnet-5,haiku-4-5-20251001}`; copilot ⚠️ slugs UNVERIFIED (docs list display names, no list command).
 - **Resolution** (`src/ui/model-gate.ts`). Every run, before the plan gate: resolve a task-named model — user alias → exact id/alias → best match (char-bigram Dice for typos, description scored). No confident hit ⇒ gate prompts (best match / provider default / exit); `--yes`/non-TTY takes best match only at score ≥ 0.85, else exit `2`. **A named model never silently becomes the default.** Explicit `task.provider` wins ties, then run default.
 - **`providerForModel`** (`src/manifest/aliases.ts`). Fallback for a name not in the catalog: pattern match (`gpt-*`→codex, `claude-*`/`sonnet`/`opus`→claude) supplies a provider for a plausible literal id. `validateManifest` rejects (with a suggestion) an explicit `provider` paired with a model that pattern-matches another provider, or a `gemini`-family model.
 - **Failure classifier** (`src/executor/classify.ts`, M2.5). Maps timeout flag + exit code + normalized `error` events + adapter `error.retryable` → `Failure {kind, retry}`. `quota`⇒`retry:"later"`; `auth`/`permission`/bad-model⇒`"never"` — a run never spends its attempt budget on an endpoint that keeps refusing.

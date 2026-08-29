@@ -268,6 +268,41 @@ export function setConfigValue(
     return path;
   }
 
+  // `baya config set modelCatalog.codex.gpt-5 "GPT-5, fast"` — the value is the
+  // model's description; `... null` drops the entry. Same persistence rules as
+  // the modelAliases branch: prune empty containers, write the user layer only.
+  if (section === "modelCatalog") {
+    const parts = key.split(".");
+    const providerRaw = parts[1];
+    // Model ids contain dots (`gpt-5.6-luna`), so the id is everything past the
+    // provider segment, rejoined.
+    const modelId = parts.slice(2).join(".");
+    if (!providerRaw || !modelId) {
+      throw new ConfigError(path, `unknown config key "${key}"`);
+    }
+    const providerId = providerOrThrow(providerRaw, path);
+    const next: ConfigFile = { ...current, modelCatalog: { ...current.modelCatalog } };
+    const catalog = next.modelCatalog as Record<
+      string,
+      Array<{ id: string; aliases: string[]; description: string }>
+    >;
+    const entries = [...(catalog[providerId] ?? [])];
+    const idx = entries.findIndex((model) => model.id === modelId);
+    const existing = idx === -1 ? undefined : entries[idx];
+    if (value === "null") {
+      if (idx !== -1) entries.splice(idx, 1);
+    } else if (existing) {
+      entries[idx] = { ...existing, description: value };
+    } else {
+      entries.push({ id: modelId, aliases: [], description: value });
+    }
+    if (entries.length === 0) delete catalog[providerId];
+    else catalog[providerId] = entries;
+    if (Object.keys(catalog).length === 0) delete next.modelCatalog;
+    writeConfigFile(path, next);
+    return path;
+  }
+
   if ((section !== "defaults" && section !== "planner") || !field) {
     throw new ConfigError(path, `unknown config key "${key}"`);
   }

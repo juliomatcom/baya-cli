@@ -1,6 +1,17 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { FAKE_PROVIDER, makeWorkspace, runCli } from "../helpers/runCli.js";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { userConfigPath } from "../../src/config/index.js";
+import {
+  BUILTIN_CATALOG,
+  type Catalog,
+  type CatalogModel,
+} from "../../src/providers/index.js";
+import {
+  FAKE_PROVIDER,
+  makeWorkspace,
+  runCli,
+  type Workspace,
+} from "../helpers/runCli.js";
 
 describe("baya doctor", () => {
   it("reports the resolved path, version, and capability set", async () => {
@@ -99,6 +110,203 @@ describe("baya config", () => {
     expect(result.code).toBe(2);
     expect(result.stderr).toContain("not valid JSON");
     expect(result.stderr).toContain("config.json");
+  });
+});
+
+describe("baya config refresh-models", () => {
+  /** Stands in for `opencode models` — the one provider that enumerates live. */
+  function fakeOpencode(dir: string, ids: string[]): string {
+    const path = join(dir, "opencode");
+    const args = ids.map((id) => `'${id}'`).join(" ");
+    writeFileSync(path, `#!/bin/sh\nprintf '%s\\n' ${args}\n`);
+    chmodSync(path, 0o755);
+    return path;
+  }
+
+  /** `opencode` reachable only through the project layer's `bin` override. */
+  function setup(ids: string[] | null, userConfig: object): Workspace {
+    const workspace = makeWorkspace({});
+    const bin =
+      ids === null ? "/nonexistent/opencode" : fakeOpencode(workspace.home, ids);
+    writeFileSync(
+      join(workspace.cwd, ".baya", "config.json"),
+      JSON.stringify({ version: 1, providers: { opencode: { bin } } }),
+    );
+    const userPath = userConfigPath(workspace.env);
+    mkdirSync(dirname(userPath), { recursive: true });
+    writeFileSync(userPath, JSON.stringify({ version: 1, ...userConfig }));
+    return workspace;
+  }
+
+  interface WrittenConfig {
+    modelCatalog?: Catalog;
+    defaults?: { provider: string | null; model: string | null };
+  }
+
+  function readUser(workspace: Workspace): WrittenConfig {
+    const raw = readFileSync(userConfigPath(workspace.env), "utf8");
+    return JSON.parse(raw) as WrittenConfig;
+  }
+
+  /** What an older baya wrote: the whole built-in catalog, copied into the file. */
+  function snapshot(): Catalog {
+    return JSON.parse(JSON.stringify(BUILTIN_CATALOG)) as Catalog;
+  }
+
+  it("caches the live opencode list, not the built-in catalog", async () => {
+    const workspace = setup(["anthropic/claude-sonnet-4", "openai/gpt-5"], {});
+    const result = await runCli(["config", "refresh-models"], { workspace });
+
+    expect(result.code).toBe(0);
+    const written = readUser(workspace);
+    expect(Object.keys(written.modelCatalog ?? {})).toEqual(["opencode"]);
+    expect((written.modelCatalog?.opencode ?? []).map((m) => m.id)).toEqual([
+      "anthropic/claude-sonnet-4",
+      "openai/gpt-5",
+    ]);
+    // Counts still describe everything a run can resolve, built-ins included.
+    expect(result.stderr).toContain("codex 3");
+    expect(result.stderr).toContain("opencode 2");
+  });
+
+  it("migrates out a stored snapshot but keeps a deliberate override", async () => {
+    const stored = snapshot();
+    const luna = (stored.codex ?? []).find((m) => m.id === "gpt-5.6-luna");
+    (luna as CatalogModel).aliases = ["luna", "cheap"];
+    const workspace = setup(["openai/gpt-5"], {
+      defaults: { provider: "codex", model: null },
+      modelCatalog: stored,
+    });
+
+    expect((await runCli(["config", "refresh-models"], { workspace })).code).toBe(0);
+
+    const written = readUser(workspace);
+    const keys = Object.keys(written.modelCatalog ?? {}).sort();
+    expect(keys).toEqual(["codex", "opencode"]);
+    expect(written.modelCatalog?.codex).toEqual([luna]);
+    // The identical copies are gone; unrelated settings are untouched.
+    expect(written.modelCatalog?.claude).toBeUndefined();
+    expect(written.defaults).toEqual({ provider: "codex", model: null });
+
+    // …and the merged view a run sees is unchanged by the migration.
+    const show = await runCli(["config", "--show"], { workspace });
+    expect(show.stdout).toContain("codex:3");
+    expect(show.stdout).toContain("claude:4");
+    expect(show.stdout).toContain("opencode:1");
+  });
+
+  it("keeps the stored cache when opencode cannot be found", async () => {
+    const cached = [{ id: "openai/gpt-5", aliases: [], description: "" }];
+    const workspace = setup(null, { modelCatalog: { opencode: cached } });
+
+    const result = await runCli(["config", "refresh-models"], { workspace });
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("opencode not found");
+    expect(readUser(workspace).modelCatalog?.opencode).toEqual(cached);
+  });
+});
+
+describe("baya models", () => {
+  /** A user config at layer 4 with a hand-written `modelCatalog`. */
+  function withUserCatalog(catalog: Catalog): Workspace {
+    const workspace = makeWorkspace({});
+    const userPath = userConfigPath(workspace.env);
+    mkdirSync(dirname(userPath), { recursive: true });
+    writeFileSync(userPath, JSON.stringify({ version: 1, modelCatalog: catalog }));
+    return workspace;
+  }
+
+  it("prints the built-in catalog grouped by provider, every row tagged built-in", async () => {
+    const result = await runCli(["models"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("codex");
+    expect(result.stdout).toContain("gpt-5.6-sol");
+    expect(result.stdout).toContain("sol");
+    expect(result.stdout).toContain("highest capability");
+    expect(result.stdout).toContain("claude");
+    expect(result.stdout).toContain("copilot");
+    expect(result.stdout).toContain("built-in");
+    expect(result.stdout).not.toMatch(/\buser\b(?! config)/);
+  });
+
+  it("narrows to one provider when given a filter", async () => {
+    const result = await runCli(["models", "codex"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("gpt-5.6-sol");
+    expect(result.stdout).not.toContain("claude-sonnet-5");
+    expect(result.stdout).not.toContain("kimi-k3");
+  });
+
+  it("tags an entry that overrides a built-in id as user, leaving the rest built-in", async () => {
+    const workspace = withUserCatalog({
+      codex: [
+        {
+          id: "gpt-5.6-luna",
+          aliases: ["luna", "cheap"],
+          description: "my cheap default",
+        },
+      ],
+    });
+
+    const result = await runCli(["models", "codex"], { workspace });
+
+    expect(result.code).toBe(0);
+    const luna = result.stdout.split("\n").find((line) => line.includes("gpt-5.6-luna"));
+    expect(luna).toContain("cheap");
+    expect(luna).toContain("my cheap default");
+    expect(luna).toContain("user");
+    const sol = result.stdout.split("\n").find((line) => line.includes("gpt-5.6-sol"));
+    expect(sol).toContain("built-in");
+  });
+
+  it("surfaces a user-added opencode entry", async () => {
+    const workspace = withUserCatalog({
+      opencode: [{ id: "anthropic/claude-sonnet-4", aliases: [], description: "cached" }],
+    });
+
+    const result = await runCli(["models", "opencode"], { workspace });
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("anthropic/claude-sonnet-4");
+    expect(result.stdout).toContain("user");
+  });
+
+  it("prints the effective catalog as clean JSON and suppresses the banner", async () => {
+    const workspace = makeWorkspace({
+      env: { FORCE_COLOR: "3", NO_COLOR: "" },
+    });
+
+    const result = await runCli(["models", "--json"], { workspace });
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(BUILTIN_CATALOG);
+    expect(result.stdout).not.toContain("\u001b[");
+    expect(result.stderr).not.toContain("▗▄▄▖");
+  });
+
+  it("applies the provider filter to JSON output", async () => {
+    const workspace = withUserCatalog({
+      codex: [{ id: "gpt-5.6-luna", aliases: ["cheap"], description: "override" }],
+    });
+
+    const result = await runCli(["models", "codex", "--json"], { workspace });
+    const catalog = JSON.parse(result.stdout) as Catalog;
+
+    expect(result.code).toBe(0);
+    expect(Object.keys(catalog)).toEqual(["codex"]);
+    expect(catalog.codex).toContainEqual({
+      id: "gpt-5.6-luna",
+      aliases: ["cheap"],
+      description: "override",
+    });
+    expect(catalog.claude).toBeUndefined();
+  });
+
+  it("rejects an unknown provider filter with exit 2", async () => {
+    const result = await runCli(["models", "rogue"]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("rogue");
   });
 });
 

@@ -22,6 +22,18 @@ describe("subcommand vs path resolution", () => {
     });
   });
 
+  it("dispatches models and accepts an optional provider filter", () => {
+    expect(parseArgs(["models"])).toMatchObject({
+      command: "models",
+      file: null,
+    });
+    expect(parseArgs(["models", "codex", "--json"])).toMatchObject({
+      command: "models",
+      modelsProvider: "codex",
+      flags: { json: true },
+    });
+  });
+
   it("lets ./doctor disambiguate a file that shares a subcommand's name", () => {
     expect(parseArgs(["./doctor"])).toMatchObject({ command: "run", file: "./doctor" });
   });

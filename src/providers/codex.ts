@@ -92,6 +92,13 @@ function eventForLine(line: string): ProviderEvent {
       if (itemType === "agent_message") {
         return { t: "text", text: String(record["text"] ?? "") };
       }
+      // codex reports its own diagnostics (a missing model-metadata entry, a
+      // truncated turn) as an `error` item. That is a message to read in full,
+      // not a tool call to abbreviate.
+      if (itemType === "error") {
+        const message = String(record["message"] ?? trimmed);
+        return { t: "error", kind: classifyErrorText(message), message };
+      }
       return { t: "tool", name: toolNameFor(itemType, record), input: record };
     }
     case "error": {
@@ -175,7 +182,9 @@ export const codexAdapter: ProviderAdapter = {
       );
     }
 
-    const errorEvent = ctx.events.find((event) => event.t === "error");
+    // The last error wins: codex emits non-fatal diagnostics (an unknown-model
+    // metadata warning) as `error` items too, and a real failure comes after.
+    const errorEvent = ctx.events.findLast((event) => event.t === "error");
     if (errorEvent && errorEvent.t === "error") {
       return synthesizeFailure(ctx.taskId, errorEvent.message, {
         retryable: errorEvent.kind !== "auth",

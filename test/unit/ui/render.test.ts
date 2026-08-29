@@ -80,15 +80,15 @@ describe("startup", () => {
 });
 
 describe("attribution column", () => {
-  it("truncates an over-long task id with an ellipsis, so it reads as cut", () => {
+  it("shows an over-long task id in full rather than cutting it", () => {
     const out = render(
       line("provider.text", {
         task_id: "create-number-generator-with-a-very-long-name",
         text: "hi",
       }),
     );
-    expect(out).toContain("…");
-    expect(out).not.toContain("create-number-generator-with-a-very-long-name");
+    expect(out).not.toContain("…");
+    expect(out).toContain("create-number-generator-with-a-very-long-name");
   });
 });
 
@@ -128,6 +128,28 @@ describe("live provider output", () => {
     ).toContain("warn: x");
   });
 
+  it("shows a provider error in full, wrapped and never truncated", () => {
+    const message =
+      "Model metadata for gpt-5-mini not found. Defaulting to fallback metadata; this can degrade performance and cause issues.";
+    const out = render(
+      line("provider.error", { task_id: "gen-schema", provider: "codex", message }),
+    );
+    expect(out).not.toContain("…");
+    const rows = (out ?? "").split("\n");
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.every((row) => row.includes("gen-schema"))).toBe(true);
+    const reassembled = rows
+      .map((row) => row.replace(/^.*│ /, "").replace(/^! /, ""))
+      .join(" ");
+    expect(reassembled).toContain(message);
+  });
+
+  it("keeps a provider error visible even under --quiet", () => {
+    expect(
+      quietRender(line("provider.error", { task_id: "a", message: "boom" })),
+    ).toContain("boom");
+  });
+
   it("suppresses all live output under --quiet", () => {
     expect(quietRender(line("provider.text", { task_id: "a", text: "x" }))).toBeNull();
     expect(quietRender(line("provider.tool", { task_id: "a", name: "Read" }))).toBeNull();
@@ -136,7 +158,7 @@ describe("live provider output", () => {
 });
 
 describe("completion lines", () => {
-  it("shows the summary's first line, capped at 120 characters", () => {
+  it("shows the summary's first line in full, without the rest and without cutting", () => {
     const out = render(
       line("task.succeeded", {
         task_id: "gen-schema",
@@ -148,7 +170,8 @@ describe("completion lines", () => {
     expect(out).toContain("✓");
     expect(out).toContain("8.1s");
     expect(out).not.toContain("second line");
-    expect(out?.length).toBeLessThan(200);
+    expect(out).not.toContain("…");
+    expect(out).toContain("x".repeat(200));
   });
 
   it("shows the token meter on a success line when the provider reported usage", () => {

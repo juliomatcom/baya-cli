@@ -1,3 +1,7 @@
+/**
+ * For a new or corrected model, add a `modelCatalog` config override first;
+ * submit a PR updating `BUILTIN_CATALOG` only when it is a confirmed shared default.
+ */
 import { PROVIDER_IDS, providerForModel, type ProviderId } from "../manifest/index.js";
 
 /**
@@ -122,6 +126,79 @@ export function mergeCatalog(base: Catalog, extra: Catalog | undefined): Catalog
 /** `opencode models` prints `provider/model` lines; turn them into catalog entries. */
 export function opencodeCatalog(ids: readonly string[]): CatalogModel[] {
   return ids.map((id) => ({ id, aliases: [], description: "" }));
+}
+
+// ------------------------------------------------------------- what to persist
+
+function sameEntry(a: CatalogModel, b: CatalogModel): boolean {
+  return (
+    a.id === b.id &&
+    a.description === b.description &&
+    a.aliases.length === b.aliases.length &&
+    a.aliases.every((alias, i) => alias === b.aliases[i])
+  );
+}
+
+/** A generated `opencode` entry carries no aliases and no description. */
+function isAuthoredOpencodeEntry(model: CatalogModel): boolean {
+  return model.aliases.length > 0 || model.description !== "";
+}
+
+/**
+ * The config migration rule (config.md §modelCatalog).
+ *
+ * A config file must hold only what a person typed: `BUILTIN_CATALOG` ships in
+ * the binary, so a stored copy of it is dead weight that silently pins an old
+ * built-in list once the shipped one moves. Drop every entry byte-identical to
+ * its built-in definition; keep everything else — a changed description, an
+ * extra alias, an id the built-in list never had. Deliberate overrides survive,
+ * because "identical to built-in" is the only thing we can prove is redundant.
+ *
+ * Applied on rewrite (`refresh-models`, wizard), never on read: loading a
+ * config never mutates it, and an un-migrated file still resolves the same —
+ * `mergeCatalog(BUILTIN_CATALOG, stored)` is unchanged by removing entries
+ * equal to the base.
+ */
+export function withoutBuiltinEntries(
+  stored: Catalog | undefined,
+  builtin: Catalog = BUILTIN_CATALOG,
+): Catalog {
+  if (!stored) return {};
+  const kept: Catalog = {};
+  for (const provider of PROVIDER_IDS) {
+    const entries = stored[provider];
+    if (!entries) continue;
+    const base = new Map((builtin[provider] ?? []).map((model) => [model.id, model]));
+    const authored = entries.filter((model) => {
+      const shipped = base.get(model.id);
+      return shipped === undefined || !sameEntry(shipped, model);
+    });
+    if (authored.length > 0) kept[provider] = authored;
+  }
+  return kept;
+}
+
+/**
+ * The `modelCatalog` `baya config refresh-models` writes: the live `opencode`
+ * enumeration (recomputable, so it is a cache worth storing) plus every
+ * user-authored entry, and nothing else.
+ *
+ * `opencodeIds` empty means the enumeration failed or `opencode` is gone —
+ * then the stored cache is all the user has, so it is left untouched rather
+ * than wiped. With a fresh list in hand, bare cached entries are replaced by
+ * it; an `opencode` entry a person gave an alias or a description survives
+ * even when the live list no longer mentions its id.
+ */
+export function catalogToPersist(
+  stored: Catalog | undefined,
+  opencodeIds: readonly string[],
+): Catalog {
+  const authored = withoutBuiltinEntries(stored);
+  if (opencodeIds.length === 0) return authored;
+  return mergeCatalog(
+    { opencode: opencodeCatalog(opencodeIds) },
+    { ...authored, opencode: (authored.opencode ?? []).filter(isAuthoredOpencodeEntry) },
+  );
 }
 
 // ---------------------------------------------------------------- resolution

@@ -7,6 +7,11 @@ import {
   setConfigValue,
   userConfigPath,
 } from "../../../src/config/index.js";
+import {
+  BUILTIN_CATALOG,
+  mergeCatalog,
+  resolveModel,
+} from "../../../src/providers/index.js";
 
 function workspace(): { cwd: string; home: string; env: NodeJS.ProcessEnv } {
   const root = mkdtempSync(join(tmpdir(), "baya-config-"));
@@ -152,5 +157,135 @@ describe("setConfigValue", () => {
   it("rejects an unknown key", () => {
     const { env } = workspace();
     expect(() => setConfigValue("defaults.nonsense", "x", env)).toThrow(ConfigError);
+  });
+
+  it("adds a modelCatalog entry with the value as its description", () => {
+    const { cwd, env } = workspace();
+    setConfigValue("modelCatalog.codex.gpt-5.6-luna", "Fast luna variant", env);
+    const entries = loadConfig({ cwd, env }).config.modelCatalog.codex ?? [];
+    expect(entries).toContainEqual({
+      id: "gpt-5.6-luna",
+      aliases: [],
+      description: "Fast luna variant",
+    });
+  });
+
+  it("updates the description of an existing modelCatalog entry, keeping aliases", () => {
+    const { cwd, env } = workspace();
+    writeUser(env, {
+      version: 1,
+      modelCatalog: { codex: [{ id: "gpt-5", aliases: ["big"], description: "old" }] },
+    });
+    setConfigValue("modelCatalog.codex.gpt-5", "new description", env);
+    expect(loadConfig({ cwd, env }).config.modelCatalog.codex).toEqual([
+      { id: "gpt-5", aliases: ["big"], description: "new description" },
+    ]);
+  });
+
+  it("overrides a built-in catalog id, storing only the override", () => {
+    const { cwd, env } = workspace();
+    setConfigValue("modelCatalog.codex.gpt-5.6-luna", "my cheaper luna", env);
+    const stored = loadConfig({ cwd, env }).config.modelCatalog;
+    // The user layer holds just the override, never a copy of the shipped list.
+    expect(stored.codex).toEqual([
+      { id: "gpt-5.6-luna", aliases: [], description: "my cheaper luna" },
+    ]);
+    // Merged beneath the shipped catalog, the override wins for that id while
+    // the other built-in codex entries stay put.
+    const merged = mergeCatalog(BUILTIN_CATALOG, stored);
+    expect((merged.codex ?? []).find((m) => m.id === "gpt-5.6-luna")?.description).toBe(
+      "my cheaper luna",
+    );
+    expect((merged.codex ?? []).map((m) => m.id)).toEqual([
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+    ]);
+  });
+
+  it("removes a modelCatalog entry on null and prunes empty containers", () => {
+    const { cwd, env } = workspace();
+    writeUser(env, {
+      version: 1,
+      modelCatalog: { codex: [{ id: "gpt-5", aliases: [], description: "x" }] },
+      defaults: { provider: "codex" },
+    });
+    setConfigValue("modelCatalog.codex.gpt-5", "null", env);
+    const loaded = loadConfig({ cwd, env });
+    expect(loaded.config.modelCatalog.codex).toBeUndefined();
+    expect(loaded.config.defaults.provider).toBe("codex");
+  });
+
+  it("rejects an unknown provider segment", () => {
+    const { env } = workspace();
+    expect(() => setConfigValue("modelCatalog.rogue.gpt-5", "x", env)).toThrow(
+      ConfigError,
+    );
+  });
+
+  it("rejects a modelCatalog key with no model id", () => {
+    const { env } = workspace();
+    expect(() => setConfigValue("modelCatalog.codex", "x", env)).toThrow(ConfigError);
+  });
+});
+
+describe("modelCatalog override resolves end to end", () => {
+  it("a user entry overriding a built-in id wins through loadConfig → merge → resolveModel", () => {
+    const { cwd, env } = workspace();
+    // The user redefines a shipped codex id, adding an alias the built-in
+    // `gpt-5.6-luna` never had and rewriting its description.
+    writeUser(env, {
+      version: 1,
+      defaults: { provider: "codex" },
+      modelCatalog: {
+        codex: [
+          {
+            id: "gpt-5.6-luna",
+            aliases: ["luna", "penny-pincher"],
+            description: "my cheaper luna",
+          },
+        ],
+      },
+    });
+
+    const loaded = loadConfig({ cwd, env });
+    expect(loaded.sources["modelCatalog.codex"]).toBe("user");
+
+    const catalog = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
+    // The merge keeps the other built-in codex entries and swaps in the user's.
+    expect((catalog.codex ?? []).map((m) => m.id)).toEqual([
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+    ]);
+    expect((catalog.codex ?? []).find((m) => m.id === "gpt-5.6-luna")).toEqual({
+      id: "gpt-5.6-luna",
+      aliases: ["luna", "penny-pincher"],
+      description: "my cheaper luna",
+    });
+
+    // The alias only the user's definition carries resolves — proof the merged
+    // catalog resolution sees the override, not the shipped entry.
+    const viaNewAlias = resolveModel("penny-pincher", {
+      catalog,
+      runDefaultProvider: loaded.config.defaults.provider ?? "codex",
+    });
+    expect(viaNewAlias.match).toMatchObject({
+      provider: "codex",
+      model: "gpt-5.6-luna",
+      via: "alias",
+    });
+
+    // The built-in alias still resolves to the same id, and the entry behind it
+    // is the user's.
+    const viaBuiltinAlias = resolveModel("luna", {
+      catalog,
+      runDefaultProvider: loaded.config.defaults.provider ?? "codex",
+    });
+    expect(viaBuiltinAlias.match?.model).toBe("gpt-5.6-luna");
+    expect(
+      (catalog.codex ?? []).find((m) => m.id === viaBuiltinAlias.match?.model)
+        ?.description,
+    ).toBe("my cheaper luna");
   });
 });

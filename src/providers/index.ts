@@ -23,10 +23,12 @@ export {
 } from "./result.js";
 export {
   BUILTIN_CATALOG,
+  catalogToPersist,
   mergeCatalog,
   opencodeCatalog,
   resolveModel,
   scoreModel,
+  withoutBuiltinEntries,
   type Catalog,
   type CatalogModel,
   type ResolvedModel,

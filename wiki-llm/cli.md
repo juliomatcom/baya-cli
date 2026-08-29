@@ -18,15 +18,16 @@ baya tasks.md --yes        # ≡ baya run tasks.md --yes
 
 ## Commands
 
-| Command               | Purpose                                                                                                                                   | Status    |
-| :-------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- | :-------- |
-| `baya <file>`         | Default form. Alias for `run`.                                                                                                            | v1        |
-| `baya run <file>`     | Plan, resolve models, confirm, execute.                                                                                                   | v1        |
-| `baya plan <file>`    | Plan + render DAG; never executes. ≡ `run --dry-run`.                                                                                     | v1        |
-| `baya doctor`         | Resolve every provider: path, version, capabilities. Reap stray process groups (gated on a stale lock).                                   | v1        |
-| `baya config`         | Re-run the wizard. Subactions `--show` \| `path` \| `set <key> <value>` \| `refresh-models`. [config.md](config.md).                      | v1        |
-| `baya resume <runId>` | Re-execute unfinished nodes; `--provider <id>` re-runs elsewhere. No `runId` ⇒ pick from a list, never guess. [recovery.md](recovery.md). | v1 — M2.8 |
-| `baya runs`           | List resumable runs + ids.                                                                                                                | v1 — M2.8 |
+| Command               | Purpose                                                                                                                                                                                 | Status    |
+| :-------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------- |
+| `baya <file>`         | Default form. Alias for `run`.                                                                                                                                                          | v1        |
+| `baya run <file>`     | Plan, resolve models, confirm, execute.                                                                                                                                                 | v1        |
+| `baya plan <file>`    | Plan + render DAG; never executes. ≡ `run --dry-run`.                                                                                                                                   | v1        |
+| `baya doctor`         | Resolve every provider: path, version, capabilities. Reap stray process groups (gated on a stale lock).                                                                                 | v1        |
+| `baya config`         | Re-run the wizard. Subactions `--show` \| `path` \| `set <key> <value>` \| `refresh-models`. [config.md](config.md).                                                                    | v1        |
+| `baya models [id]`    | Print the effective catalog (`BUILTIN_CATALOG` + config `modelCatalog`) grouped by provider; each row tagged `built-in` / `user`. Optional provider filter; `--json` emits the catalog. | v1        |
+| `baya resume <runId>` | Re-execute unfinished nodes; `--provider <id>` re-runs elsewhere. No `runId` ⇒ pick from a list, never guess. [recovery.md](recovery.md).                                               | v1 — M2.8 |
+| `baya runs`           | List resumable runs + ids.                                                                                                                                                              | v1 — M2.8 |
 
 Run `baya doctor` first on any new machine — provider binaries are frequently off `$PATH`.
 
@@ -51,7 +52,7 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                    |
 | `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                    |
 | `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from the task list.                                                                 |
-| `--json`                  | off           | Machine-readable run report to stdout.                                                                                     |
+| `--json`                  | off           | Machine-readable run report or `models` catalog to stdout.                                                                 |
 | `--verbose`               | off           | Alias for `--log-level debug`.                                                                                             |
 | `--no-color`              | off           | Disable ANSI. `NO_COLOR` / `FORCE_COLOR` honored natively by chalk.                                                        |
 | `--provider <id>`         | —             | **`resume` only** — re-run unfinished tasks elsewhere (answer to exhausted credits). **M2.8**.                             |
@@ -127,7 +128,7 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
 | Element                                  | Rule                                                                                                                           |
 | :--------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
 | Model resolution line                    | Printed at the gate when a task-named model resolves to a different id or via a user alias.                                    |
-| Completion line                          | `summary`, first line, ≤120 chars. Full text in `output.md` + the report.                                                      |
+| Completion line                          | `summary`, first line, in full (terminal soft-wraps; never ellipsis-cut). Full text in `output.md` + the report.               |
 | `warn` / `action_required` notes         | Printed **the moment the task finishes**, wrapped + indented under it.                                                         |
 | `info` notes                             | Held for the end-of-run report.                                                                                                |
 | Full `output`                            | Printed in full **only** for a single-task run, or under `--verbose`.                                                          |
