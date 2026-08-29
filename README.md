@@ -189,9 +189,12 @@ A few rules that are load-bearing rather than stylistic — the full list is in 
 - Never document a provider flag you have not actually run.
 - Never regex a model's prose for meaning — semantics come from validated JSON.
 - Update the affected `wiki-llm/` page in the same commit as the change.
+- Read provider event shapes out of a recorded run in `.baya/runs/`, not out of a provider's docs.
 - Tests never touch the network; the contract tier is opt-in via `BAYA_CONTRACT=1`.
 
 Adding a provider is deliberately small: one adapter, one capability block, one section in `providers.md`, one contract test.
+
+**Use Baya on Baya.** Every run leaves `.baya/runs/<runId>/` behind — real provider event streams, on a real repository, for free. That corpus is the best fixture set the project has: it is where the `codex` `file_change` bug was found, and where cross-task memory's first two heuristics were caught being wrong. Mine it before inventing an input, then pin what you find with a committed test. [`wiki-llm/testing.md`](wiki-llm/testing.md#dogfooding-your-own-runs-are-the-fixture-set) has the method. `.baya/` is gitignored and holds your prompts and source excerpts — evidence for you, never an issue attachment.
 
 ## Adding or overriding a model
 

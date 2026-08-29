@@ -85,6 +85,19 @@ Both are tested against the record a real run leaves, not against invented shape
 - **Session reuse** asserts `state.tasks[id].continued_from`, and pins the cold path with `--no-session-reuse`. A chain-collapse test and a `--no-session-reuse` test must exist for every context-bus assertion, because a continuation deliberately stops re-inlining an in-session upstream.
 - `codex exec resume` stays `⚠️ UNVERIFIED` until the contract tier exercises it (M6.5). The cold-retry fallback is what makes that safe to ship, and has its own case: `reject_stdin` makes the fake provider refuse the resumed invocation only, so the test proves a refused continuation costs one wasted spawn rather than the task.
 
+## Dogfooding: your own runs are the fixture set
+
+Baya records every run to `.baya/runs/<runId>/` — normalized `events.jsonl` per task, `state.json`, `memory.json`, `report.json`. That is a corpus of **real provider behavior on a real repository**, accumulating for free every time you use the tool on itself. Mine it before inventing anything.
+
+The method, in order:
+
+1. **Never author a provider's event shape from documentation.** Read it back out of a recorded run (`hard rule #6`). The `codex` `file_change` field was `changes: [{path, kind}]`, not `path` — the adapter had read `path` since M1, so every file change ever reported rendered as a bare `Edit()`. No amount of re-reading the docs would have shown that; one `jq` over `events.jsonl` did.
+2. **Run a new heuristic over the corpus and look at the output before shipping it.** Cross-task memory's first rendering was dominated by fourteen near-identical `npm run test:contract -- …` dead ends from one task's flailing, and reported `console.log` as a file the repo needed. Both were invisible in unit tests written against invented inputs, and obvious in one pass over real data.
+3. **Turn what you found into a committed test with an invented-but-minimal input.** The corpus finds the bug; the fixture pins it. Recorded runs are for **authoring** heuristics, never for regression tests — they are per-machine, unshared, and would break CI's offline guarantee.
+4. **Measure a behavior change against a flag, not against a memory of how it used to feel.** Ship the off-switch (`--no-memory`) in the same change, and compare **tool-call counts, not tokens or wall time** — provider token variance and test-runner caching both swamp the effect you are looking for.
+
+⚠️ `.baya/` is gitignored and stays local. It holds prompts, paths, and source excerpts from whatever you were working on, so it is evidence for you, never an attachment on an issue ([logging.md](logging.md) covers redaction for the parts that do get shared).
+
 ## Color in tests
 
 - **All snapshot tests run with color forced off** (`FORCE_COLOR=0`, chalk level `0`, Jest global setup).
