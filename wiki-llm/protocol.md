@@ -1,9 +1,9 @@
 # Protocol — JSON Wire Format
 
-> **Maintenance Invariant:** Schemas and parsing rules only. Every schema change bumps `baya` version and updates `testing.md` fixtures in the SAME commit. Items tagged `later` are not in v1.
-> **Answers:** What exact JSON goes into and comes out of a provider? What is the manifest shape? How is malformed output handled?
+> **Maintenance Invariant:** Schemas + parsing rules only. Every schema change bumps `baya` version and updates `testing.md` fixtures in the SAME commit. `later` items are not in v1. Token-optimized: imperative, no prose, no redundancy.
+> **Answers:** Exact JSON into/out of a provider. Manifest shape. Malformed-output handling.
 
-**Governing rule: all orchestrator↔provider communication is JSON, both directions. Prose is never the interface.** Three independently validated layers: transport (provider's own stream) · request envelope · result envelope.
+**Governing rule:** all orchestrator↔provider communication is JSON, both directions — prose is never the interface. Three independently validated layers: transport (provider stream) · request envelope · result envelope.
 
 ## 1. Manifest (planner output)
 
@@ -23,16 +23,15 @@
 | Field | Rule |
 | :-- | :-- |
 | `id` | kebab-case, unique, `^[a-z0-9][a-z0-9-]{0,63}$`. |
-| `instruction` | Non-empty. Self-contained; upstream context arrives separately via `context[]`. |
-| `provider` | Closed enum ∩ configured allowlist. Unknown ⇒ validation error. |
-| `model` | Free string or `null`. `null` ⇒ provider's own default. **Never hard-code model ids.** |
+| `instruction` | Non-empty. Self-contained; upstream context arrives via `context[]`. |
+| `provider` | Closed enum ∩ configured allowlist. Unknown ⇒ validation error. `null` ⇒ run default (or model-alias routing). |
+| `model` | Free string or `null`. `null` ⇒ provider's own default. **Never hard-code model ids.** A named model is resolved against the catalog before the run (`config.md` §Model resolution). |
 | `depends_on` | Every entry must resolve. Graph must be acyclic. |
 | `writes` | `true` ⇒ workspace-write permission + writer lock. Default `false`. |
 
-**Privilege boundary — the manifest may never contain argv, shell strings, env vars, or executable paths.** The planner selects *which* provider; the adapter alone decides *how* to invoke it.
+**Privilege boundary:** the manifest may never contain argv, shell strings, env vars, or executable paths. The planner selects *which* provider; the adapter alone decides *how*.
 
-### Validation order (fail fast, report all)
-Zod shape → id format → id uniqueness → `depends_on` resolves → acyclic (Kahn, report the cycle path) → provider in allowlist → task count ≤ `--max-tasks`.
+**Validation order** (fail fast, report all per stage): zod shape → id format → id uniqueness → `depends_on` resolves → acyclic (Kahn, report the cycle path) → provider in allowlist → model routing (no explicit `provider`/`model` provider clash; no deferred `gemini`-family model) → task count ≤ `--max-tasks`.
 
 ## 2. `task_request` (orchestrator → provider)
 
@@ -55,7 +54,7 @@ Written to `runs/<runId>/tasks/<id>/request.json`, delivered by file/stdin (see 
 }
 ```
 
-`inline` holds the upstream text when it fits the per-edge budget; otherwise `null` and the agent reads `output_path`. See `execution.md` §Context.
+`inline` = upstream text when it fits the per-edge budget; else `null` and the agent reads `output_path`. See `execution.md` §Context.
 
 ## 3. `task_result` (provider → orchestrator)
 
@@ -67,7 +66,7 @@ Written to `runs/<runId>/tasks/<id>/request.json`, delivered by file/stdin (see 
   "output": "## Schema\n\n…markdown…",
   "notes": [
     { "severity": "warn",
-      "message": "The migration locks `users` for ~30s on tables over 1M rows. Consider a concurrent index build." }
+      "message": "The migration locks `users` for ~30s on tables over 1M rows." }
   ],
   "question": null,
   "error": null,
@@ -82,40 +81,37 @@ Written to `runs/<runId>/tasks/<id>/request.json`, delivered by file/stdin (see 
 | `needs_input` | `question.text` | Park node, bubble question, resume session. |
 | `failed` | `error.message`, `error.retryable` | Mark descendants `skipped`. |
 
-Cap `summary` at 2000 chars. `question.options` and `question.default` are optional; a `default` is used when `--on-input default`.
+Cap `summary` at 2000 chars. `question.options` / `question.default` optional; `default` used under `--on-input default`.
 
 ### `notes[]` — "done, but you should know…"
 
-The channel for everything an agent wants a human to see that is **not** a failure and **not** a blocking question. Caveats, risks, assumptions it had to make, follow-up work it noticed. Without this field that commentary is buried in `output` and never reaches the terminal.
+Channel for anything a human should see that is **not** a failure and **not** a blocking question: caveats, risks, forced assumptions, follow-up work. Without it, that commentary is buried in `output` and never reaches the terminal.
 
 | `severity` | Meaning | Surfaced |
 | :-- | :-- | :-- |
-| `info` | Worth knowing. Assumptions, minor observations. | End-of-run report |
-| `warn` | Something is likely wrong or risky, but the task completed. | **Immediately**, plus the report |
-| `action_required` | The human must do something Baya cannot. | **Immediately**, plus the report, and the run report calls it out |
+| `info` | Assumptions, minor observations. | End-of-run report |
+| `warn` | Likely wrong/risky, but the task completed. | **Immediately** + report |
+| `action_required` | The human must do something Baya cannot. | **Immediately** + report + run-report callout |
 
-Valid on **any** status — a `failed` task often has the most useful notes. Empty array when there is nothing to raise; never null.
-
-> Because `codex` and `claude` enforce the schema natively, `notes` is not merely *allowed* — the schema shape actively invites the model to fill it. The contract induces the behavior.
+Valid on **any** status (a `failed` task often has the most useful notes). Empty array when nothing to raise; never null. `codex`/`claude` enforce the schema natively, so the shape actively induces the model to fill `notes`.
 
 ## 4. Parsing the result — degradation ladder
 
-Apply in order; stop at first success:
+Apply in order; stop at first success. Implementation: `src/providers/result.ts` (M2.6).
 
-1. **Native schema.** `codex --output-schema … -o result.json` → read the file. Strongest; no parsing. `claude` `.structured_output` is rung 1 too.
-2. **Verbatim.** Final assistant message parses as JSON matching the schema.
-3. **Fenced extract.** *Last* ` ```json ` block in the final message (last, not first — a model often shows a draft then a correction).
-4. **One repair round-trip.** Resume the session: *"Return only the JSON object matching the schema. No prose."* `later` — v1 goes straight to step 5.
-   Only `opencode` and `copilot` can reach rungs 2–4; `codex` and `claude` enforce the schema up front.
-5. **Synthesize failure.** `status:"failed"`, `error.message:"unparseable result"`, raw stdout preserved as an artifact.
+1. **Native schema.** codex `--output-schema … -o result.json` → read the file (no parsing). claude `.structured_output` is rung 1 too.
+2. **Verbatim.** Final assistant message parses as conforming JSON. `extractResultFromText`.
+3. **Fenced.** *Last* ` ```json ` block in the final message (last, not first — a model shows a draft then a correction). `extractResultFromText`.
+4. **One repair round-trip.** Resume: *"Return only the JSON object matching the schema. No prose."* `later` — v1 skips to step 5.
+5. **Synthesize failure.** `status:"failed"`, `error.message:"unparseable result"`, raw stdout kept as an artifact. `synthesizeFailure`.
 
-Rungs 2–3 are `extractResultFromText(taskId, text)` and rung 5 is `synthesizeFailure` (`src/providers/result.ts`, M2.6). Both normalize `task_id` to the requested id so a provider echoing the wrong id cannot misroute a result. `opencode`/`copilot` call `extractResultFromText` over their concatenated assistant text; `claude` calls it over `.result`.
+Only `opencode`/`copilot` reach rungs 2–4 (over concatenated assistant text); `codex`/`claude` enforce up front (`claude` also runs rungs 2–3 over `.result`). Rungs 2–3 and 5 normalize `task_id` to the requested id — a provider echoing the wrong id cannot misroute a result.
 
-**Never regex prose for meaning.** A question is the `needs_input` status field — not a question mark spotted in a stream. This is what makes escalation structural rather than heuristic.
+**Never regex prose for meaning.** A question is the `needs_input` status field — not a question mark in a stream. Escalation is structural, not heuristic.
 
 ## 5. `ProviderEvent` (normalized transport)
 
-Each adapter maps its CLI's native stream onto this union; the normalized stream is persisted to `events.jsonl`.
+Each adapter maps its CLI's stream onto this union; the normalized stream persists to `events.jsonl`.
 
 ```ts
 type ProviderEvent =
@@ -127,8 +123,6 @@ type ProviderEvent =
   | { t: 'unknown'; raw: string };                                // never drop
 ```
 
-Unrecognized transport lines become `unknown` rather than being discarded — upstream CLIs add event types without notice, and silent drops make drift invisible.
-
-**Every event is forwarded to the main process and surfaced at `info`** (`text`, `tool`, and child stderr), so a running task is never a black box. Rendering and levels: [logging.md](logging.md).
-
-`error.kind` classifies retryability. `rate_limit` and transient network are retryable; `auth` is not.
+- Unrecognized transport lines ⇒ `unknown`, never discarded — upstream CLIs add event types silently; drops make drift invisible.
+- Every event forwarded to the main process, surfaced at `info` (`text`, `tool`, child stderr) — a running task is never a black box. Rendering + levels: [logging.md](logging.md).
+- `error.kind` classifies retryability: `rate_limit` + transient network retryable; `auth` not. Full classification: `providers.md` §Failure classifier.
