@@ -15,6 +15,7 @@ export const COMMANDS = [
   "plan",
   "doctor",
   "config",
+  "models",
   "resume",
   "runs",
   "help",
@@ -53,6 +54,8 @@ export interface ParsedArgs {
   configAction?: "show" | "path" | "set" | "refresh-models";
   configKey?: string;
   configValue?: string;
+  /** Optional provider filter for `models`. */
+  modelsProvider?: string;
   flags: RunFlags;
   showVersion: boolean;
   errors: string[];
@@ -238,6 +241,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       errors.push(`unknown config action: ${action}`);
     }
   }
+
+  if (command === "models" && rest[0] !== undefined) parsed.modelsProvider = rest[0];
 
   // `plan` is exactly `run --dry-run` (cli.md §Commands).
   if (command === "plan") parsed.flags.dryRun = true;

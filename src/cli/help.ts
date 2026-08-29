@@ -32,6 +32,7 @@ export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
     "  baya run|plan <file>            explicit form",
     "  baya doctor                     check provider installs",
     "  baya config [--show|path|set|refresh-models]",
+    "  baya models [provider]          list effective catalog; optional provider filter; --json emits catalog as JSON",
     "",
     theme.taskId("PROVIDERS"),
     ...providerLines,

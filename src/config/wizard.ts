@@ -1,6 +1,11 @@
 import { select, input } from "@inquirer/prompts";
 import type { ProviderId } from "../manifest/index.js";
-import type { Catalog, CatalogModel, ProviderStatus } from "../providers/index.js";
+import {
+  withoutBuiltinEntries,
+  type Catalog,
+  type CatalogModel,
+} from "../providers/catalog.js";
+import type { ProviderStatus } from "../providers/index.js";
 import { writeConfigFile } from "./load.js";
 
 /**
@@ -216,10 +221,14 @@ export async function runWizard(options: RunWizardOptions): Promise<WizardResult
     model = picked;
   }
 
+  // The picker sees the whole catalog; the file stores only the part the binary
+  // can't reproduce — the live `opencode` list. Persisting the built-in lists
+  // too would pin them to this install's version (catalog.ts §migration rule).
+  const cached = withoutBuiltinEntries(options.catalog);
   writeConfigFile(options.configPath, {
     defaults: { provider, model },
     planner: { provider, model },
-    ...(options.catalog ? { modelCatalog: options.catalog } : {}),
+    ...(Object.keys(cached).length > 0 ? { modelCatalog: cached } : {}),
   });
 
   return { provider, model, configPath: options.configPath };

@@ -9,14 +9,16 @@ import {
   setConfigValue,
   userConfigPath,
   writeConfigFile,
+  type ConfigFile,
 } from "../config/index.js";
-import type { ProviderId } from "../manifest/index.js";
+import { PROVIDER_IDS, type ProviderId } from "../manifest/index.js";
 import {
   BUILTIN_CATALOG,
+  catalogToPersist,
   createDefaultRegistry,
   enumerateModels,
   mergeCatalog,
-  opencodeCatalog,
+  withoutBuiltinEntries,
   type Registry,
 } from "../providers/index.js";
 import { renderBanner } from "../ui/banner.js";
@@ -135,6 +137,9 @@ export async function main(options: MainOptions = {}): Promise<number> {
       case "config":
         return await configCommand(args, { env, cwd, io, theme, registry });
 
+      case "models":
+        return modelsCommand(args, { env, cwd, io, theme });
+
       case "resume":
       case "runs":
         io.stderr.write(
@@ -154,6 +159,80 @@ export async function main(options: MainOptions = {}): Promise<number> {
     io.stderr.write(`${theme.status("fail")} ${theme.fail((err as Error).message)}\n`);
     return 2;
   }
+}
+
+/**
+ * `baya models` (cli.md §Commands) — the catalog a run resolves task-named
+ * models against: `BUILTIN_CATALOG` with the config's `modelCatalog` merged on
+ * top (higher layers win by entry `id`), grouped by provider, optionally
+ * narrowed to one. Every row is tagged `built-in` or `user`: an entry that
+ * differs from — or has no — shipped definition of the same id is exactly what
+ * `withoutBuiltinEntries` keeps, so "why did `luna` resolve to codex?" is
+ * answerable without opening the file. Same `theme.note` / padded-column style
+ * as `config --show`.
+ */
+function modelsCommand(
+  args: ReturnType<typeof parseArgs>,
+  ctx: {
+    env: NodeJS.ProcessEnv;
+    cwd: string;
+    io: CliIo;
+    theme: ReturnType<typeof createTheme>;
+  },
+): number {
+  const { io, theme } = ctx;
+
+  const filter = args.modelsProvider;
+  if (filter !== undefined && !(PROVIDER_IDS as readonly string[]).includes(filter)) {
+    const msg = `unknown provider: ${filter} — expected one of ${PROVIDER_IDS.join(", ")}`;
+    io.stderr.write(`${theme.status("fail")} ${theme.fail(msg)}\n`);
+    return 2;
+  }
+
+  const loaded = loadConfig({ cwd: ctx.cwd, env: ctx.env });
+  const effective = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
+  if (args.flags.json) {
+    const catalog =
+      filter === undefined
+        ? effective
+        : { [filter]: effective[filter as ProviderId] ?? [] };
+    io.stdout.write(`${JSON.stringify(catalog, null, 2)}\n`);
+    return 0;
+  }
+
+  // Entries that differ from the built-in of the same id, or have no built-in
+  // at all — everything a person put in the config, and nothing else.
+  const authored = withoutBuiltinEntries(effective);
+
+  const providers = (filter ? [filter as ProviderId] : [...PROVIDER_IDS]).filter(
+    (id) => (effective[id] ?? []).length > 0,
+  );
+
+  const lines = ["", `  ${theme.taskId("Models")}`];
+  if (providers.length === 0) {
+    lines.push("", `  ${theme.note("no models in the catalog")}`);
+  }
+  for (const id of providers) {
+    const models = effective[id] ?? [];
+    const authoredIds = new Set((authored[id] ?? []).map((model) => model.id));
+    const rows = models.map((model) => ({
+      id: model.id,
+      aliases: model.aliases.join(", "),
+      description: model.description,
+      tag: authoredIds.has(model.id) ? "user" : "built-in",
+    }));
+    const idWidth = Math.max(...rows.map((row) => row.id.length));
+    const aliasWidth = Math.max(0, ...rows.map((row) => row.aliases.length));
+    const descWidth = Math.max(0, ...rows.map((row) => row.description.length));
+    lines.push("", `  ${theme.provider(id)}`);
+    for (const row of rows) {
+      const cells = `${row.id.padEnd(idWidth)}  ${row.aliases.padEnd(aliasWidth)}  ${row.description.padEnd(descWidth)}`;
+      lines.push(`    ${cells}  ${theme.note(row.tag)}`);
+    }
+  }
+  lines.push("", `  ${theme.note("user config")}    ${loaded.userPath}`, "");
+  io.stdout.write(`${lines.join("\n")}\n`);
+  return 0;
 }
 
 async function configCommand(
@@ -191,17 +270,34 @@ async function configCommand(
       probe: false,
     });
     const ids = oc ? await enumerateModels(oc.bin) : [];
-    const catalog = mergeCatalog(
-      BUILTIN_CATALOG,
-      ids.length > 0 ? { opencode: opencodeCatalog(ids) } : undefined,
-    );
+
+    // Only what the config alone can't reproduce: the live `opencode` list and
+    // the user's own entries. `BUILTIN_CATALOG` ships in the binary — writing a
+    // copy of it would freeze today's built-in lists into the file, and a stale
+    // copy already there is migrated out here (catalog.ts §withoutBuiltinEntries).
+    const stored = readUserConfig(ctx.env);
+    const persisted = catalogToPersist(stored.modelCatalog, ids);
+    const next: ConfigFile = { ...stored };
+    if (Object.keys(persisted).length > 0) next.modelCatalog = persisted;
+    else delete next.modelCatalog;
     const path = userConfigPath(ctx.env);
-    writeConfigFile(path, { ...readUserConfig(ctx.env), modelCatalog: catalog });
-    const counts = Object.entries(catalog)
+    writeConfigFile(path, next);
+
+    // Counts describe the catalog a run will resolve against — built-ins
+    // included — not the file's now-smaller subset.
+    const counts = Object.entries(mergeCatalog(BUILTIN_CATALOG, persisted))
       .map(([id, models]) => `${id} ${models.length}`)
       .join(" · ");
+    let warning = "";
+    if (ids.length === 0) {
+      warning = theme.warn(
+        oc
+          ? "  (opencode listed no models — kept the stored entries)"
+          : "  (opencode not found — kept the stored entries)",
+      );
+    }
     io.stderr.write(
-      `  refreshed model catalog in ${path}\n  ${theme.note(counts)}${oc ? "" : theme.warn("  (opencode not found — built-in lists only)")}\n`,
+      `  refreshed model catalog in ${path}\n  ${theme.note(counts)}${warning}\n`,
     );
     return 0;
   }
@@ -236,7 +332,11 @@ async function configCommand(
       `    ${dotted.padEnd(18)} ${target.padEnd(12)} ${theme.note(`from ${loaded.sources[dotted] ?? "built-in"}`)}`,
     );
   }
-  const catalogCounts = Object.entries(loaded.config.modelCatalog)
+  // The catalog a run resolves against — built-in lists plus the config's own
+  // entries. Counting only the config layer would read as "3 models" for an
+  // install that resolves twenty.
+  const resolvable = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
+  const catalogCounts = Object.entries(resolvable)
     .map(([id, models]) => `${id}:${models.length}`)
     .join(" ");
   if (catalogCounts) {

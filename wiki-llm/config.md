@@ -15,7 +15,7 @@ Highest wins. Every value records its source for `baya config --show`.
 | 4   | **User**  | `$XDG_CONFIG_HOME/baya/config.json`, else `~/.config/baya/config.json` |
 | 5   | Built-in  | provider defaults                                                      |
 
-Wizard writes **layer 4**. `defaults`/`planner`/`providers` merge per key; `modelAliases`/`modelCatalog` merge per entry key.
+Wizard writes **layer 4**. `defaults`/`planner`/`providers` merge per key; `modelAliases` merges per entry key; `modelCatalog` merges per provider, then by entry `id`, with higher layers winning.
 
 ## Schema
 
@@ -32,7 +32,28 @@ Wizard writes **layer 4**. `defaults`/`planner`/`providers` merge per key; `mode
 
 - `model: null` ⇒ provider's own default. `defaults` = task fallback; `planner` = parses the task list → DAG. Wizard sets both from one answer; edit the file to split.
 - `modelAliases` — `nickname → real id`. `baya config set modelAliases.<name> <id>` (`… null` drops).
-- `modelCatalog` — resolution catalog, written at first run: hardcoded `codex`/`claude`/`copilot` lists (`src/providers/catalog.ts`) + live `opencode models`. `baya config refresh-models` rewrites it. See **Model resolution**.
+- `modelCatalog` — user-editable resolution catalog. `BUILTIN_CATALOG` (`src/providers/catalog.ts`) provides the base; config layers merge per provider and by entry `id`, with higher layers replacing lower entries. `baya config set modelCatalog.<provider>.<id> <description>` adds or re-describes one entry (`… null` drops it); unknown `<provider>` errors. See **Model resolution** and **What the file stores**.
+
+### What the file stores
+
+**Invariant: never a snapshot of `BUILTIN_CATALOG`.** The built-in lists ship in the binary; a stored copy pins them to the version that wrote it. Written files hold only what the binary cannot reproduce:
+
+1. the live `opencode models` cache (recomputable — `opencode` is the one provider that enumerates);
+2. user-authored entries — an added id, a changed `description`, an extra alias, an entry for a provider with no list command.
+
+**Migration rule** (`withoutBuiltinEntries`, `src/providers/catalog.ts`) — applied on every rewrite (wizard, `refresh-models`), never on read:
+
+- Entry byte-identical (`id` + `aliases` + `description`) to the built-in entry with the same `id` ⇒ **drop** — `BUILTIN_CATALOG` already provides it.
+- Entry differing in `aliases` or `description` ⇒ **keep** — a deliberate override.
+- `id` absent from `BUILTIN_CATALOG` ⇒ **keep** — user-added, or a built-in the shipped list has since dropped.
+- `opencode` entry with no aliases and empty description ⇒ **cache**: replaced by a fresh `opencode models` list, kept as-is when that list is unavailable.
+- `opencode` entry carrying an alias or description ⇒ **keep**, even when the live list no longer has that `id`.
+
+No live list (`opencode` missing or listing nothing) ⇒ `refresh-models` warns and keeps the stored entries rather than wiping the cache.
+
+Safe because loading merges `BUILTIN_CATALOG` under the config layers: dropping an entry equal to the base leaves the resolved catalog identical. Reads never mutate the file — an un-migrated config keeps working, just larger.
+
+**Limitation:** an old snapshot entry whose built-in text has since changed reads as a deliberate override and is kept, shadowing the new built-in wording. Delete the entry to fall back to the shipped one.
 
 ## First-run wizard
 
@@ -41,7 +62,7 @@ Wizard writes **layer 4**. `defaults`/`planner`/`providers` merge per key; `mode
 **Flow — two questions, then continue the original command.** Never re-invoke.
 
 - **Q1 Provider.** Only resolved providers selectable; undetected ones listed disabled with an install hint (list doubles as discovery).
-- **Q2 Model.** Picker from the catalog the wizard is about to store. Sources: `opencode` = live `opencode models` (≈190, `provider/model` form); `codex`/`claude`/`copilot` = hardcoded `src/providers/catalog.ts` (no list command). Each entry `{ id, aliases, description }` — description shown + scored during best-match. Choices: "Provider default (recommended)" + catalog entries + "Enter manually".
+- **Q2 Model.** Picker from the full merged catalog (only the live `opencode` part of it is stored — see **What the file stores**). Sources: `opencode` = live `opencode models` (≈190, `provider/model` form); `codex`/`claude`/`copilot` = hardcoded `src/providers/catalog.ts` (no list command). Each entry `{ id, aliases, description }` — description shown + scored during best-match. Choices: "Provider default (recommended)" + catalog entries + "Enter manually".
 
 **No CLI validates a model name cheaply** (`codex` HTTP 400, `claude` `unrecognized_model`, only `opencode` enumerates) — Baya never calls one. It resolves against the stored catalog and only spawns once the id is known.
 
@@ -66,13 +87,13 @@ Every run, before the plan gate, each task that **names** a model resolves (`src
 
 ## Commands
 
-| Command                         | Purpose                                                                            |
-| :------------------------------ | :--------------------------------------------------------------------------------- |
-| `baya config`                   | Re-run the wizard, overwrite stored defaults.                                      |
-| `baya config --show`            | Resolved config + source layer per value + `modelAliases` / `modelCatalog` counts. |
-| `baya config refresh-models`    | Re-fetch `opencode models`, rewrite `modelCatalog` (hardcoded lists unchanged).    |
-| `baya config set <key> <value>` | `defaults.*`, `planner.*`, or `modelAliases.<name>` (`null` drops).                |
-| `baya config path`              | Print the user config file path.                                                   |
+| Command                         | Purpose                                                                                             |
+| :------------------------------ | :-------------------------------------------------------------------------------------------------- |
+| `baya config`                   | Re-run the wizard, overwrite stored defaults.                                                       |
+| `baya config --show`            | Resolved config + source layer per value + `modelAliases` / `modelCatalog` counts.                  |
+| `baya config refresh-models`    | Re-fetch `opencode models`; rewrite `modelCatalog` = live list + user entries.                      |
+| `baya config set <key> <value>` | `defaults.*`, `planner.*`, `modelAliases.<name>`, or `modelCatalog.<provider>.<id>` (`null` drops). |
+| `baya config path`              | Print the user config file path.                                                                    |
 
 ## Implementation notes
 

@@ -1,4 +1,10 @@
-# baya
+```
+▗▄▄▖  ▗▄▖▗▖  ▗▖▗▄▖      ▗▄▄▖▗▖   ▗▄▄▄▖
+▐▌ ▐▌▐▌ ▐▌▝▚▞▘▐▌ ▐▌    ▐▌   ▐▌     █         (º>
+▐▛▀▚▖▐▛▀▜▌ ▐▌ ▐▛▀▜▌    ▐▌   ▐▌     █      //(  )
+▐▙▄▞▘▐▌ ▐▌ ▐▌ ▐▌ ▐▌    ▝▚▄▄▖▐▙▄▄▖▗▄█▄▖     //¯\\
+
+```
 
 **Orchestrate local AI coding CLIs from a plain-text task list.**
 
@@ -186,6 +192,47 @@ A few rules that are load-bearing rather than stylistic — the full list is in 
 - Tests never touch the network; the contract tier is opt-in via `BAYA_CONTRACT=1`.
 
 Adding a provider is deliberately small: one adapter, one capability block, one section in `providers.md`, one contract test.
+
+## Adding or overriding a model
+
+Add model entries to `~/.config/baya/config.json` when a provider's catalog is missing a model or has stale metadata. `modelCatalog` is keyed by provider; each entry supplies the exact provider `id`, optional short `aliases`, and a one-line `description`:
+
+```json
+{
+  "modelCatalog": {
+    "copilot": [
+      {
+        "id": "vendor-model-slug",
+        "aliases": ["short-name"],
+        "description": "one-line description"
+      }
+    ]
+  }
+}
+```
+
+For example, if the built-in Copilot slug `claude-sonnet-4.6` is rejected by your installed CLI, but that CLI accepts `claude-sonnet-4.5`, map the old name to the accepted id and add that id to the Copilot catalog:
+
+```json
+{
+  "modelAliases": {
+    "claude-sonnet-4.6": "claude-sonnet-4.5"
+  },
+  "modelCatalog": {
+    "copilot": [
+      {
+        "id": "claude-sonnet-4.5",
+        "aliases": ["sonnet45"],
+        "description": "Anthropic Claude Sonnet 4.5"
+      }
+    ]
+  }
+}
+```
+
+`modelAliases` is the shortcut for a nickname: `{ "cheap": "gpt-5.6-luna" }` lets tasks name `cheap` without adding a catalog entry. Set one from the CLI with `baya config set modelAliases.cheap gpt-5.6-luna`. User catalog entries merge by provider and model id, so an entry with an existing id replaces that built-in entry while leaving the others intact. `baya config refresh-models` keeps them: it rewrites only the cached `opencode` list, and prunes entries that are byte-identical to a built-in one (nothing you changed).
+
+Contributing a corrected entry to `BUILTIN_CATALOG` in `src/providers/catalog.ts` is welcome, but never required; user config overrides exist for exactly this kind of provider drift.
 
 ## FAQ
 

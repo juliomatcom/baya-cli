@@ -30,10 +30,11 @@ const DefaultsSchema = z
 const ModelAliasesSchema = z.record(z.string().min(1), z.string().min(1));
 
 /**
- * The cached model catalog written at first run: the hardcoded lists for
- * `codex`/`claude`/`copilot` plus whatever `opencode models` returned, so a
- * run resolves names without touching the network. `baya config refresh-models`
- * rewrites it.
+ * The user's slice of the model catalog: whatever `opencode models` returned
+ * (cached so a run resolves names without touching the network) plus any entry
+ * the user wrote by hand. Never a copy of `BUILTIN_CATALOG` — that ships in the
+ * binary and is merged underneath at load. `baya config refresh-models`
+ * rewrites this key and migrates an older snapshot out of it.
  */
 const CatalogModelSchema = z
   .object({
