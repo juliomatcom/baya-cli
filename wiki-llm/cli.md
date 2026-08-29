@@ -99,6 +99,10 @@ No user config + TTY ⇒ two questions (default provider, default model — mode
 
 Non-TTY never prompts: one provider ⇒ used with a warning; several ⇒ exit `2` asking for `--default-provider`. Full rules + zero-provider case: [config.md](config.md).
 
+## Banner
+
+Every human-facing invocation opens with the `baya` wordmark (`src/ui/banner.ts`) on **stderr**. Suppressed for `--json`, `--version`, `--quiet`. Never on stdout — a piped `--json` payload and `$(baya config path)` stay clean.
+
 ## Run output
 
 Provider output streamed **live at `info`** — watch each model work, don't wait for a result. Every line task-prefixed so parallel branches stay legible. Nothing an agent wants you to read is left in a file you must go find.

@@ -19,6 +19,7 @@ import {
   opencodeCatalog,
   type Registry,
 } from "../providers/index.js";
+import { renderBanner } from "../ui/banner.js";
 import { createTheme } from "../ui/theme.js";
 import { UNIMPLEMENTED_COMMANDS, parseArgs } from "./args.js";
 import { doctor } from "./doctor.js";
@@ -38,6 +39,16 @@ export interface MainOptions {
   env?: NodeJS.ProcessEnv;
   io?: Partial<CliIo>;
   registry?: Registry;
+}
+
+/**
+ * The banner is chrome for a person at a terminal. Suppress it whenever the
+ * caller has signalled machine or minimal output: `--json`, `--version`,
+ * `--quiet`. Everything else — `run`, `plan`, `help`, `doctor`, `config` —
+ * gets it.
+ */
+function shouldShowBanner(args: ReturnType<typeof parseArgs>): boolean {
+  return !args.showVersion && !args.flags.json && !args.flags.quiet;
 }
 
 function version(): string {
@@ -65,6 +76,13 @@ export async function main(options: MainOptions = {}): Promise<number> {
 
   const args = parseArgs(argv);
   const theme = createTheme(args.flags.noColor || env["NO_COLOR"] ? "never" : "auto");
+
+  // The wordmark leads every human-facing run. Kept off stdout (and skipped
+  // entirely for `--json` / `--version` / `--quiet`) so scripted callers get a
+  // clean stream; see `shouldShowBanner`.
+  if (shouldShowBanner(args)) {
+    io.stderr.write(renderBanner(theme));
+  }
 
   if (args.errors.length > 0) {
     for (const error of args.errors) {
