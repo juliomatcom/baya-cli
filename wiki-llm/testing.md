@@ -50,6 +50,8 @@ Emulates the **codex file-out contract**: when argv carries `-o <path>`, `final`
 
 Every engine test runs against this: zero network, zero LLM, zero cost, deterministic.
 
+New harness knob: `reject_stdin: "<substring>"` — exit 1 with nothing parseable when stdin carries it. Models a CLI refusing an invocation outright (a resume identifier it will not accept), which is structurally different from running and reporting failure through the schema.
+
 ## Tiers
 
 | Tier            | Scope                                                                                                                                                                          | Command                                          | CI         |
@@ -73,6 +75,15 @@ Run tests via `npm test`, never bare `npx jest` (needs `--experimental-vm-module
 9. **Non-TTY** — `needs_input` with no TTY fails cleanly, never hangs (a hang here is the worst failure mode).
 10. **Plan round-trip** — `--plan-out` then `--plan-in` produces an identical execution.
 11. **Model gate** — a task-named model resolves via catalog/alias; an unresolvable name aborts (exit `2`), never defaults.
+
+## Memory & session reuse
+
+Both are tested against the record a real run leaves, not against invented shapes.
+
+- **Pure halves** (`deriveMemory`, `renderMemory`, `parseClaudeTranscript`) are unit-tested in `test/unit/memory/`. Transcript fixtures are copied from a real Claude Code session log; the selection tests encode measured failures — one task flailing through variations of one invocation crowded out every other fact kind, and `console.log` was reported as a file.
+- **Delivery** rides on the fake provider's `expect_stdin` (`test/integration/memory.test.ts`): if the memory block never reached the prompt, the task fails and the run exits non-zero. Stronger than reading `memory.json` back — it proves the fact travelled into what a CLI was actually sent.
+- **Session reuse** asserts `state.tasks[id].continued_from`, and pins the cold path with `--no-session-reuse`. A chain-collapse test and a `--no-session-reuse` test must exist for every context-bus assertion, because a continuation deliberately stops re-inlining an in-session upstream.
+- `codex exec resume` stays `⚠️ UNVERIFIED` until the contract tier exercises it (M6.5). The cold-retry fallback is what makes that safe to ship, and has its own case: `reject_stdin` makes the fake provider refuse the resumed invocation only, so the test proves a refused continuation costs one wasted spawn rather than the task.
 
 ## Color in tests
 

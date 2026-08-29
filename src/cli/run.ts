@@ -14,6 +14,7 @@ import {
   type Logger,
 } from "../log/index.js";
 import { FileLock } from "../lock/index.js";
+import { DEFAULT_MEMORY_BUDGET } from "../memory/index.js";
 import {
   checkTaskText,
   plan as planTaskList,
@@ -81,6 +82,7 @@ export interface RunCommandOptions {
 }
 
 const CONTEXT_BUDGET_DEFAULT = 12_000;
+const MEMORY_BUDGET_DEFAULT = DEFAULT_MEMORY_BUDGET;
 
 export async function runCommand(options: RunCommandOptions): Promise<number> {
   const { args, cwd, env, io, registry } = options;
@@ -432,6 +434,9 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         isolation: "shared",
         context_strategy: flags.contextStrategy ?? "link-only",
         context_budget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
+        memory: !flags.noMemory,
+        memory_budget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
+        session_reuse: !flags.noSessionReuse,
       },
       totals: {
         succeeded: 0,
@@ -472,6 +477,9 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       binOverrides,
       contextStrategy: flags.contextStrategy ?? "link-only",
       contextBudget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
+      memory: !flags.noMemory,
+      memoryBudget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
+      sessionReuse: !flags.noSessionReuse,
       env,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
       onTaskSettled: (taskId, _state, result) => {

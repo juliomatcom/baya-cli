@@ -15,10 +15,13 @@
 | M3 Provider breadth         |      7 |      8 | ███████░        |
 | M2 Concurrency & resilience |      2 |     10 | ██░░░░░░        |
 | M4 Escalation               |      0 |      6 | ░░░░░░░░        |
+| M6 Cost reduction           |      4 |      6 | █████░░░        |
 | M5 Hardening                |      — |      — | prose checklist |
-| **Total**                   | **37** | **52** |                 |
+| **Total**                   | **41** | **58** |                 |
 
 **Reprioritized 2026-08-29 — M3 before M2.** Baya's value proposition is "a different CLI per task"; shipping on `codex` alone is an MVP of the engine, not of the product. Breadth now leads; concurrency and resume widen it afterward. Task ids are unchanged — only the execution order moved. See **Execution order** below.
+
+**M6 landed 2026-08-29 (bar `M6.5`/`M6.6`).** Cross-task memory and session chain-collapse, scoped to `codex` + `claude`. Design in `wiki-llm/execution.md` §Memory / §Session reuse.
 
 **Next up:** M3 is landed bar `M3.4` (re-probe `copilot` — blocked on quota reset). All four adapters are registered and unit-covered; `codex` + `claude` run end to end, `opencode` + `copilot` await a local environment fix and are settled by `npm run test:contract`. Then **`M2.4` signal teardown** — the gate before calling this an MVP.
 
@@ -144,6 +147,23 @@ The milestone sections below are numbered by theme, not by build order. Since th
 |  ☐  | M4.4  | Session resume dispatch per adapter (`codex exec resume`, `opencode run -s`, `claude --resume`) with the answer in context                                                 | Integration: park → answer → resume → `0`                                            |
 |  ☐  | M4.5  | `--on-input ask\|fail\|skip\|default`; **non-TTY fails cleanly, never hangs**                                                                                              | Integration with `stdin` not a TTY                                                   |
 
+## M6 — Cost reduction _(cross-task memory + session reuse)_
+
+**Why:** per-task model routing already saves money; the next-largest waste is that every task starts blind. Measured on 23 recorded runs in `.baya/runs/`: `wiki-llm/index.md` was independently re-read by 7 tasks, `package.json` by 6, `npm run typecheck` re-run by 4 — and `npm test` failed then `npm test -- --runInBand` succeeded, rediscovered task after task.
+
+Design and rationale: [`wiki-llm/execution.md`](../../wiki-llm/execution.md) §Memory and §Session reuse. Scoped to `codex` + `claude`; `copilot`/`opencode` widen one at a time.
+
+|  ✓  | #    | Task                                                                                                                                                                                                       | Done when                                                                                                               |
+| :-: | :--- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------- |
+| ✅  | M6.1 | **codex `file_change` fix** — the field is `changes: [{path, kind}]`, not `path`; every file change rendered as a bare `Edit()`                                                                            | Unit test on the real shape; `files_changed` facts are non-empty                                                        |
+| ✅  | M6.2 | **`observations` capability + both readers** — codex from its own `events.jsonl`; claude from `~/.claude/projects/*/<session-id>.jsonl`, found by globbing the id, never by rebuilding the cwd slug        | Unit tests per adapter; a missing transcript yields `[]` and never fails a task                                         |
+| ✅  | M6.3 | **`src/memory/`** — pure `deriveMemory` + `renderMemory`, one prompt section by `# Workspace`, `runs/<id>/memory.json`, `--no-memory` / `--memory-budget`                                                  | Delivery proven by `expect_stdin` in `test/integration/memory.test.ts`; per-kind caps stop one flailing task dominating |
+| ✅  | M6.4 | **Chain-collapse** — single dependency + same provider **and** model + warm + under the turn cap ⇒ `buildContinue`; warm continuations jump the ready-set queue; cold retry once when a resume is rejected | `continued_from` in `state.json`; `--no-session-reuse` pins the cold path; a fan-in never collapses                     |
+|  ☐  | M6.5 | **Verify `codex exec resume <thread_id>`** in the contract tier — the last UNVERIFIED assumption under session reuse                                                                                       | `npm run test:contract` exercises a real two-turn chain on codex                                                        |
+|  ☐  | M6.6 | **Measure it.** Report exploration tool-calls per task with and without `--no-memory`; token variance is too high to read the effect directly                                                              | A run report carries the comparison; the README claim is backed by numbers rather than by design intent                 |
+
+> `M6.6` before advertising this. The whole feature is a bet that memory costs less than the rediscovery it prevents, and `--no-memory` exists precisely so the bet is checkable.
+
 ## M5 — Hardening & release
 
 `README.md` (quickstart + wiki pointer) · `.baya/config.json` overrides · **`baya doctor` stray-pid reaping — gated on a stale `.baya/baya.lock`, never on pid-liveness alone**; reports unparseable locks for manual deletion · provider version-drift warning · npm packaging and `baya` bin smoke test · full contract-tier pass.
@@ -182,4 +202,9 @@ The milestone sections below are numbered by theme, not by build order. Since th
 | copilot is argv-only for prompts, breaking the "prefer files" rule | Delivery-preference chain already degrades per adapter; document the exception | M3.5 |
 | Wizard hangs a piped/CI invocation | Explicit non-TTY fallbacks; `BAYA_NO_INPUT=1` and `--default-provider` bypass; no test may open a prompt | M1.10b |
 | No CLI validates model names cheaply (`codex` 400s, `claude` reports `unrecognized_model`, only `opencode` enumerates) | Hardcoded catalog for the three that can't list + live `opencode models`, cached to `modelCatalog` at setup. Resolution is offline string-matching against it — **no per-run validation call**. A name that won't resolve stops at the model gate | M3.6 |
+| Memory carries a wrong fact into every later task | Derived only — never model-reported; keyed so a later fact replaces an earlier one; never carries command output. A command that failed then succeeded stops being a dead end | M6.3 |
+| Memory becomes an injection channel into every task | Command strings and paths only, never `aggregated_output`/`tool_result.content`; rendered as evidence, not instruction | M6.3 |
+| Session reuse silently fights per-task model routing | A chain partitions at every model change — routing wins by construction, and the guard is explicit in `continuationFor` | M6.4 |
+| A stale session costs more than the cold start it replaced | `SESSION_WARM_MS` 300 000, matching the 5-minute prompt cache the session file outlives | M6.4 |
+| `codex exec resume` identifier is still unverified | Cold retry once on a rejected continuation; contract tier settles it | M6.4, M6.5 |
 | Provider ANSI escapes reach the terminal unsanitized | `--color never` at the flag level + strip residual ANSI before render/persist | M0.5, M2.7 |

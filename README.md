@@ -137,11 +137,11 @@ flowchart TB
     BUS --> OUT
 ```
 
-Four ideas do most of the work:
+Five ideas do most of the work:
 
 - **JSON on the wire, both directions.** Every exchange with a provider is a validated envelope, never prose. `codex` and `claude` enforce the result schema natively. A question from an agent is a `status: "needs_input"` field — not a question mark spotted in a stream.
 - **The planner picks a provider, never a command.** Manifests carry a provider name from a closed enum; adapters alone build `argv`. `shell: true` is banned repo-wide.
-- **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume <runId> --provider claude` picks up exactly where it stopped.
+- **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume <runId> --provider claude` picks up exactly where it stopped. Within a run, no task rediscovers what another already found: commands that worked, commands that failed, and files already touched are derived from the providers' own logs — costing nothing to produce — and handed to every later task.
 - **Providers are watched, not trusted.** Their flag surfaces are live-probed and contract-tested, their output is ANSI-stripped and schema-validated.
 
 ## Providers
@@ -238,7 +238,9 @@ Contributing a corrected entry to `BUILTIN_CATALOG` in `src/providers/catalog.ts
 
 **Why not just use one CLI's built-in agent?** Because you probably pay for more than one, and they are good at different things. Baya lets a task list say "plan with one, build with another" and handles the plumbing.
 
-**Can this save me money?** Yes. A task list picks the model per task, so the light steps can run on a cheap model (`luna`, `terra`) while the expensive ones are reserved for the work that earns them. You are still spending under subscriptions you already pay for — Baya just stops the top-tier model from doing work a cheaper one would have done fine.
+**Can this save me money?** Yes, three ways. A task list picks the model per task, so the light steps can run on a cheap model (`luna`, `terra`) while the expensive ones are reserved for the work that earns them. Beyond that, tasks stop starting blind: what earlier tasks in a run found — which commands work, which fail, which files were already changed — is derived from the providers' own logs and passed to later tasks, so nobody pays twice to discover the same thing. And a chain of tasks on the same model continues in one provider session instead of spawning cold each time, which keeps the prompt cache warm. You are still spending under subscriptions you already pay for — Baya just stops the top-tier model from doing work a cheaper one would have done fine, and stops every task from re-reading the repo from scratch.
+
+Both are on by default and switchable off: `--no-memory`, `--no-session-reuse`.
 
 **Does this need API keys?** No. It drives locally installed CLIs under whatever subscription you already have.
 

@@ -131,3 +131,32 @@ describe("config subcommand", () => {
     expect(parseArgs(["config"]).configAction).toBeUndefined();
   });
 });
+
+describe("memory and session-reuse flags", () => {
+  it("defaults both features on", () => {
+    const parsed = parseArgs(["tasks.md"]);
+    expect(parsed.flags.noMemory).toBe(false);
+    expect(parsed.flags.noSessionReuse).toBe(false);
+    expect(parsed.flags.memoryBudget).toBeUndefined();
+  });
+
+  it("turns each off independently", () => {
+    expect(parseArgs(["tasks.md", "--no-memory"]).flags).toMatchObject({
+      noMemory: true,
+      noSessionReuse: false,
+    });
+    expect(parseArgs(["tasks.md", "--no-session-reuse"]).flags).toMatchObject({
+      noMemory: false,
+      noSessionReuse: true,
+    });
+  });
+
+  it("takes a memory budget and rejects a nonsensical one", () => {
+    expect(parseArgs(["tasks.md", "--memory-budget", "500"]).flags.memoryBudget).toBe(
+      500,
+    );
+    expect(parseArgs(["tasks.md", "--memory-budget", "-1"]).errors).toContain(
+      "--memory-budget must be a non-negative integer",
+    );
+  });
+});

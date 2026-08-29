@@ -1,9 +1,11 @@
 import { type ProviderEvent, type TaskResult } from "../manifest/index.js";
 import { stripAnsi } from "../log/index.js";
+import { findClaudeTranscript, parseClaudeTranscript } from "../memory/index.js";
 import { extractResultFromText, parseResultJson, synthesizeFailure } from "./result.js";
 import type {
   BuildRunInput,
   ExtractContext,
+  Observation,
   ProviderAdapter,
   ProviderUsage,
   SpawnPlan,
@@ -66,8 +68,14 @@ function permissionModeFor(input: BuildRunInput): string {
   return input.dangerouslyAllowAll ? "bypassPermissions" : "auto";
 }
 
-/** Flags shared by `-p` and `--resume`, in a fixed order for the snapshot. */
-function commonFlags(input: BuildRunInput): string[] {
+/**
+ * Flags shared by `-p` and `--resume`, in a fixed order for the snapshot.
+ *
+ * `resuming` drops `--session-id`: the id is already named by `--resume`, and
+ * passing both asks claude to create and to continue the same session in one
+ * invocation.
+ */
+function commonFlags(input: BuildRunInput, resuming = false): string[] {
   const argv = [
     "-p",
     "--output-format",
@@ -88,7 +96,9 @@ function commonFlags(input: BuildRunInput): string[] {
   }
   if (input.model !== null) argv.push("--model", input.model);
   // `--session-id` pre-assigns the id so resume needs no event parsing (M4.1).
-  if (input.sessionId !== undefined) argv.push("--session-id", input.sessionId);
+  if (!resuming && input.sessionId !== undefined) {
+    argv.push("--session-id", input.sessionId);
+  }
   return argv;
 }
 
@@ -190,6 +200,10 @@ export const claudeAdapter: ProviderAdapter = {
     events: "json",
     sessionId: "preassign",
     resume: "session",
+    // `--output-format json` is one object, so no `tool` events exist to read.
+    // Claude Code's own session transcript carries them instead, and carries
+    // them better: `Read` names a `file_path` outright.
+    observations: "transcript",
     cwdFlag: false,
     modelFlag: true,
     // Subscription-throttled until measured under load (risk register).
@@ -213,11 +227,34 @@ export const claudeAdapter: ProviderAdapter = {
    */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, "--resume", sessionId, ...commonFlags(input)],
+      argv: [input.bin, "--resume", sessionId, ...commonFlags(input, true)],
       cwd: input.cwd,
       stdin: "pipe",
       stdinData: answer,
     };
+  },
+
+  /**
+   * The next task as another turn in the same session (execution.md §Session
+   * reuse). Turns 2+ of a chain **must** go through `--resume`: re-passing an
+   * existing `--session-id` on a fresh `-p` asks claude to create a session
+   * that already exists.
+   */
+  buildContinue(sessionId: string, input: BuildRunInput): SpawnPlan {
+    return {
+      argv: [input.bin, "--resume", sessionId, ...commonFlags(input, true)],
+      cwd: input.cwd,
+      stdin: "pipe",
+      stdinData: input.prompt,
+    };
+  },
+
+  transcriptPath(sessionId: string): string | null {
+    return findClaudeTranscript(sessionId);
+  },
+
+  extractObservations(ctx: ExtractContext): Observation[] {
+    return ctx.transcript ? parseClaudeTranscript(ctx.transcript) : [];
   },
 
   /**

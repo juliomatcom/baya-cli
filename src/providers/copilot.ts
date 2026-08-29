@@ -164,6 +164,10 @@ export const copilotAdapter: ProviderAdapter = {
     events: "jsonl",
     sessionId: "preassign",
     resume: "session",
+    // Deferred: this adapter emits `tool` events, but neither its event
+    // shapes nor its resume path have been exercised for memory. Scoped to
+    // codex + claude first (execution.md §Memory), widened one at a time.
+    observations: "none",
     cwdFlag: true,
     modelFlag: true,
     maxConcurrency: 1,

@@ -49,6 +49,9 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | `--retries <n>`           | `1`           | Transient failures only. **M2.5**.                                                                                         |
 | `--context-strategy <s>`  | `link-only`   | `link-only` \| `truncate`. `summarize` is `later`.                                                                         |
 | `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                                                         |
+| `--no-memory`             | off           | Do not pass what earlier tasks learned. Every task starts blind. The A/B control for measuring memory.                     |
+| `--memory-budget <n>`     | `1200`        | Chars of the `# Known about this workspace` block (~300 tokens).                                                           |
+| `--no-session-reuse`      | off           | Never continue a chain in one provider session; every task spawns cold.                                                    |
 | `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                    |
 | `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                    |
 | `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from the task list.                                                                 |

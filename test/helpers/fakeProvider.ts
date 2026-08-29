@@ -17,6 +17,8 @@ export interface FakeProviderScenario {
   hang_ms?: number;
   spawn_child?: boolean;
   expect_stdin?: boolean | string;
+  /** Exit 1 with nothing parseable when stdin carries this — a refused invocation. */
+  reject_stdin?: string;
   expect_file?: string;
   writes_file?: string;
   by_task?: Record<string, FakeProviderScenario>;

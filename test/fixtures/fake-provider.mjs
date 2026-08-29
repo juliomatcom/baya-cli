@@ -14,6 +14,10 @@
  *   "hang_ms": 0,
  *   "spawn_child": false,
  *   "expect_stdin": false | true | "substring that must appear",
+ *   "reject_stdin": "substring that makes this invocation exit 1 with nothing",
+ *     — models a CLI refusing the invocation itself (a resume id it will not
+ *       accept), which is structurally different from running and reporting
+ *       failure through the schema.
  *   "expect_file": "path that must exist and be non-empty",
  *   "writes_file": "path to append start/end markers to",
  *   "by_task": { "<taskId>": {scenario}, "__planner__": {...}, "default": {...} }
@@ -98,6 +102,21 @@ async function checkExpectStdin(expectStdin) {
   if (!ok) fail("expect_stdin failed: stdin did not meet the expectation");
 }
 
+/**
+ * Refuse the invocation outright, the way a CLI does when it rejects a resume
+ * identifier: non-zero exit, nothing parseable, no result file. Consumes stdin
+ * first so the writer never sees EPIPE.
+ */
+async function checkRejectStdin(rejectStdin) {
+  if (typeof rejectStdin !== "string" || rejectStdin === "") return;
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  if (Buffer.concat(chunks).toString("utf8").includes(rejectStdin)) {
+    process.stderr.write("fake-provider: refusing this invocation\n");
+    process.exit(1);
+  }
+}
+
 function writeFileMarker(writesFile, event) {
   if (!writesFile) return;
   appendFileSync(
@@ -144,6 +163,7 @@ async function main() {
 
   installSignalHandlers(scenario.on_signal ?? "exit");
   checkExpectFile(scenario.expect_file);
+  await checkRejectStdin(scenario.reject_stdin);
   await checkExpectStdin(scenario.expect_stdin);
 
   writeFileMarker(scenario.writes_file, "start");

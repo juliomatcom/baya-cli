@@ -151,6 +151,28 @@ describe("claudeAdapter.buildRun argv", () => {
       claudeAdapter.buildResume("sess-9", "use postgres", input()).argv,
     ).toMatchSnapshot();
   });
+
+  it("never pairs --resume with --session-id, which would create and continue at once", () => {
+    const withId = input({ sessionId: "sess-9" });
+    expect(claudeAdapter.buildResume("sess-9", "answer", withId).argv).not.toContain(
+      "--session-id",
+    );
+    expect(claudeAdapter.buildContinue?.("sess-9", withId).argv).not.toContain(
+      "--session-id",
+    );
+    // A cold run still pre-assigns it.
+    expect(claudeAdapter.buildRun(withId).argv).toContain("--session-id");
+  });
+
+  it("continues a chain by sending the next task_request into --resume", () => {
+    const plan = claudeAdapter.buildContinue?.("sess-9", input());
+    expect(plan?.argv.slice(0, 3)).toEqual([
+      "/usr/local/bin/claude",
+      "--resume",
+      "sess-9",
+    ]);
+    expect(plan?.stdinData).toBe(input().prompt);
+  });
 });
 
 describe("claudeAdapter.parseEvents", () => {
@@ -312,5 +334,47 @@ describe("claudeAdapter.extractUsage", () => {
 
   it("returns nothing when there is no final blob", () => {
     expect(claudeAdapter.extractUsage?.([])).toEqual({});
+  });
+});
+
+describe("claude observations", () => {
+  const ctx = (transcript: string | null) => ({
+    taskId: "t1",
+    events: [],
+    resultFileContents: null,
+    exitCode: 0,
+    stderr: "",
+    transcript,
+  });
+
+  it("declares the transcript as its source, because its events cannot carry tools", () => {
+    expect(claudeAdapter.capabilities.observations).toBe("transcript");
+    expect(claudeAdapter.capabilities.events).toBe("json");
+    expect(typeof claudeAdapter.transcriptPath).toBe("function");
+  });
+
+  it("reads observations out of the transcript it is handed", () => {
+    const transcript = [
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "u1",
+              name: "Read",
+              input: { file_path: "/repo/a.ts" },
+            },
+          ],
+        },
+      }),
+    ].join("\n");
+    expect(claudeAdapter.extractObservations?.(ctx(transcript))).toEqual([
+      { kind: "read", path: "/repo/a.ts" },
+    ]);
+  });
+
+  it("contributes nothing, and fails nothing, when no transcript was found", () => {
+    expect(claudeAdapter.extractObservations?.(ctx(null))).toEqual([]);
   });
 });

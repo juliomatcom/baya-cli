@@ -19,11 +19,16 @@ v1 set: `opencode`, `codex`, `claude`, `copilot`. `gemini` verified, deferred to
 | **Session id field**      | `thread_id`                 | `session_id`                         | `sessionId`                  | `sessionID`           |
 | **Pre-assign session id** | ❌ capture                  | ✅ `--session-id <uuid>`             | ✅ `--session-id <id>`       | ❌ capture            |
 | Resume                    | `codex exec resume <id>`    | `-r/--resume <id>`                   | `-r/--resume=<id>`           | `-s/--session <id>`   |
+| **Chain continuation**    | ✅ `buildContinue`          | ✅ `buildContinue`                   | ❌ not wired                 | ❌ not wired          |
+| **Observation source**    | own `events.jsonl`          | `~/.claude/projects/*/<id>.jsonl`    | ❌ none                      | ❌ none               |
+| Tool calls in events      | ✅ `item.completed`         | ❌ single result object              | ✅ (unwired)                 | ✅ (unwired)          |
 | Working dir flag          | ✅ `-C/--cd`                | ❌ **none** — set spawn `cwd`        | ✅ `-C`                      | ✅ `--dir`            |
 | Disable color             | ✅ `--color never`          | ❌ none                              | ✅ `--no-color`              | ❌ none               |
 | Cost cap                  | —                           | `--max-budget-usd`                   | `--max-ai-credits`           | —                     |
 
 Session id has four spellings — normalizing it is the adapter layer's core justification.
+
+Memory and session reuse are scoped to `codex` + `claude` (execution.md §Memory, §Session reuse). `copilot`/`opencode` do emit tool events, but neither their event shapes nor their resume paths have been exercised for it; they widen one at a time, each with its own contract-test case.
 
 ## Cross-cutting rules
 
@@ -44,6 +49,7 @@ interface ProviderAdapter {
     events: "jsonl" | "json" | "none";
     sessionId: "preassign" | "capture";
     resume: "session" | "none";
+    observations: "events" | "transcript" | "none"; // execution.md §Memory
     cwdFlag: boolean;
     modelFlag: boolean;
     maxConcurrency: number;
@@ -54,6 +60,9 @@ interface ProviderAdapter {
     answer,
     env,
   ): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
+  buildContinue?(sessionId, env): SpawnPlan; // next task as another turn
+  transcriptPath?(sessionId: string): string | null;
+  extractObservations?(ctx: ExtractContext): Observation[];
   parseEvents(chunk: string): ProviderEvent[]; // fed complete lines only
   extractResult(ctx: ExtractContext): TaskResult;
   extractUsage?(events): { cost_usd?; input_tokens?; output_tokens? };
@@ -63,6 +72,8 @@ interface ProviderAdapter {
 - `buildRun`/`buildResume` return `argv: string[]`, never a command string; `shell: true` banned repo-wide. Pure + snapshot-tested — the snapshot is the drift alarm.
 - `extractUsage` optional, per-provider. codex reports usage on `turn.completed` (normalized to `unknown`); read it back here rather than widening the `ProviderEvent` union.
 - `parseEvents` gets whole lines only. Partial-chunk buffering lives in `src/executor/spawn.ts`.
+- `buildContinue` is **optional**: absent ⇒ this provider never joins a session chain and its tasks always start cold. That is the honest default for an unexercised resume path — do not add one from documentation. Distinct from `buildResume`, which answers an escalation; `buildContinue` carries a whole new `task_request`, so the prompt re-states the response contract.
+- `extractObservations` + `transcriptPath` are how a provider contributes to cross-task memory. Both optional; `observations: "none"` means the adapter consumes memory and contributes none. Never self-reported by the model — read back out of a record the provider already wrote.
 
 ## Binary resolution
 
@@ -82,7 +93,9 @@ Flags: `-m/--model` · `-C/--cd <DIR>` · `--add-dir` · `-s/--sandbox {read-onl
 
 Events (`--json`): `thread.started`→`thread_id` · `turn.started` · `item.completed`→`item.type:"agent_message"`/`item.text`, `item.type:"error"`→error event (full message, e.g. an unknown-model metadata warning) · top-level `type:"error"`→error event · `turn.completed`→`usage`.
 
-Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-file'` · `sessionId 'capture'` · `resume 'session'` · `cwdFlag true` · `maxConcurrency 2`.
+Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-file'` · `sessionId 'capture'` · `resume 'session'` · `observations 'events'` · `cwdFlag true` · `maxConcurrency 2`.
+
+⚠️ `file_change` items carry **`changes: [{path, kind}]`, not `path`.** Reading `path` rendered every file change as a bare `Edit()` — verified against 8 recorded events. `command_execution` carries `command`, `exit_code` (a **string** in the JSONL), and `status`; those three are the whole of codex's memory contribution.
 
 Adapter `src/providers/codex.ts`, snapshot `test/unit/providers/codex.test.ts`. argv: `codex exec --json --color never --skip-git-repo-check -C <cwd> -s <sandbox> --output-schema <file> -o <file> [-m <model>] -`, prompt on stdin behind `-`. Sandbox from task: `writes:false`⇒`read-only`, `writes:true`⇒`workspace-write`, `--dangerously-allow-all`⇒`danger-full-access`.
 
@@ -102,7 +115,11 @@ Flags: `--model` (aliases `opus`/`sonnet`/`haiku`, or full id) · `--output-form
 ⚠️ `--json-schema` rejects a file path; inline JSON only, and strip the `$schema` meta-pointer (claude's validator has no 2020-12 meta-schema: `no schema with key or ref https://json-schema.org/draft/2020-12/schema`).
 💡 `--session-id <uuid>` pre-assigns the id — resume needs no event parsing.
 
-Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-inline'` · `sessionId 'preassign'` · `resume 'session'` · `cwdFlag false` · `maxConcurrency 1` (subscription-throttled until measured).
+Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-inline'` · `sessionId 'preassign'` · `resume 'session'` · `observations 'transcript'` · `cwdFlag false` · `maxConcurrency 1` (subscription-throttled until measured).
+
+⚠️ **`--resume` and `--session-id` are mutually exclusive in practice** — one continues a session, the other creates it. `commonFlags(input, resuming)` drops `--session-id` on both `buildResume` and `buildContinue`.
+
+**Transcript.** `--output-format json` prints one object, so `parseEvents` emits no `tool` events and observations come from Claude Code's own session log at `~/.claude/projects/<cwd-slug>/<session-id>.jsonl`. Verified 2026-08-29: 9 of 10 recorded Baya claude tasks had theirs on disk. Located by **globbing the session id** across project directories — the slug's escaping rules are undocumented and are deliberately not reproduced. Records with `type` `assistant`/`user` carry `message.content[]`; `attachment` / `ai-title` / `queue-operation` / `atis-latch` / `last-prompt` are bookkeeping. `tool_use` gives `Bash.command` (plus a free model-written `description`), `Read.file_path`, `Edit.file_path`; the matching `tool_result.tool_use_id` gives `is_error`.
 
 Adapter `src/providers/claude.ts`, snapshot `test/unit/providers/claude.test.ts`. argv: `claude -p --output-format json --json-schema <inline JSON, $schema stripped> --permission-mode <mode> [--model <m>] [--session-id <uuid>]`, prompt on stdin, `cwd` on spawn. `--output-format json` (not `stream-json`): one object parsed once. `.structured_output`=rung 1; `.result`=rungs 2–3; `permission_denials[]`⇒non-retryable `permission` failure **when no rung parsed**, else a `warn` note on the succeeding result (a denied run must not report clean); `is_error`⇒failure classified by message. Usage: `total_cost_usd`⇒`cost_usd`; `usage.{input,output}_tokens` + both cache token fields folded into `input_tokens`.
 
@@ -125,7 +142,7 @@ Events: `{type, data, ephemeral, id, timestamp, parentId}`. **15/20 events `ephe
 💡 Set `--no-ask-user` — disables the `ask_user` tool so a question returns as `status:"needs_input"` instead of blocking.
 ⚠️ `--allow-all-tools`: help says "required for non-interactive", but a run reached quota without it. Treat as required for unattended tool _execution_, not parsing. Re-verify post-quota.
 
-Capabilities: `promptDelivery ['argv']` · `structuredOutput 'none'` · `sessionId 'preassign'` · `resume 'session'` · `cwdFlag true` · `maxConcurrency 1`.
+Capabilities: `promptDelivery ['argv']` · `structuredOutput 'none'` · `sessionId 'preassign'` · `resume 'session'` · `observations 'none'` · `cwdFlag true` · `maxConcurrency 1`.
 
 Adapter `src/providers/copilot.ts`, snapshot `test/unit/providers/copilot.test.ts`. argv: `copilot -p <text> --output-format json -C <cwd> --no-color --no-ask-user [--allow-all-tools] [--model <m>] [--session-id <id>]`. `-p <text>` = the one place a prompt rides in argv in Baya. `--allow-all-tools` only for `writes:true` / `--dangerously-allow-all` (no read-only sandbox). `parseEvents` drops `ephemeral:true`; `result` line → session id + exit code + `usage.codeChanges.filesModified`⇒`files_changed`. No schema ⇒ degradation ladder.
 
@@ -145,7 +162,7 @@ Events: JSONL `{type, timestamp, sessionID, …}`. Error `{"type":"error","error
 
 ⚠️ **Environment, not a bug:** this machine's opencode holds an invalid key (`"asd"`), every run 401s. Fix local auth before the contract test.
 
-Capabilities: `promptDelivery ['file','argv']` · `structuredOutput 'none'` · `sessionId 'capture'` · `resume 'session'` · `cwdFlag true` · `maxConcurrency 2`.
+Capabilities: `promptDelivery ['file','argv']` · `structuredOutput 'none'` · `sessionId 'capture'` · `resume 'session'` · `observations 'none'` · `cwdFlag true` · `maxConcurrency 2`.
 
 Adapter `src/providers/opencode.ts`, snapshot `test/unit/providers/opencode.test.ts`. Proves the abstraction against a **third** prompt-delivery shape (file `-f` vs codex/claude stdin). argv: `opencode run --format json --dir <cwd> [-m <provider/model>] -f <promptFile>`, `stdin:"ignore"`, prompt written to `<taskDir>/prompt.md` via `SpawnPlan.files`. `-m` passed verbatim. No schema ⇒ degradation ladder.
 

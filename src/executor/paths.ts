@@ -15,6 +15,8 @@ export interface RunPaths {
   state: string;
   report: string;
   log: string;
+  /** Derived cross-task memory for this run (execution.md §Memory). */
+  memory: string;
   taskDir(taskId: string): string;
   request(taskId: string): string;
   result(taskId: string): string;
@@ -50,6 +52,7 @@ export function runPaths(cwd: string, runId: string): RunPaths {
     manifest: join(runDir, "manifest.json"),
     state: join(runDir, "state.json"),
     report: join(runDir, "report.json"),
+    memory: join(runDir, "memory.json"),
     log: join(runDir, "baya.jsonl"),
     taskDir,
     request: (id) => join(taskDir(id), "request.json"),

@@ -4,6 +4,7 @@ import { parseResultJson, synthesizeFailure } from "./result.js";
 import type {
   BuildRunInput,
   ExtractContext,
+  Observation,
   ProviderAdapter,
   ProviderUsage,
   SpawnPlan,
@@ -46,12 +47,33 @@ function commonFlags(input: BuildRunInput): string[] {
   return argv;
 }
 
+/**
+ * Paths touched by a `file_change` item.
+ *
+ * ⚠️ The field is `changes: [{path, kind}]`, **not** `path`. Reading `path`
+ * yielded a bare `Edit()` for every file change codex ever reported — the
+ * older shape is kept as a fallback because it costs one `??`.
+ */
+function changedPaths(item: Record<string, unknown>): string[] {
+  const changes = item["changes"];
+  if (Array.isArray(changes)) {
+    return changes
+      .map((change) => {
+        if (change === null || typeof change !== "object") return "";
+        return String((change as Record<string, unknown>)["path"] ?? "");
+      })
+      .filter((path) => path !== "");
+  }
+  const single = item["path"];
+  return typeof single === "string" && single !== "" ? [single] : [];
+}
+
 function toolNameFor(itemType: string, item: Record<string, unknown>): string {
   switch (itemType) {
     case "command_execution":
       return `Shell(${String(item["command"] ?? "")})`;
     case "file_change":
-      return `Edit(${String(item["path"] ?? "")})`;
+      return `Edit(${changedPaths(item).join(", ")})`;
     case "mcp_tool_call":
       return `${String(item["server"] ?? "mcp")}.${String(item["tool"] ?? "")}`;
     case "web_search":
@@ -128,6 +150,9 @@ export const codexAdapter: ProviderAdapter = {
     events: "jsonl",
     sessionId: "capture",
     resume: "session",
+    // `--json` already carries `command_execution` (with `exit_code`) and
+    // `file_change`, so Baya's own `events.jsonl` is the record — no sidecar.
+    observations: "events",
     cwdFlag: true,
     modelFlag: true,
     maxConcurrency: 2,
@@ -156,6 +181,49 @@ export const codexAdapter: ProviderAdapter = {
       stdin: "pipe",
       stdinData: answer,
     };
+  },
+
+  /**
+   * The next task as another turn on the same thread. Identical argv to
+   * `buildResume` — only the payload differs, and it differs entirely: a whole
+   * `task_request`, not an answer to a question.
+   *
+   * ⚠️ Inherits `buildResume`'s UNVERIFIED assumption that `thread_id` is what
+   * `exec resume` accepts. The executor falls back to a cold run when a
+   * continuation fails, so being wrong here costs one wasted spawn rather than
+   * the task.
+   */
+  buildContinue(sessionId: string, input: BuildRunInput): SpawnPlan {
+    return {
+      argv: [input.bin, "exec", "resume", sessionId, ...commonFlags(input), "-"],
+      cwd: input.cwd,
+      stdin: "pipe",
+      stdinData: input.prompt,
+    };
+  },
+
+  extractObservations(ctx: ExtractContext): Observation[] {
+    const out: Observation[] = [];
+    for (const event of ctx.events) {
+      if (event.t !== "tool") continue;
+      const item = event.input;
+      if (item === null || typeof item !== "object") continue;
+      const record = item as Record<string, unknown>;
+      if (record["type"] === "command_execution") {
+        const command = record["command"];
+        if (typeof command !== "string" || command.trim() === "") continue;
+        // `exit_code` arrives as a string in the JSONL; `status` is the
+        // narrative version of the same thing and is the safer read.
+        const ok =
+          record["status"] === "completed" && String(record["exit_code"] ?? "0") === "0";
+        out.push({ kind: "command", command, ok });
+        continue;
+      }
+      if (record["type"] === "file_change") {
+        for (const path of changedPaths(record)) out.push({ kind: "write", path });
+      }
+    }
+    return out;
   },
 
   parseEvents(chunk: string): ProviderEvent[] {

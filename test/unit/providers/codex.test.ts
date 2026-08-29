@@ -108,6 +108,20 @@ describe("codexAdapter.parseEvents", () => {
     expect(event).toMatchObject({ t: "tool", name: "Edit(a.sql)" });
   });
 
+  it("names every path in a file_change — the field is `changes`, not `path`", () => {
+    // The real shape. Reading `path` produced a bare `Edit()` for every file
+    // change codex has ever reported.
+    const [event] = codexAdapter.parseEvents(
+      '{"type":"item.completed","item":{"type":"file_change","changes":' +
+        '[{"path":"/repo/src/a.ts","kind":"update"},{"path":"/repo/t/a.test.ts","kind":"add"}],' +
+        '"status":"completed"}}',
+    );
+    expect(event).toMatchObject({
+      t: "tool",
+      name: "Edit(/repo/src/a.ts, /repo/t/a.test.ts)",
+    });
+  });
+
   it("surfaces a completed `error` item as a full error event, not an abbreviated tool", () => {
     const message =
       "Model metadata for `gpt-5-mini` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.";
@@ -239,5 +253,58 @@ describe("codexAdapter.extractUsage", () => {
   it("returns nothing when codex emitted no usage line", () => {
     const events = codexAdapter.parseEvents('{"type":"turn.started"}');
     expect(codexAdapter.extractUsage?.(events)).toEqual({});
+  });
+});
+
+describe("codex observations", () => {
+  const ctx = (events: ReturnType<typeof codexAdapter.parseEvents>) => ({
+    taskId: "t1",
+    events,
+    resultFileContents: null,
+    exitCode: 0,
+    stderr: "",
+    transcript: null,
+  });
+
+  it("reads commands and their exit status straight out of the event stream", () => {
+    const events = codexAdapter.parseEvents(
+      '{"type":"item.completed","item":{"type":"command_execution","command":' +
+        '"/bin/zsh -lc \'npm test\'","exit_code":"1","status":"failed"}}\n' +
+        '{"type":"item.completed","item":{"type":"command_execution","command":' +
+        '"/bin/zsh -lc \'npm run lint\'","exit_code":"0","status":"completed"}}',
+    );
+    expect(codexAdapter.extractObservations?.(ctx(events))).toEqual([
+      { kind: "command", command: "/bin/zsh -lc 'npm test'", ok: false },
+      { kind: "command", command: "/bin/zsh -lc 'npm run lint'", ok: true },
+    ]);
+  });
+
+  it("reports every changed path, which the `path` bug used to swallow", () => {
+    const events = codexAdapter.parseEvents(
+      '{"type":"item.completed","item":{"type":"file_change","changes":' +
+        '[{"path":"src/a.ts","kind":"update"}],"status":"completed"}}',
+    );
+    expect(codexAdapter.extractObservations?.(ctx(events))).toEqual([
+      { kind: "write", path: "src/a.ts" },
+    ]);
+  });
+
+  it("reads its observations from its own events, needing no sidecar", () => {
+    expect(codexAdapter.capabilities.observations).toBe("events");
+    expect(codexAdapter.transcriptPath).toBeUndefined();
+  });
+});
+
+describe("codex session continuation", () => {
+  it("continues a thread with the next task_request on stdin", () => {
+    const plan = codexAdapter.buildContinue?.("thread-9", input());
+    expect(plan?.argv).toEqual([
+      "/usr/local/bin/codex",
+      "exec",
+      "resume",
+      "thread-9",
+      ...codexAdapter.buildRun(input()).argv.slice(2),
+    ]);
+    expect(plan?.stdinData).toBe(input().prompt);
   });
 });

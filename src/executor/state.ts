@@ -69,6 +69,12 @@ export const TaskStateEntrySchema = z
     result_rung: z.string().nullable().default(null),
     /** For `skipped`: the failed ancestor that caused it. */
     blocked_by: z.string().nullable().default(null),
+    /**
+     * For a task run as another turn in an earlier task's provider session
+     * (execution.md §Session reuse): which task opened that session. `null`
+     * means this task started cold.
+     */
+    continued_from: z.string().nullable().default(null),
   })
   .strict();
 export type TaskStateEntry = z.infer<typeof TaskStateEntrySchema>;
@@ -87,6 +93,10 @@ export const ConfigSnapshotSchema = z
     isolation: z.string(),
     context_strategy: z.string(),
     context_budget: z.number().int(),
+    /** Cross-task memory settings, so a run can be compared against `--no-memory`. */
+    memory: z.boolean().default(true),
+    memory_budget: z.number().int().default(0),
+    session_reuse: z.boolean().default(true),
   })
   .strict();
 export type ConfigSnapshot = z.infer<typeof ConfigSnapshotSchema>;

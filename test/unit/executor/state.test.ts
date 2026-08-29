@@ -27,6 +27,9 @@ function initialState(taskIds: string[]): RunState {
       isolation: "shared",
       context_strategy: "link-only",
       context_budget: 12_000,
+      memory: true,
+      memory_budget: 1200,
+      session_reuse: true,
     },
     totals: {
       succeeded: 0,
