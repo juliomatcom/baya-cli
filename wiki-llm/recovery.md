@@ -14,28 +14,49 @@
   "version": 1,
   "run_id": "20260828T2152Z-a1f4c9",
   "status": "running | completed | failed | interrupted",
-  "started_at": "…", "updated_at": "…",
+  "started_at": "…",
+  "updated_at": "…",
   "source": { "path": "tasks.md", "sha256": "9f2c…" },
   "manifest_path": ".baya/runs/…/manifest.json",
   "config_snapshot": {
     "planner": { "provider": "codex", "model": null },
     "defaults": { "provider": "codex", "model": null },
-    "max_parallel": 4, "isolation": "shared"
+    "max_parallel": 4,
+    "isolation": "shared"
   },
   "totals": { "succeeded": 2, "failed": 1, "skipped": 2, "pending": 0, "cost_usd": 0.42 },
   "tasks": {
     "build-ui": {
-      "state": "failed", "provider": "codex", "model": null,
-      "session_id": "01a04a04-…", "attempts": 1,
-      "started_at": "…", "ended_at": "…", "duration_ms": 8112, "exit_code": 1, "pid": 44119,
+      "state": "failed",
+      "provider": "codex",
+      "model": null,
+      "session_id": "01a04a04-…",
+      "attempts": 1,
+      "started_at": "…",
+      "ended_at": "…",
+      "duration_ms": 8112,
+      "exit_code": 1,
+      "pid": 44119,
       "failure": {
-        "kind": "quota", "message": "You have exceeded your monthly quota",
-        "provider_code": "quota_exceeded", "status_code": 402,
-        "retry": "later", "occurred_at": "…"
+        "kind": "quota",
+        "message": "You have exceeded your monthly quota",
+        "provider_code": "quota_exceeded",
+        "status_code": 402,
+        "retry": "later",
+        "occurred_at": "…"
       },
-      "artifacts": { "request": "tasks/build-ui/request.json", "result": "…", "events": "…", "stdout": "…", "stderr": "…" },
+      "artifacts": {
+        "request": "tasks/build-ui/request.json",
+        "result": "…",
+        "events": "…",
+        "stdout": "…",
+        "stderr": "…"
+      },
       "notes": [{ "severity": "warn", "message": "…" }],
-      "files_changed": [], "cost_usd": 0.0, "result_rung": null, "blocked_by": null
+      "files_changed": [],
+      "cost_usd": 0.0,
+      "result_rung": null,
+      "blocked_by": null
     }
   }
 }
@@ -57,14 +78,14 @@ On startup, `run`/`resume` take `.baya/baya.lock`, held for the process lifetime
 
 Refusing (not coordinating) removes an entire class of machinery: no cross-process write lock, no double-spend guard on resume, no reconciling two processes' views. A second `baya resume` of the same run cannot double-spend — it cannot start.
 
-| Resource | Guarantee |
-| :-- | :-- |
-| Directory | One `.baya/baya.lock`, held for the process lifetime. |
-| `runId` | `<utc-timestamp>-<rand>-<pid>` — sortable + unique. |
+| Resource             | Guarantee                                                  |
+| :------------------- | :--------------------------------------------------------- |
+| Directory            | One `.baya/baya.lock`, held for the process lifetime.      |
+| `runId`              | `<utc-timestamp>-<rand>-<pid>` — sortable + unique.        |
 | Writers within a run | In-memory scheduler semaphore. No file lock — one process. |
-| Config / plan cache | Atomic `rename`; no torn file observable. |
-| Logs | Per-run files. |
-| `.baya/` creation | `mkdir` recursive; `EEXIST` is success. |
+| Config / plan cache  | Atomic `rename`; no torn file observable.                  |
+| Logs                 | Per-run files.                                             |
+| `.baya/` creation    | `mkdir` recursive; `EEXIST` is success.                    |
 
 ### Stale locks
 
@@ -89,17 +110,17 @@ cd ../baya-feature-x && baya ./tasks.md
 
 Normalized from real provider signals (verified 2026-08-28, `providers.md`). Classifier: `src/executor/classify.ts`.
 
-| `kind` | `retry` | Detected from |
-| :-- | :-- | :-- |
-| `quota` | `later` | copilot `errorCode:"quota_exceeded"` / `402`; "quota"/"exhausted"/"credit" in text |
-| `rate_limit` | `later` | HTTP 429, "overloaded"; opencode `isRetryable:true` |
-| `auth` | `never` | 401/403; opencode `error.kind:"auth"`; "api key"/"unauthorized" |
-| `network` | `now` | ECONNRESET / ETIMEDOUT / ENOTFOUND / "fetch failed" |
-| `timeout` | `now` | Baya's `max_runtime_s` exceeded |
-| `permission` | `never` | claude `permission_denials[]`; "denied permission"; `--allow`/`--dangerously` hints |
-| `schema` | `now` | result failed the degradation ladder ("unparseable"/"does not match task_result") |
-| `crash` | `now` / `never` | non-zero exit, no classified signal — `now` if adapter `retryable`, else `never`; a bad model name ("model not found"/"unrecognized model") ⇒ `never` |
-| `interrupted` | `now` | SIGINT/SIGTERM teardown |
+| `kind`        | `retry`         | Detected from                                                                                                                                         |
+| :------------ | :-------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quota`       | `later`         | copilot `errorCode:"quota_exceeded"` / `402`; "quota"/"exhausted"/"credit" in text                                                                    |
+| `rate_limit`  | `later`         | HTTP 429, "overloaded"; opencode `isRetryable:true`                                                                                                   |
+| `auth`        | `never`         | 401/403; opencode `error.kind:"auth"`; "api key"/"unauthorized"                                                                                       |
+| `network`     | `now`           | ECONNRESET / ETIMEDOUT / ENOTFOUND / "fetch failed"                                                                                                   |
+| `timeout`     | `now`           | Baya's `max_runtime_s` exceeded                                                                                                                       |
+| `permission`  | `never`         | claude `permission_denials[]`; "denied permission"; `--allow`/`--dangerously` hints                                                                   |
+| `schema`      | `now`           | result failed the degradation ladder ("unparseable"/"does not match task_result")                                                                     |
+| `crash`       | `now` / `never` | non-zero exit, no classified signal — `now` if adapter `retryable`, else `never`; a bad model name ("model not found"/"unrecognized model") ⇒ `never` |
+| `interrupted` | `now`           | SIGINT/SIGTERM teardown                                                                                                                               |
 
 **`retry:"later"` — `quota`/`auth` consume no in-run attempts.** Baya records the failure, stops scheduling for **that provider**, lets other providers' branches finish, leaves the run resumable — tomorrow or on a different provider, costing nothing already paid.
 
@@ -144,23 +165,23 @@ Run 20260828T2152Z-a1f4c9 · tasks.md · interrupted 4m ago
 
 ### Guards
 
-| Situation | Behavior |
-| :-- | :-- |
+| Situation                                     | Behavior                                                                                                        |
+| :-------------------------------------------- | :-------------------------------------------------------------------------------------------------------------- |
 | `tasks.md` changed (`source.sha256` mismatch) | Warn plan is stale; offer re-plan / continue with stored manifest / abort. Never silently execute a stale plan. |
-| Another Baya running here | Directory lock refuses at startup — a second resume cannot double-spend. |
-| Not a TTY | No prompt. `--yes` retries everything retryable + skips the rest; else exit `2`. |
-| `state.json` unreadable / malformed | Report the file, stop. Never silently start a fresh run. |
+| Another Baya running here                     | Directory lock refuses at startup — a second resume cannot double-spend.                                        |
+| Not a TTY                                     | No prompt. `--yes` retries everything retryable + skips the rest; else exit `2`.                                |
+| `state.json` unreadable / malformed           | Report the file, stop. Never silently start a fresh run.                                                        |
 
 ## Progress display
 
 `ora` v9 (ESM), via `src/ui/progress.ts`.
 
-| Rule | Reason |
-| :-- | :-- |
-| Spinner → **stderr** (ora default) | Keeps stdout a clean JSON document for `--json \| jq`. |
-| Disabled for non-TTY / `--json` / `NO_COLOR` / `--no-progress` | Spinner frames in a log or pipe are noise. |
-| **Stopped before any prompt** | A live spinner + a prompt corrupt each other. |
+| Rule                                                                        | Reason                                                                                        |
+| :-------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| Spinner → **stderr** (ora default)                                          | Keeps stdout a clean JSON document for `--json \| jq`.                                        |
+| Disabled for non-TTY / `--json` / `NO_COLOR` / `--no-progress`              | Spinner frames in a log or pipe are noise.                                                    |
+| **Stopped before any prompt**                                               | A live spinner + a prompt corrupt each other.                                                 |
 | **Cursor restored on every exit path** (SIGINT/SIGTERM/`uncaughtException`) | ora hides the cursor; a hard exit without cleanup leaves the terminal with no visible cursor. |
-| All persistent output through `progress.ts` | Writing straight to stderr while ora spins garbles the line. |
+| All persistent output through `progress.ts`                                 | Writing straight to stderr while ora spins garbles the line.                                  |
 
 ⚠️ **ora is single-line, does not multiplex.** Fits M1 (sequential). At M2 parallelism: render one aggregate line (`▸ 3 running · 5 done · 12 pending`) or move to `log-update`. Never N concurrent ora instances.

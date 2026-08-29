@@ -129,13 +129,13 @@ Four ideas do most of the work:
 
 Verified 2026-08-28 by live invocation, not from documentation.
 
-| Provider | Non-interactive | Schema enforcement | Status |
-| :-- | :-- | :-- | :-- |
-| [`codex`](https://github.com/openai/codex) | `codex exec` | ✅ file in / file out | ✅ verified |
-| [`claude`](https://claude.com/claude-code) | `claude -p` | ✅ inline `--json-schema` | ✅ verified |
-| [`copilot`](https://github.com/github/copilot-cli) | `copilot -p` | ❌ | ⚠️ partial |
-| [`opencode`](https://github.com/sst/opencode) | `opencode run` | ❌ | ⚠️ partial |
-| [`gemini`](https://github.com/google-gemini/gemini-cli) | `gemini -p` | ❌ | deferred to v1.1 |
+| Provider                                                | Non-interactive | Schema enforcement        | Status           |
+| :------------------------------------------------------ | :-------------- | :------------------------ | :--------------- |
+| [`codex`](https://github.com/openai/codex)              | `codex exec`    | ✅ file in / file out     | ✅ verified      |
+| [`claude`](https://claude.com/claude-code)              | `claude -p`     | ✅ inline `--json-schema` | ✅ verified      |
+| [`copilot`](https://github.com/github/copilot-cli)      | `copilot -p`    | ❌                        | ⚠️ partial       |
+| [`opencode`](https://github.com/sst/opencode)           | `opencode run`  | ❌                        | ⚠️ partial       |
+| [`gemini`](https://github.com/google-gemini/gemini-cli) | `gemini -p`     | ❌                        | deferred to v1.1 |
 
 Full flag surfaces, event shapes, and capability matrix: [`wiki-llm/providers.md`](wiki-llm/providers.md).
 
@@ -184,4 +184,4 @@ Adding a provider is deliberately small: one adapter, one capability block, one 
 
 ## License
 
-*TBD.*
+_TBD._

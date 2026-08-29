@@ -7,9 +7,9 @@
 
 Loop: compute ready-set (all `depends_on` `succeeded`) → admit while **global budget** AND **per-provider budget** AND the **writer semaphore** allow → spawn → on completion re-evaluate. Terminates when nothing is `running`/`parked` and the ready-set is empty. Sequential today (parallel = M2.1).
 
-| Budget | Source | Default |
-| :-- | :-- | :-- |
-| Global | `--max-parallel` | `min(4, cpus)` |
+| Budget       | Source                                | Default                                             |
+| :----------- | :------------------------------------ | :-------------------------------------------------- |
+| Global       | `--max-parallel`                      | `min(4, cpus)`                                      |
 | Per-provider | adapter `capabilities.maxConcurrency` | `codex` 2 · `opencode` 2 · `claude` 1 · `copilot` 1 |
 
 Per-provider caps conservative — consumer subscriptions throttle. Raise via `.baya/config.json` once measured.
@@ -30,23 +30,23 @@ Never guessed. Task policy → adapter mapping: `writes:false` ⇒ read-only; `w
 
 Upstream results persist to `tasks/<id>/result.json` + `output.md`. A downstream `task_request.context[]` entry always carries `summary` + absolute paths; `inline` carries text only when it fits.
 
-| `--context-strategy` | Behavior |
-| :-- | :-- |
-| `link-only` (**default**) | `summary` + paths. Agent reads the file for detail. |
-| `truncate` | Inline head+tail to the per-edge budget, with an elision marker. |
-| `summarize` `later` | LLM-compress upstream output before injection. |
+| `--context-strategy`      | Behavior                                                         |
+| :------------------------ | :--------------------------------------------------------------- |
+| `link-only` (**default**) | `summary` + paths. Agent reads the file for detail.              |
+| `truncate`                | Inline head+tail to the per-edge budget, with an elision marker. |
+| `summarize` `later`       | LLM-compress upstream output before injection.                   |
 
 Budgets: `--context-budget` 12000 chars total, 6000 per edge. `link-only` default: these providers are agentic and open files; a path costs ~40 tokens (unbounded), inlining 40 KB costs ~10k and still truncates. Fan-in of five 40 KB upstreams is the breaking case for naive prepending.
 
 ## Failure semantics
 
-| Concern | Behavior |
-| :-- | :-- |
-| Task fails | **Descendants** ⇒ `skipped`, never `failed`. Independent branches continue. |
-| `--on-error stop` | Stop admitting new tasks; let in-flight finish; then report. |
-| Retries | `--retries` (default 1), `retry:"now"` failures only. **`quota`/`rate_limit` ⇒ `retry:"later"`, `auth`/`permission` ⇒ `"never"` — none consume attempts.** Exponential backoff + jitter. Taxonomy: [recovery.md](recovery.md). |
-| Provider exhausted | `quota` failure ⇒ stop scheduling **for that provider**; other providers' branches continue; run stays resumable, optionally elsewhere. |
-| Timeout | `constraints.max_runtime_s` (default 900) ⇒ group teardown, `status:failed`, `retryable:true`. |
+| Concern            | Behavior                                                                                                                                                                                                                       |
+| :----------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task fails         | **Descendants** ⇒ `skipped`, never `failed`. Independent branches continue.                                                                                                                                                    |
+| `--on-error stop`  | Stop admitting new tasks; let in-flight finish; then report.                                                                                                                                                                   |
+| Retries            | `--retries` (default 1), `retry:"now"` failures only. **`quota`/`rate_limit` ⇒ `retry:"later"`, `auth`/`permission` ⇒ `"never"` — none consume attempts.** Exponential backoff + jitter. Taxonomy: [recovery.md](recovery.md). |
+| Provider exhausted | `quota` failure ⇒ stop scheduling **for that provider**; other providers' branches continue; run stays resumable, optionally elsewhere.                                                                                        |
+| Timeout            | `constraints.max_runtime_s` (default 900) ⇒ group teardown, `status:failed`, `retryable:true`.                                                                                                                                 |
 
 Exit: `0` all succeeded · `1` any failed/skipped/parked · `2` planner/validation/model-gate error · `130` SIGINT.
 

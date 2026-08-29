@@ -5,17 +5,17 @@
 
 ## Toolchain
 
-| Concern        | Choice                                                                                                                                                                                                   |
-| :------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Runtime        | **Node 24** (`.nvmrc`; `engines.node >= 24`)                                                                                                                                                             |
-| Language       | **TypeScript**, `strict: true`, `module: NodeNext`, ESM (`"type": "module"`)                                                                                                                             |
-| Tests          | **Jest** + `@swc/jest`                                                                                                                                                                                   |
-| Validation     | `zod` — one schema per envelope, `z.infer` for types. Never hand-write a type that a schema already implies.                                                                                             |
-| Terminal color | **`chalk` v6** (ESM-only — matches our `type: module`). Used _only_ through `src/ui/theme.ts`.                                                                                                           |
+| Concern        | Choice                                                                                                                                                                                                                                                      |
+| :------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime        | **Node 24** (`.nvmrc`; `engines.node >= 24`)                                                                                                                                                                                                                |
+| Language       | **TypeScript**, `strict: true`, `module: NodeNext`, ESM (`"type": "module"`)                                                                                                                                                                                |
+| Tests          | **Jest** + `@swc/jest`                                                                                                                                                                                                                                      |
+| Validation     | `zod` — one schema per envelope, `z.infer` for types. Never hand-write a type that a schema already implies.                                                                                                                                                |
+| Terminal color | **`chalk` v6** (ESM-only — matches our `type: module`). Used _only_ through `src/ui/theme.ts`.                                                                                                                                                              |
 | Prompts        | **`@inquirer/prompts` v8** (ESM; modular `select`/`search`/`input`). Used _only_ in `src/config/wizard.ts` (setup), `src/ui/confirm.ts` (the plan gate), and `src/ui/model-gate.ts` (unresolved-model picker); `src/recovery/prompt.ts` joins them at M2.9. |
-| Progress       | **`ora` v9** (ESM). Used _only_ through `src/ui/progress.ts`.                                                                                                                                            |
-| Package        | **`baya-cli`** on npm (`baya` itself is taken by an unrelated package)                                                                                                                                   |
-| Bin            | `baya` → `dist/cli/index.js`                                                                                                                                                                             |
+| Progress       | **`ora` v9** (ESM). Used _only_ through `src/ui/progress.ts`.                                                                                                                                                                                               |
+| Package        | **`baya-cli`** on npm (`baya` itself is taken by an unrelated package)                                                                                                                                                                                      |
+| Bin            | `baya` → `dist/cli/index.js`                                                                                                                                                                                                                                |
 
 > **Jest + ESM friction (settled M0.2):** needs `--experimental-vm-modules` (run tests via `npm test`, never bare `npx jest`); trips on `.js` extension resolution under `NodeNext`; `chalk` v6 is ESM-only and detonates first. Fix: `@swc/jest` + `extensionsToTreatAsEsm` + `moduleNameMapper` stripping `.js` from relative imports.
 
@@ -79,9 +79,9 @@ specs/001/     point-in-time refinement record
 
 ## Documentation split
 
-| Location     | Holds                                                                                                                                        |
-| :----------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wiki-llm/`  | **Source of truth.** Architecture, protocol, provider surfaces, commands, runbooks, conventions. Kept current; every page token-optimized (AGENTS.md §0).                        |
-| `specs/001/` | Point-in-time record of this refinement: what the original spec got wrong, the refined target, the phased plan. Not updated as code evolves. |
-| `README.md`  | Only: what Baya is, quickstart, repo layout, pointer to `wiki-llm/index.md`. No runbooks, no CLI reference.                                  |
-| `AGENTS.md`  | Agent operating rules.                                                                                                                       |
+| Location     | Holds                                                                                                                                                     |
+| :----------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wiki-llm/`  | **Source of truth.** Architecture, protocol, provider surfaces, commands, runbooks, conventions. Kept current; every page token-optimized (AGENTS.md §0). |
+| `specs/001/` | Point-in-time record of this refinement: what the original spec got wrong, the refined target, the phased plan. Not updated as code evolves.              |
+| `README.md`  | Only: what Baya is, quickstart, repo layout, pointer to `wiki-llm/index.md`. No runbooks, no CLI reference.                                               |
+| `AGENTS.md`  | Agent operating rules.                                                                                                                                    |

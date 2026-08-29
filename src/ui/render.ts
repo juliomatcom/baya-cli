@@ -1,12 +1,6 @@
 import type { LogLine } from "../log/index.js";
 import type { Theme } from "./theme.js";
-import {
-  DEFAULT_WIDTH,
-  firstLine,
-  formatDuration,
-  formatTokens,
-  wrap,
-} from "./text.js";
+import { DEFAULT_WIDTH, firstLine, formatDuration, formatTokens, wrap } from "./text.js";
 
 /**
  * Composes the terminal narrative from structured log fields (logging.md rule
@@ -113,7 +107,8 @@ export function createEventRenderer(
       case "task.succeeded": {
         if (quiet) return null;
         const summary = firstLine(str(line, "summary"));
-        const tokens = (num(line, "input_tokens") ?? 0) + (num(line, "output_tokens") ?? 0);
+        const tokens =
+          (num(line, "input_tokens") ?? 0) + (num(line, "output_tokens") ?? 0);
         const meter = tokens > 0 ? theme.note(` · ${formatTokens(tokens)} tok`) : "";
         return `${INDENT}${theme.status("ok")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${(duration === null ? "" : formatDuration(duration)).padStart(7)}${meter}  ${summary}`;
       }

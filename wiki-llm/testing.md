@@ -17,7 +17,14 @@ Every component spawns nondeterministic, rate-limited, paid subprocesses. The fa
     { "delay_ms": 10, "line": "{\"type\":\"session\",\"id\":\"s-1\"}" },
     { "delay_ms": 10, "line": "{\"type\":\"text\",\"text\":\"working\"}" }
   ],
-  "final": { "baya": "1", "kind": "task_result", "task_id": "t1", "status": "ok", "summary": "done", "output": "…" },
+  "final": {
+    "baya": "1",
+    "kind": "task_result",
+    "task_id": "t1",
+    "status": "ok",
+    "summary": "done",
+    "output": "…"
+  },
   "exit_code": 0,
   "on_signal": "exit"
 }
@@ -25,19 +32,19 @@ Every component spawns nondeterministic, rate-limited, paid subprocesses. The fa
 
 Required knobs, each mapping to a real failure mode:
 
-| Knob | Exercises |
-| :-- | :-- |
-| `final.status: needs_input` | Park → bubble → resume path |
-| `exit_code: 1` + `stderr` | Failure → descendants `skipped` |
-| `final` malformed / prose-wrapped | Result-parsing degradation ladder |
-| `hang_ms` + `on_signal: "ignore"` | SIGINT teardown, grace, SIGKILL escalation |
-| `spawn_child: true` | Grandchild reaping — process-group teardown |
-| `emit` unknown event types | `ProviderEvent.unknown` passthrough |
-| `emit` lines with ANSI escapes | ANSI stripping before persist/render |
-| `error.kind: rate_limit` | Retry classification + backoff |
-| `writes_file` | Workspace write-lock serialization |
-| `expect_stdin` / `expect_file` | Prompt-delivery preference chain |
-| `by_task` map keyed by task id | One scenario file scripting a whole multi-task run |
+| Knob                              | Exercises                                          |
+| :-------------------------------- | :------------------------------------------------- |
+| `final.status: needs_input`       | Park → bubble → resume path                        |
+| `exit_code: 1` + `stderr`         | Failure → descendants `skipped`                    |
+| `final` malformed / prose-wrapped | Result-parsing degradation ladder                  |
+| `hang_ms` + `on_signal: "ignore"` | SIGINT teardown, grace, SIGKILL escalation         |
+| `spawn_child: true`               | Grandchild reaping — process-group teardown        |
+| `emit` unknown event types        | `ProviderEvent.unknown` passthrough                |
+| `emit` lines with ANSI escapes    | ANSI stripping before persist/render               |
+| `error.kind: rate_limit`          | Retry classification + backoff                     |
+| `writes_file`                     | Workspace write-lock serialization                 |
+| `expect_stdin` / `expect_file`    | Prompt-delivery preference chain                   |
+| `by_task` map keyed by task id    | One scenario file scripting a whole multi-task run |
 
 Emulates the **codex file-out contract**: when argv carries `-o <path>`, `final` is written there (not stdout) and the task id is read back from `tasks/<id>/result.json`. This lets one scenario file script a whole run with no stdin coordination, and lets `test/helpers/runCli.ts` drive the real CLI end to end via a `.baya/config.json` binary override — exactly as a user would.
 
@@ -45,11 +52,11 @@ Every engine test runs against this: zero network, zero LLM, zero cost, determin
 
 ## Tiers
 
-| Tier | Scope | Command | CI |
-| :-- | :-- | :-- | :-- |
-| **Unit** | Pure layers: manifest validation, cycle detection, topo order, model catalog + alias resolution, context budgeting, redaction, failure classifier, **adapter argv snapshots**. | `npm test` | ✅ |
-| **Integration** | Full engine against fake providers. | `npm test` | ✅ |
-| **Contract** | Real binaries, trivial prompt, asserts flag surfaces still hold; unresolved binary ⇒ skipped. | `npm run test:contract` (sets `BAYA_CONTRACT=1`) | ❌ offline |
+| Tier            | Scope                                                                                                                                                                          | Command                                          | CI         |
+| :-------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------- | :--------- |
+| **Unit**        | Pure layers: manifest validation, cycle detection, topo order, model catalog + alias resolution, context budgeting, redaction, failure classifier, **adapter argv snapshots**. | `npm test`                                       | ✅         |
+| **Integration** | Full engine against fake providers.                                                                                                                                            | `npm test`                                       | ✅         |
+| **Contract**    | Real binaries, trivial prompt, asserts flag surfaces still hold; unresolved binary ⇒ skipped.                                                                                  | `npm run test:contract` (sets `BAYA_CONTRACT=1`) | ❌ offline |
 
 Run tests via `npm test`, never bare `npx jest` (needs `--experimental-vm-modules`). Contract tier = the defense against provider drift (the class of bug that made the spec's universal `-p` wrong: `codex -p` = `--profile`). Run before every release; never in offline CI. Config `jest.contract.config.js`, excluded from `jest.config.js` via `testPathIgnorePatterns`.
 
@@ -70,7 +77,7 @@ Run tests via `npm test`, never bare `npx jest` (needs `--experimental-vm-module
 ## Color in tests
 
 - **All snapshot tests run with color forced off** (`FORCE_COLOR=0`, chalk level `0`, Jest global setup).
-- A test asserts the inverse: color forced *on* ⇒ `theme` tokens emit expected ANSI + every status carries its glyph.
+- A test asserts the inverse: color forced _on_ ⇒ `theme` tokens emit expected ANSI + every status carries its glyph.
 - A test asserts `--json` output parses as JSON with color forced on — regression guard for ANSI leaking into machine output.
 - A test feeds ANSI escapes through the fake provider and asserts they are stripped from `events.jsonl`, `stdout.log`, and the display.
 

@@ -16,51 +16,51 @@ baya tasks.md --yes        # ≡ baya run tasks.md --yes
 
 ## Commands
 
-| Command               | Purpose                                                                                                     | Status    |
-| :-------------------- | :--------------------------------------------------------------------------------------------------------- | :-------- |
-| `baya <file.md>`      | Default form. Alias for `run`.                                                                             | v1        |
-| `baya run <file.md>`  | Plan, resolve models, confirm, execute.                                                                   | v1        |
-| `baya plan <file.md>` | Plan + render DAG; never executes. ≡ `run --dry-run`.                                                      | v1        |
-| `baya doctor`         | Resolve every provider: path, version, capabilities. Reap stray process groups (gated on a stale lock).   | v1        |
-| `baya config`         | Re-run the wizard. Subactions `--show` \| `path` \| `set <key> <value>` \| `refresh-models`. [config.md](config.md). | v1        |
+| Command               | Purpose                                                                                                                                   | Status    |
+| :-------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- | :-------- |
+| `baya <file.md>`      | Default form. Alias for `run`.                                                                                                            | v1        |
+| `baya run <file.md>`  | Plan, resolve models, confirm, execute.                                                                                                   | v1        |
+| `baya plan <file.md>` | Plan + render DAG; never executes. ≡ `run --dry-run`.                                                                                     | v1        |
+| `baya doctor`         | Resolve every provider: path, version, capabilities. Reap stray process groups (gated on a stale lock).                                   | v1        |
+| `baya config`         | Re-run the wizard. Subactions `--show` \| `path` \| `set <key> <value>` \| `refresh-models`. [config.md](config.md).                      | v1        |
 | `baya resume <runId>` | Re-execute unfinished nodes; `--provider <id>` re-runs elsewhere. No `runId` ⇒ pick from a list, never guess. [recovery.md](recovery.md). | v1 — M2.8 |
-| `baya runs`           | List resumable runs + ids.                                                                                | v1 — M2.8 |
+| `baya runs`           | List resumable runs + ids.                                                                                                                | v1 — M2.8 |
 
 Run `baya doctor` first on any new machine — provider binaries are frequently off `$PATH`.
 
 ## Flags (`run`)
 
-| Flag                      | Default       | Meaning                                                                                          |
-| :------------------------ | :------------ | :--------------------------------------------------------------------------------------------- |
-| `--planner-provider <id>` | _from config_ | Provider that parses the Markdown into a manifest.                                             |
-| `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                               |
-| `--default-provider <id>` | _from config_ | Fallback for tasks with no stated provider. **Bypasses the first-run wizard.**                 |
-| `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                               |
-| `--dry-run`               | off           | Render the DAG (with resolved models) and exit `0`.                                            |
+| Flag                      | Default       | Meaning                                                                                                                    |
+| :------------------------ | :------------ | :------------------------------------------------------------------------------------------------------------------------- |
+| `--planner-provider <id>` | _from config_ | Provider that parses the Markdown into a manifest.                                                                         |
+| `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                                                            |
+| `--default-provider <id>` | _from config_ | Fallback for tasks with no stated provider. **Bypasses the first-run wizard.**                                             |
+| `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                                                            |
+| `--dry-run`               | off           | Render the DAG (with resolved models) and exit `0`.                                                                        |
 | `--yes`                   | off           | Auto-confirm the plan gate; at the model gate takes a best match ≥ 0.85 else exits `2`. **Never answers a task question.** |
-| `--plan-out <f>`          | —             | Write the manifest (models resolved) and exit.                                                |
-| `--plan-in <f>`           | —             | Execute a manifest directly; skips planning. Still runs the model gate.                        |
-| `--max-parallel <n>`      | `min(4,cpus)` | Global concurrency budget. **M2.1** — sequential today.                                        |
-| `--isolation <mode>`      | `shared`      | `shared` only; `worktree` is `later`.                                                         |
-| `--on-error <mode>`       | `continue`    | `continue` (skip descendants) \| `stop`. **M2.3** — `continue` is current behavior.           |
-| `--retries <n>`           | `1`           | Transient failures only. **M2.5**.                                                            |
-| `--context-strategy <s>`  | `link-only`   | `link-only` \| `truncate`. `summarize` is `later`.                                            |
-| `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                            |
-| `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.        |
-| `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                       |
-| `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from Markdown.                                          |
-| `--json`                  | off           | Machine-readable run report to stdout.                                                        |
-| `--verbose`               | off           | Alias for `--log-level debug`.                                                                |
-| `--no-color`              | off           | Disable ANSI. `NO_COLOR` / `FORCE_COLOR` honored natively by chalk.                            |
-| `--provider <id>`         | —             | **`resume` only** — re-run unfinished tasks elsewhere (answer to exhausted credits). **M2.8**. |
-| `--no-progress`           | off           | Disable the spinner. Auto-off for non-TTY / `--json` / `NO_COLOR`.                             |
-| `--log-level <l>`         | `info`        | `trace\|debug\|info\|warn\|error`. Display filter only; the log file always gets everything.   |
-| `--quiet`                 | off           | Alias for `--log-level warn`. Suppresses live provider output + completion lines; notes and the final report still print. |
-| `--edit`, `--no-cache`    | —             | `later`.                                                                                      |
+| `--plan-out <f>`          | —             | Write the manifest (models resolved) and exit.                                                                             |
+| `--plan-in <f>`           | —             | Execute a manifest directly; skips planning. Still runs the model gate.                                                    |
+| `--max-parallel <n>`      | `min(4,cpus)` | Global concurrency budget. **M2.1** — sequential today.                                                                    |
+| `--isolation <mode>`      | `shared`      | `shared` only; `worktree` is `later`.                                                                                      |
+| `--on-error <mode>`       | `continue`    | `continue` (skip descendants) \| `stop`. **M2.3** — `continue` is current behavior.                                        |
+| `--retries <n>`           | `1`           | Transient failures only. **M2.5**.                                                                                         |
+| `--context-strategy <s>`  | `link-only`   | `link-only` \| `truncate`. `summarize` is `later`.                                                                         |
+| `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                                                         |
+| `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                    |
+| `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                    |
+| `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from Markdown.                                                                      |
+| `--json`                  | off           | Machine-readable run report to stdout.                                                                                     |
+| `--verbose`               | off           | Alias for `--log-level debug`.                                                                                             |
+| `--no-color`              | off           | Disable ANSI. `NO_COLOR` / `FORCE_COLOR` honored natively by chalk.                                                        |
+| `--provider <id>`         | —             | **`resume` only** — re-run unfinished tasks elsewhere (answer to exhausted credits). **M2.8**.                             |
+| `--no-progress`           | off           | Disable the spinner. Auto-off for non-TTY / `--json` / `NO_COLOR`.                                                         |
+| `--log-level <l>`         | `info`        | `trace\|debug\|info\|warn\|error`. Display filter only; the log file always gets everything.                               |
+| `--quiet`                 | off           | Alias for `--log-level warn`. Suppresses live provider output + completion lines; notes and the final report still print.  |
+| `--edit`, `--no-cache`    | —             | `later`.                                                                                                                   |
 
 Unannotated flags are implemented + covered by `test/unit/cli/args.test.ts`.
 
-**Model defaults deliberately unset.** Ids churn faster than this tool ships; the original spec's `claude-3-5-haiku` / `gpt-4o` defaults were dead on arrival. Each provider picks its own default. A task that *names* a model is resolved against the catalog (`config.md` §Model resolution), not against a hard-coded list.
+**Model defaults deliberately unset.** Ids churn faster than this tool ships; the original spec's `claude-3-5-haiku` / `gpt-4o` defaults were dead on arrival. Each provider picks its own default. A task that _names_ a model is resolved against the catalog (`config.md` §Model resolution), not against a hard-coded list.
 
 ## `-h` / `--help`
 
@@ -118,23 +118,23 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
   ⏵ 1 running · 2 done · 2 pending
 ```
 
-| Element                                  | Rule                                                                                                          |
-| :--------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
-| Model resolution line                    | Printed at the gate when a task-named model resolves to a different id or via a user alias.                  |
-| Completion line                          | `summary`, first line, ≤120 chars. Full text in `output.md` + the report.                                    |
-| `warn` / `action_required` notes         | Printed **the moment the task finishes**, wrapped + indented under it.                                       |
-| `info` notes                             | Held for the end-of-run report.                                                                             |
-| Full `output`                            | Printed in full **only** for a single-task run, or under `--verbose`.                                        |
+| Element                                  | Rule                                                                                                                           |
+| :--------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| Model resolution line                    | Printed at the gate when a task-named model resolves to a different id or via a user alias.                                    |
+| Completion line                          | `summary`, first line, ≤120 chars. Full text in `output.md` + the report.                                                      |
+| `warn` / `action_required` notes         | Printed **the moment the task finishes**, wrapped + indented under it.                                                         |
+| `info` notes                             | Held for the end-of-run report.                                                                                                |
+| Full `output`                            | Printed in full **only** for a single-task run, or under `--verbose`.                                                          |
 | Live provider output                     | Streamed by default at `info` — assistant prose, tool calls, child stderr. Task-prefixed, ANSI-stripped. `--quiet` suppresses. |
-| Session ids, unknown events, checkpoints | `debug` only.                                                                                               |
+| Session ids, unknown events, checkpoints | `debug` only.                                                                                                                  |
 
 ### Verbosity
 
-| Setting                           | You see                                                                                 |
-| :-------------------------------- | :------------------------------------------------------------------------------------ |
-| `--quiet` (`--log-level warn`)    | Warnings, failures, notes, final report.                                              |
-| **default** (`info`)             | + completion lines + live provider prose / tool calls / stderr.                        |
-| `--verbose` (`debug`)            | + full `output` per task, session ids, unknown events, state checkpoints.             |
+| Setting                        | You see                                                                   |
+| :----------------------------- | :------------------------------------------------------------------------ |
+| `--quiet` (`--log-level warn`) | Warnings, failures, notes, final report.                                  |
+| **default** (`info`)           | + completion lines + live provider prose / tool calls / stderr.           |
+| `--verbose` (`debug`)          | + full `output` per task, session ids, unknown events, state checkpoints. |
 
 `baya.jsonl` + `events.jsonl` always hold the full stream — verbosity filters display, never the record.
 
@@ -178,12 +178,12 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
 
 ## Exit codes
 
-| Code  | Meaning                                                                      |
-| :---- | :------------------------------------------------------------------------- |
-| `0`   | All tasks succeeded (or `--dry-run` completed).                            |
-| `1`   | At least one task `failed`, `skipped`, or `parked`.                        |
-| `2`   | Planner / manifest validation / model-gate error; nothing executed.       |
-| `130` | SIGINT; children torn down.                                               |
+| Code  | Meaning                                                             |
+| :---- | :------------------------------------------------------------------ |
+| `0`   | All tasks succeeded (or `--dry-run` completed).                     |
+| `1`   | At least one task `failed`, `skipped`, or `parked`.                 |
+| `2`   | Planner / manifest validation / model-gate error; nothing executed. |
+| `130` | SIGINT; children torn down.                                         |
 
 ## Examples
 
