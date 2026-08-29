@@ -298,13 +298,45 @@ describe("codex observations", () => {
 describe("codex session continuation", () => {
   it("continues a thread with the next task_request on stdin", () => {
     const plan = codexAdapter.buildContinue?.("thread-9", input());
-    expect(plan?.argv).toEqual([
+    expect(plan?.argv.slice(0, 4)).toEqual([
       "/usr/local/bin/codex",
       "exec",
       "resume",
       "thread-9",
-      ...codexAdapter.buildRun(input()).argv.slice(2),
     ]);
     expect(plan?.stdinData).toBe(input().prompt);
+  });
+
+  /**
+   * ⚠️ The regression that made every real continuation fail: `exec resume`
+   * does NOT take `exec`'s flags. Passing them exits 2 with
+   * `error: unexpected argument '-C' found`, before the model is reached.
+   * Verified live 2026-08-29 against codex-cli 0.150.1.
+   */
+  it.each([
+    ["buildContinue", () => codexAdapter.buildContinue?.("t-9", input())?.argv ?? []],
+    ["buildResume", () => codexAdapter.buildResume("t-9", "answer", input()).argv],
+  ])("%s passes no flag `exec resume` rejects", (_name, argv) => {
+    for (const rejected of ["-C", "-s", "--color"]) {
+      expect(argv()).not.toContain(rejected);
+    }
+  });
+
+  it.each([
+    ["buildContinue", () => codexAdapter.buildContinue?.("t-9", input())?.argv ?? []],
+    ["buildResume", () => codexAdapter.buildResume("t-9", "answer", input()).argv],
+  ])("%s keeps the flags `exec resume` does accept", (_name, argv) => {
+    for (const kept of ["--json", "--skip-git-repo-check", "--output-schema", "-o"]) {
+      expect(argv()).toContain(kept);
+    }
+  });
+
+  it("still gives `exec` its full surface", () => {
+    const argv = codexAdapter.buildRun(input()).argv;
+    for (const kept of ["-C", "-s", "--color"]) expect(argv).toContain(kept);
+  });
+
+  it("relies on the spawn cwd once -C is gone", () => {
+    expect(codexAdapter.buildContinue?.("t-9", input())?.cwd).toBe("/work");
   });
 });

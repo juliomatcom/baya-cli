@@ -15,9 +15,9 @@
 | M3 Provider breadth         |      7 |      8 | ███████░        |
 | M2 Concurrency & resilience |      2 |     10 | ██░░░░░░        |
 | M4 Escalation               |      0 |      6 | ░░░░░░░░        |
-| M6 Cost reduction           |      5 |      7 | ██████░░        |
+| M6 Cost reduction           |      6 |      8 | ██████░░        |
 | M5 Hardening                |      — |      — | prose checklist |
-| **Total**                   | **42** | **59** |                 |
+| **Total**                   | **43** | **60** |                 |
 
 **Reprioritized 2026-08-29 — M3 before M2.** Baya's value proposition is "a different CLI per task"; shipping on `codex` alone is an MVP of the engine, not of the product. Breadth now leads; concurrency and resume widen it afterward. Task ids are unchanged — only the execution order moved. See **Execution order** below.
 
@@ -207,6 +207,6 @@ Design and rationale: [`wiki-llm/execution.md`](../../wiki-llm/execution.md) §M
 | Memory becomes an injection channel into every task | Command strings and paths only, never `aggregated_output`/`tool_result.content`; rendered as evidence, not instruction | M6.3 |
 | Session reuse silently fights per-task model routing | A chain partitions at every model change — routing wins by construction, and the guard is explicit in `continuationFor` | M6.4 |
 | A stale session costs more than the cold start it replaced | `SESSION_WARM_MS` 300 000, matching the 5-minute prompt cache the session file outlives | M6.4 |
-| `codex exec resume` identifier is still unverified | Cold retry once on a rejected continuation; contract tier settles it | M6.4, M6.5 |
+| A provider's resume surface differs from its run surface | **Measured, not hypothetical:** `codex exec resume` rejects `-C`/`-s`/`--color`, so every continuation failed. Cold retry once on a rejected continuation kept the run whole; per-flag argv tests keep it fixed | M6.4, M6.5 |
 | `writes` read as "this edits my source" and alarmed users about tasks that only ran a test | Renamed to `access: "read-only" \| "read-write"` — an enum named for the permission, not a boolean named for an effect. Clean break; a stale `--plan-in` file is refused, never silently defaulted | M6.7 |
 | Provider ANSI escapes reach the terminal unsanitized | `--color never` at the flag level + strip residual ANSI before render/persist | M0.5, M2.7 |

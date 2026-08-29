@@ -27,22 +27,30 @@ function sandboxFor(input: BuildRunInput): string {
   return input.task.access === "read-write" ? "workspace-write" : "read-only";
 }
 
-/** Flags shared by `exec` and `exec resume`, in a fixed order for the snapshot. */
-function commonFlags(input: BuildRunInput): string[] {
-  const argv = [
-    "--json",
-    "--color",
-    "never",
-    "--skip-git-repo-check",
-    "-C",
-    input.cwd,
-    "-s",
-    sandboxFor(input),
-    "--output-schema",
-    input.schemaPath,
-    "-o",
-    input.resultFile,
-  ];
+/**
+ * ⚠️ `codex exec` and `codex exec resume` do **not** share a flag surface.
+ * Verified live 2026-08-29 against codex-cli 0.150.1: `resume` accepts
+ * `--json`, `--skip-git-repo-check`, `--output-schema`, `-o`, `-m` — and
+ * rejects `-C`, `-s`, and `--color`, exiting 2 with
+ * `error: unexpected argument '-C' found` before the model is ever reached.
+ *
+ * Passing the `exec` set to `resume` is what made every session continuation
+ * fail in the first real chain run. The consequences of the three it drops:
+ *
+ * - **`-C`** — the working directory comes from the spawn `cwd` instead, which
+ *   `SpawnPlan` already carries. No behavior is lost.
+ * - **`-s`** — a resumed turn **inherits the sandbox its session was opened
+ *   with**; codex offers no way to change it. That is why a chain may only
+ *   collapse across turns of the same `access` (execution.md §Session reuse).
+ * - **`--color`** — ANSI is stripped everywhere regardless (conventions #12),
+ *   so this costs nothing.
+ */
+function commonFlags(input: BuildRunInput, mode: "exec" | "resume"): string[] {
+  const argv = ["--json"];
+  if (mode === "exec") argv.push("--color", "never");
+  argv.push("--skip-git-repo-check");
+  if (mode === "exec") argv.push("-C", input.cwd, "-s", sandboxFor(input));
+  argv.push("--output-schema", input.schemaPath, "-o", input.resultFile);
   if (input.model !== null) argv.push("-m", input.model);
   return argv;
 }
@@ -162,7 +170,7 @@ export const codexAdapter: ProviderAdapter = {
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, "exec", ...commonFlags(input), "-"],
+      argv: [input.bin, "exec", ...commonFlags(input, "exec"), "-"],
       cwd: input.cwd,
       stdin: "pipe",
       stdinData: input.prompt,
@@ -171,12 +179,19 @@ export const codexAdapter: ProviderAdapter = {
 
   /**
    * `codex exec resume <thread_id>` — the id captured from `thread.started`.
-   * ⚠️ UNVERIFIED that `thread_id` is the identifier `resume` accepts; the
-   * contract tier (M3.7) is where that gets settled against the real binary.
+   * `thread_id` is a UUID and `resume` takes one positionally — verified live
+   * 2026-08-29. What was actually wrong was the flag set; see `commonFlags`.
    */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, "exec", "resume", sessionId, ...commonFlags(input), "-"],
+      argv: [
+        input.bin,
+        "exec",
+        "resume",
+        sessionId,
+        ...commonFlags(input, "resume"),
+        "-",
+      ],
       cwd: input.cwd,
       stdin: "pipe",
       stdinData: answer,
@@ -188,14 +203,20 @@ export const codexAdapter: ProviderAdapter = {
    * `buildResume` — only the payload differs, and it differs entirely: a whole
    * `task_request`, not an answer to a question.
    *
-   * ⚠️ Inherits `buildResume`'s UNVERIFIED assumption that `thread_id` is what
-   * `exec resume` accepts. The executor falls back to a cold run when a
-   * continuation fails, so being wrong here costs one wasted spawn rather than
-   * the task.
+   * The executor still falls back to a cold run when a continuation fails —
+   * that fallback is what turned this adapter's first real chain run into two
+   * wasted (and unbilled) spawns instead of two lost tasks.
    */
   buildContinue(sessionId: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, "exec", "resume", sessionId, ...commonFlags(input), "-"],
+      argv: [
+        input.bin,
+        "exec",
+        "resume",
+        sessionId,
+        ...commonFlags(input, "resume"),
+        "-",
+      ],
       cwd: input.cwd,
       stdin: "pipe",
       stdinData: input.prompt,

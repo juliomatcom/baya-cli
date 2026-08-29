@@ -155,7 +155,7 @@ describe("a continuation the CLI refuses", () => {
         provider: "codex",
         model: null,
         depends_on: [],
-        access: "read-only",
+        access: "read-write",
         cwd: null,
       },
       {

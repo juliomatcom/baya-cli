@@ -88,7 +88,7 @@ Scheduling: among tasks **already in the ready-set**, a warm continuation jumps 
 
 Context and memory are suppressed for what is already in the session — an upstream the agent produced itself is pointed at, not re-inlined.
 
-⚠️ `codex exec resume <thread_id>` is still **UNVERIFIED** (M1.5, settled by M3.7). A continuation that exits non-zero with nothing parseable — structurally distinct from a task that ran and reported failure through the schema at exit 0 — is retried **cold once**, so being wrong costs one spawn rather than the task.
+The cold-retry fallback earned its place on the first real chain run: a continuation that exits non-zero with nothing parseable — structurally distinct from a task that ran and reported failure through the schema at exit 0 — is retried **cold once**. codex rejected every resume because `exec resume` takes a different flag set (providers.md §codex), and the fallback turned two broken invocations into two wasted, unbilled spawns instead of two lost tasks. Keep it even now the flags are right: it is the only thing standing between a provider's CLI drifting and a run losing work.
 
 Flag: `--no-session-reuse`.
 

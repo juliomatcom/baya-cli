@@ -14,7 +14,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: [],
-      access: "read-only",
+      access: "read-write",
       cwd: null,
     },
     {
@@ -140,6 +140,30 @@ describe("a two-task chain, end to end", () => {
       context: Array<{ task_id: string; inline: string | null }>;
     };
     expect(request.context[0]).toMatchObject({ task_id: "design-api", inline: null });
+  });
+
+  /**
+   * `codex exec resume` takes no `-s`, so a resumed turn inherits the sandbox
+   * its session was opened with. Collapsing across a change of `access` would
+   * silently widen or narrow a task's permissions.
+   */
+  it("refuses to collapse a chain whose access level changes", async () => {
+    const mixed = {
+      ...scenario,
+      __planner__: {
+        final: {
+          tasks: [
+            { ...PLAN.tasks[0], access: "read-only" },
+            { ...PLAN.tasks[1], access: "read-write" },
+          ],
+        },
+      },
+    };
+    const result = await runCli(["./tasks.md", "--yes"], { scenario: mixed });
+    const state = result.readJson(result.paths!.state) as {
+      tasks: Record<string, { continued_from: string | null }>;
+    };
+    expect(state.tasks["gen-schema"]?.continued_from).toBeNull();
   });
 
   it("--no-session-reuse starts every task cold", async () => {

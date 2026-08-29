@@ -95,6 +95,8 @@ interface SessionInfo {
   sessionId: string;
   provider: ProviderId;
   model: string | null;
+  /** The access level the session was opened with. codex cannot change it later. */
+  access: Task["access"];
   endedAtMs: number;
   turns: number;
   /** Task ids whose work is already visible in this session's transcript. */
@@ -342,6 +344,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
           sessionId: execution.sessionId,
           provider,
           model,
+          access: task.access,
           endedAtMs: Date.now(),
           turns: (parent?.turns ?? 0) + 1,
           chain: [...(parent?.chain ?? []), taskId],
@@ -418,6 +421,10 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
    * - same provider and model, because a session belongs to one model — this
    *   is where per-task model routing and session reuse genuinely conflict,
    *   and routing wins by construction;
+   * - same `access`, because `codex exec resume` takes no `-s`: a resumed turn
+   *   inherits the sandbox its session was opened with. Collapsing a read-only
+   *   turn onto a read-write session would silently widen its permissions, and
+   *   the reverse would deny it tools it was granted;
    * - warm, because past the cache window a resume costs more than a cold start;
    * - unclaimed, because two tasks continuing one session would fork it.
    */
@@ -434,6 +441,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     const provider = routeProvider(candidate, options.defaultProvider);
     if (provider !== info.provider) return null;
     if ((candidate.model ?? options.defaultModel) !== info.model) return null;
+    if (candidate.access !== info.access) return null;
     if (registry.get(provider)?.buildContinue === undefined) return null;
     return { sessionId: info.sessionId, parentId, chain: info.chain };
   }
