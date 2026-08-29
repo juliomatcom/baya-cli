@@ -65,6 +65,8 @@ Fact kinds, in value-per-token order — the budget is spent in this order, afte
 
 Keyed (`command:<cmd>` / `file:<path>`), so a later fact **replaces** an earlier one instead of appending a contradiction. Exploration commands (`sed`, `rg`, `git`, `env`, …) contribute paths only — `rg` exits 1 on "no matches", which is not a dead end. Caps: 6 items per kind, 120 chars per command. Both measured: without them, one task flailing through variations of one invocation produced 14 dead ends and crowded out every other kind.
 
+⚠️ **A command that never executed is not a dead end.** Measured 2026-08-29: claude's `--permission-mode auto` denied `npm test`, memory filed it under "Commands that FAILED (do not repeat them)", and the next task read that and refused to try — "the previous attempt to run this command already failed". By the fourth task the block held five dead ends, none of which had ever run: a survivable permission warning became a cascading run failure. A task reporting `permission_denials` therefore contributes no **failed** command facts; its successes and its file facts stand, since a denial cannot produce a success. Any new observation source must answer the same question before it emits a dead end.
+
 **Never carries command output** (`aggregated_output`, `tool_result.content`). It is most of the bytes and the only route by which untrusted repository text could enter memory. The block is framed as evidence, not instruction.
 
 Flags: `--no-memory` (off, for A/B measurement) · `--memory-budget <chars>` (default 1200).

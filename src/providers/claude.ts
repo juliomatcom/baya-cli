@@ -247,8 +247,29 @@ export const claudeAdapter: ProviderAdapter = {
     return findClaudeTranscript(sessionId);
   },
 
+  /**
+   * ⚠️ A command that was **denied** never ran, so it is not a dead end.
+   *
+   * Measured 2026-08-29: `--permission-mode auto` denied `npm test`, memory
+   * recorded it under "Commands that FAILED (do not repeat them)", and the
+   * next task read that and refused to try — "the previous attempt to run this
+   * command already failed". By the fourth task the block was five dead ends,
+   * none of which had ever executed. A survivable permission warning became a
+   * cascading run failure, which is exactly the poisoning risk memory has to
+   * be built against.
+   *
+   * A denial cannot produce `ok: true`, so successful commands stay: only the
+   * failures, which are indistinguishable from denials once the transcript is
+   * flattened, are dropped from a task that reported any denial.
+   */
   extractObservations(ctx: ExtractContext): Observation[] {
-    return ctx.transcript ? parseClaudeTranscript(ctx.transcript) : [];
+    if (!ctx.transcript) return [];
+    const observations = parseClaudeTranscript(ctx.transcript);
+    const obj = lastFinalObject(ctx.events);
+    if (!obj || deniedTools(obj).length === 0) return observations;
+    return observations.filter(
+      (observation) => observation.kind !== "command" || observation.ok,
+    );
   },
 
   /**
