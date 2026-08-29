@@ -406,4 +406,81 @@ describe("claude observations", () => {
   it("contributes nothing, and fails nothing, when no transcript was found", () => {
     expect(claudeAdapter.extractObservations?.(ctx(null))).toEqual([]);
   });
+
+  /**
+   * The poisoning case, measured on a real run: `auto` denied `npm test`, it
+   * was recorded as a dead end, and the next task refused to try it. A denied
+   * command never ran, so it can never be a dead end.
+   */
+  it("drops failed commands from a task whose tools were denied", () => {
+    const transcript = [
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "tool_use", id: "a", name: "Bash", input: { command: "npm test" } },
+            { type: "tool_use", id: "b", name: "Bash", input: { command: "ls" } },
+            { type: "tool_use", id: "c", name: "Read", input: { file_path: "/r/a.ts" } },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "user",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "a", is_error: true },
+            { type: "tool_result", tool_use_id: "b", is_error: false },
+          ],
+        },
+      }),
+    ].join("\n");
+
+    const denied = {
+      ...ctx(transcript),
+      events: claudeAdapter.parseEvents(
+        JSON.stringify({
+          session_id: "s",
+          result: "done",
+          permission_denials: [{ tool_name: "Bash" }],
+        }),
+      ),
+    };
+
+    const observations = claudeAdapter.extractObservations?.(denied) ?? [];
+    // The denied one is gone; what actually ran, and what was read, survive.
+    expect(observations).not.toContainEqual(
+      expect.objectContaining({ command: "npm test" }),
+    );
+    expect(observations).toContainEqual({ kind: "command", command: "ls", ok: true });
+    expect(observations).toContainEqual({ kind: "read", path: "/r/a.ts" });
+  });
+
+  it("keeps failed commands when nothing was denied — a real failure is a fact", () => {
+    const transcript = [
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "tool_use", id: "a", name: "Bash", input: { command: "npm test" } },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "user",
+        message: { content: [{ type: "tool_result", tool_use_id: "a", is_error: true }] },
+      }),
+    ].join("\n");
+
+    const clean = {
+      ...ctx(transcript),
+      events: claudeAdapter.parseEvents(
+        JSON.stringify({ session_id: "s", result: "done", permission_denials: [] }),
+      ),
+    };
+    expect(claudeAdapter.extractObservations?.(clean)).toContainEqual({
+      kind: "command",
+      command: "npm test",
+      ok: false,
+    });
+  });
 });
