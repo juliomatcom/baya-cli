@@ -37,6 +37,11 @@ export interface RunFlags {
   maxTasks?: number;
   contextStrategy?: "link-only" | "truncate";
   contextBudget?: number;
+  /** `--no-memory`: start every task blind, as before cross-task memory. */
+  noMemory: boolean;
+  memoryBudget?: number;
+  /** `--no-session-reuse`: never continue a chain in one provider session. */
+  noSessionReuse: boolean;
   dangerouslyAllowAll: boolean;
   json: boolean;
   verbose: boolean;
@@ -74,6 +79,8 @@ function emptyFlags(): RunFlags {
   return {
     dryRun: false,
     yes: false,
+    noMemory: false,
+    noSessionReuse: false,
     dangerouslyAllowAll: false,
     json: false,
     verbose: false,
@@ -147,6 +154,12 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       case "--no-progress":
         flags.noProgress = true;
         break;
+      case "--no-memory":
+        flags.noMemory = true;
+        break;
+      case "--no-session-reuse":
+        flags.noSessionReuse = true;
+        break;
       case "--dangerously-allow-all":
         flags.dangerouslyAllowAll = true;
         break;
@@ -161,6 +174,16 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
           if (Number.isNaN(parsed) || parsed < 1)
             errors.push(`--max-tasks must be a positive integer`);
           else flags.maxTasks = parsed;
+        }
+        break;
+      }
+      case "--memory-budget": {
+        const value = takeValue();
+        if (value !== undefined) {
+          const parsed = Number.parseInt(value, 10);
+          if (Number.isNaN(parsed) || parsed < 0)
+            errors.push(`--memory-budget must be a non-negative integer`);
+          else flags.memoryBudget = parsed;
         }
         break;
       }

@@ -5,6 +5,7 @@ import type {
   TaskRequest,
   TaskResult,
 } from "../manifest/index.js";
+import type { Observation } from "../memory/index.js";
 
 /** Adapter interface (providers.md §Adapter interface). */
 export interface ProviderCapabilities {
@@ -14,6 +15,14 @@ export interface ProviderCapabilities {
   events: "jsonl" | "json" | "none";
   sessionId: "preassign" | "capture";
   resume: "session" | "none";
+  /**
+   * Where this provider's record of what its agent *did* can be read from
+   * (execution.md §Memory). `events` means Baya's own `events.jsonl` already
+   * holds it; `transcript` means the provider keeps its own log and
+   * `transcriptPath` names it; `none` means the provider contributes no
+   * observations and only consumes memory.
+   */
+  observations: "events" | "transcript" | "none";
   cwdFlag: boolean;
   modelFlag: boolean;
   /** Conservative by default — these run on consumer subscriptions that throttle. */
@@ -74,12 +83,30 @@ export interface ExtractContext {
   resultFileContents: string | null;
   exitCode: number | null;
   stderr: string;
+  /**
+   * Contents of the provider's own session log for `observations: 'transcript'`
+   * adapters. Absent or null is normal, never an error — a missing transcript
+   * thins memory and nothing more, so no adapter may depend on it.
+   */
+  transcript?: string | null;
 }
 
+/**
+ * Input tokens come at three prices — fresh, written-to-cache (a premium), and
+ * read-from-cache (about a tenth). Collapsing them into one number is what made
+ * a run that cost *more* look 52% cheaper, so all three are kept.
+ *
+ * `input_tokens` stays the gross total, of which `cache_write_input_tokens` and
+ * `cached_input_tokens` are parts; fresh input is the remainder.
+ */
 export interface ProviderUsage {
   cost_usd?: number;
   input_tokens?: number;
   output_tokens?: number;
+  /** Input served from the provider's prompt cache (cheapest). */
+  cached_input_tokens?: number;
+  /** Input written into the cache (dearer than fresh input on Anthropic). */
+  cache_write_input_tokens?: number;
 }
 
 export interface ProviderAdapter {
@@ -91,10 +118,29 @@ export interface ProviderAdapter {
   knownLocations?: string[];
   buildRun(input: BuildRunInput): SpawnPlan;
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan;
+  /**
+   * Run the **next task** as another turn in an existing session
+   * (execution.md §Session reuse). Distinct from `buildResume`, which answers
+   * an escalation: this one carries a whole new `task_request`, so the prompt
+   * has to re-state the response contract.
+   *
+   * Absent => this provider never joins a chain, and its tasks always start
+   * cold. That is the honest default for an adapter whose resume path has not
+   * been exercised.
+   */
+  buildContinue?(sessionId: string, input: BuildRunInput): SpawnPlan;
+  /** Absolute path to the provider's own session log, for `observations: 'transcript'`. */
+  transcriptPath?(sessionId: string): string | null;
+  /**
+   * What the agent did, normalized. Never self-reported by the model — every
+   * observation is read back out of a record the provider already wrote, so
+   * this costs no tokens and cannot be hallucinated.
+   */
+  extractObservations?(ctx: ExtractContext): Observation[];
   /** Fed complete lines by the executor; partial-line buffering is not the adapter's job. */
   parseEvents(chunk: string): ProviderEvent[];
   extractResult(ctx: ExtractContext): TaskResult;
   extractUsage?(events: ProviderEvent[]): ProviderUsage;
 }
 
-export type { ProviderId, TaskResult, ProviderEvent };
+export type { ProviderId, TaskResult, ProviderEvent, Observation };

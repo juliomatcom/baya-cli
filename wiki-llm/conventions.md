@@ -55,7 +55,7 @@ specs/001/     point-in-time refinement record
 3. **Never regex provider prose for meaning.** Semantics come from validated JSON fields only.
 4. **Never hard-code model ids.** Unset ⇒ provider default. Model names churn.
 5. **Never assume `$PATH`.** Use the resolution chain (`providers.md`).
-6. **Never document an unverified flag as fact.** Mark it UNVERIFIED.
+6. **Never document an unverified flag as fact.** Mark it UNVERIFIED. The corollary for event and item shapes: read them out of a recorded run in `.baya/runs/`, never from a provider's docs ([testing.md](testing.md) §Dogfooding).
 7. **All child processes spawn `detached: true`** and are killed by process group.
 8. **`state.json` writes are atomic** (tmp + `rename`).
 9. **No raw `console.*`** — use the shared logger. Redact secret-shaped strings before any write.

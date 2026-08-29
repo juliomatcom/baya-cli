@@ -27,6 +27,9 @@ function initialState(taskIds: string[]): RunState {
       isolation: "shared",
       context_strategy: "link-only",
       context_budget: 12_000,
+      memory: true,
+      memory_budget: 1200,
+      session_reuse: true,
     },
     totals: {
       succeeded: 0,
@@ -38,6 +41,8 @@ function initialState(taskIds: string[]): RunState {
       cost_usd: 0,
       input_tokens: 0,
       output_tokens: 0,
+      cached_input_tokens: 0,
+      cache_write_input_tokens: 0,
     },
     tasks: Object.fromEntries(taskIds.map((id) => [id, emptyTaskEntry()])),
   };

@@ -44,7 +44,11 @@ baya config                        # change your default provider
 
 On first run baya asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
 
-The task list is just text — any UTF-8 file. Markdown:
+### The task list
+
+Any UTF-8 text file. Baya's planner reads it for intent — the format is yours to pick.
+
+**Markdown** — a heading for the goal, a bullet per task:
 
 ```markdown
 # Ship the orders endpoint
@@ -55,7 +59,7 @@ The task list is just text — any UTF-8 file. Markdown:
 - Once the schema and UI are done, write integration tests.
 ```
 
-…or a bare `TODO.txt`, one task per line:
+**A bare `TODO.txt`** — one task per line, numbered or not:
 
 ```text
 1 Design the REST API for orders. Use Sonnet.
@@ -64,7 +68,23 @@ The task list is just text — any UTF-8 file. Markdown:
 4 Once the schema and UI are done, write integration tests.
 ```
 
-Baya's planner reads whichever you give it for intent. Empty or binary files are rejected before planning; if the planner can't produce a graph, a deterministic splitter falls back to a linear chain in the order you wrote the tasks.
+**YAML** — the same intent, laid out if you think better that way:
+
+```yaml
+- id: design-api
+  task: Design the REST API for orders. Use Sonnet.
+- id: gen-schema
+  task: Generate the DB schema from that design.
+  depends_on: [design-api]
+- id: build-ui
+  task: Build the React table that consumes the schema. Run with codex.
+  depends_on: [gen-schema]
+- id: tests
+  task: Write integration tests for the endpoint.
+  depends_on: [gen-schema, build-ui]
+```
+
+Baya never parses these structurally — the planner reads every format for intent, so `depends_on:` and plain prose like "once the schema and UI are done" get you the same graph. Empty or binary files are rejected before planning; if the planner can't produce a graph, a deterministic splitter falls back to a linear chain in the order you wrote the tasks.
 
 ### Example — a task per model, resolved automatically
 
@@ -96,6 +116,19 @@ $ baya ./tasks.md --yes
 ```
 
 `luna`, `terra`, and `sonnet` are short names — Baya resolves each against its model catalog to the real id and the provider that serves it (`luna`/`terra` → `codex`, `sonnet` → `claude`), then runs all three independently. A name it can't resolve stops at the plan gate instead of failing mid-run; it is never silently swapped for the default. See [`wiki-llm/config.md`](wiki-llm/config.md#model-resolution).
+
+## Features
+
+- ✅ **Works out of the box** — zero config. One prompt on first run for your default provider, then never again.
+- ✅ **Multi-provider** — routes each task to `codex`, `claude`, `copilot`, or `opencode`, the CLIs you already have installed and logged in.
+- ✅ **Plain-text task lists** — Markdown, `TODO.txt`, YAML, whatever you already write. No config format, no DSL.
+- ✅ **LLM-planned dependency graph** — a model turns your list into a DAG; a deterministic splitter falls back to a linear chain if it can't.
+- ✅ **No API keys** — drives your existing CLI subscriptions; nothing new to pay for.
+- ✅ **Model-per-task** — name `luna`, `sonnet`, etc. in the task text; Baya resolves it to the real id and the provider that serves it.
+- ✅ **Parallel execution** — independent tasks run concurrently (`--max-parallel`); `read-write` tasks are serialized by a write-lock.
+- ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files touched) carries to later tasks, and chains on one model stay in a single warm provider session instead of spawning cold. `--no-memory`, `--no-session-reuse` to disable.
+- ✅ **Preview gate** — see the full plan before anything runs; `--dry-run` shows it and runs nothing.
+- ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider.
 
 ## How it works
 
@@ -137,11 +170,11 @@ flowchart TB
     BUS --> OUT
 ```
 
-Four ideas do most of the work:
+Five ideas do most of the work:
 
 - **JSON on the wire, both directions.** Every exchange with a provider is a validated envelope, never prose. `codex` and `claude` enforce the result schema natively. A question from an agent is a `status: "needs_input"` field — not a question mark spotted in a stream.
 - **The planner picks a provider, never a command.** Manifests carry a provider name from a closed enum; adapters alone build `argv`. `shell: true` is banned repo-wide.
-- **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume <runId> --provider claude` picks up exactly where it stopped.
+- **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume <runId> --provider claude` picks up exactly where it stopped. Within a run, no task rediscovers what another already found: commands that worked, commands that failed, and files already touched are derived from the providers' own logs — costing nothing to produce — and handed to every later task.
 - **Providers are watched, not trusted.** Their flag surfaces are live-probed and contract-tested, their output is ANSI-stripped and schema-validated.
 
 ## Providers
@@ -189,9 +222,12 @@ A few rules that are load-bearing rather than stylistic — the full list is in 
 - Never document a provider flag you have not actually run.
 - Never regex a model's prose for meaning — semantics come from validated JSON.
 - Update the affected `wiki-llm/` page in the same commit as the change.
+- Read provider event shapes out of a recorded run in `.baya/runs/`, not out of a provider's docs.
 - Tests never touch the network; the contract tier is opt-in via `BAYA_CONTRACT=1`.
 
 Adding a provider is deliberately small: one adapter, one capability block, one section in `providers.md`, one contract test.
+
+**Use Baya on Baya.** Every run leaves `.baya/runs/<runId>/` behind — real provider event streams, on a real repository, for free. That corpus is the best fixture set the project has: it is where the `codex` `file_change` bug was found, and where cross-task memory's first two heuristics were caught being wrong. Mine it before inventing an input, then pin what you find with a committed test. [`wiki-llm/testing.md`](wiki-llm/testing.md#dogfooding-your-own-runs-are-the-fixture-set) has the method. `.baya/` is gitignored and holds your prompts and source excerpts — evidence for you, never an issue attachment.
 
 ## Adding or overriding a model
 
@@ -238,11 +274,13 @@ Contributing a corrected entry to `BUILTIN_CATALOG` in `src/providers/catalog.ts
 
 **Why not just use one CLI's built-in agent?** Because you probably pay for more than one, and they are good at different things. Baya lets a task list say "plan with one, build with another" and handles the plumbing.
 
-**Can this save me money?** Yes. A task list picks the model per task, so the light steps can run on a cheap model (`luna`, `terra`) while the expensive ones are reserved for the work that earns them. You are still spending under subscriptions you already pay for — Baya just stops the top-tier model from doing work a cheaper one would have done fine.
+**Can this save me money?** Yes, three ways. A task list picks the model per task, so the light steps can run on a cheap model (`luna`, `terra`) while the expensive ones are reserved for the work that earns them. Beyond that, tasks stop starting blind: what earlier tasks in a run found — which commands work, which fail, which files were already changed — is derived from the providers' own logs and passed to later tasks, so nobody pays twice to discover the same thing. And a chain of tasks on the same model continues in one provider session instead of spawning cold each time, which keeps the prompt cache warm. You are still spending under subscriptions you already pay for — Baya just stops the top-tier model from doing work a cheaper one would have done fine, and stops every task from re-reading the repo from scratch.
+
+Both are on by default and switchable off: `--no-memory`, `--no-session-reuse`.
 
 **Does this need API keys?** No. It drives locally installed CLIs under whatever subscription you already have.
 
-**Is it safe to run in parallel?** Read-only tasks run concurrently; anything that writes is serialized by the scheduler. One Baya runs per directory — a second is refused rather than left to fight over the same files. To run two task lists against one repo, give each its own `git worktree`.
+**Is it safe to run in parallel?** Tasks the planner marked `read-only` run concurrently; anything `read-write` is serialized by the scheduler. `access` is about what a task needs permission to _do_, not what it edits — a task that only runs the test suite is `read-write`, because a runner that cannot write its cache cannot run. One Baya runs per directory — a second is refused rather than left to fight over the same files. To run two task lists against one repo, give each its own `git worktree`.
 
 ## License
 

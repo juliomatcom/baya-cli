@@ -49,11 +49,11 @@ Every line carries `run_id` — concurrent Baya processes stay distinguishable.
 
 ### Scheduling
 
-`run.created` (run_id, source) · `run.started` · `task.ready` (deps met) · `task.queued` (blocked on budget or lock) · `lock.waited` · `lock.acquired` · `lock.released` · `task.context.assembled` (upstream ids, strategy, bytes, inline vs link)
+`run.created` (run_id, source) · `run.started` · `task.ready` (deps met) · `task.queued` (blocked on budget or lock) · `lock.waited` · `lock.acquired` · `lock.released` · `task.context.assembled` (upstream ids, strategy, bytes, inline vs link) · `task.memory.rendered` (`debug`; chars)
 
 ### Execution
 
-`task.request.written` (path, bytes) · `task.spawned` (provider, argv, pid, pgid, delivery) · **`provider.text`** · **`provider.tool`** · **`provider.stderr`** · `provider.error` (`warn`; a classified transport error) · `provider.session` (`debug`) · `provider.event.unknown` (`debug`) · `task.result.parsed` (**which rung of the degradation ladder was used**) · `task.note` (severity, message — one per `notes[]` entry) · `task.succeeded` (duration, cost, files_changed, note_count) · `task.failed` (kind, retry class, exit code) · `task.parked` (question) · `task.skipped` (blocking ancestor) · `task.retried` (attempt, backoff_ms) · `task.timeout`
+`task.request.written` (path, bytes) · `task.spawned` (provider, argv, pid, pgid, delivery) · **`provider.text`** · **`provider.tool`** · **`provider.stderr`** · `provider.error` (`warn`; a classified transport error) · `provider.session` (`debug`) · `provider.event.unknown` (`debug`) · `task.result.parsed` (**which rung of the degradation ladder was used**) · `task.transcript` (`debug`; path, found) · `task.observations` (`debug`; provider, count) · `task.continue.failed` (`warn`; a session continuation the CLI rejected — retried cold) · `task.note` (severity, message — one per `notes[]` entry) · `task.succeeded` (duration, cost, files_changed, note_count, continued_from) · `task.failed` (kind, retry class, exit code) · `task.parked` (question) · `task.skipped` (blocking ancestor) · `task.retried` (attempt, backoff_ms) · `task.timeout`
 
 ## Provider output bubbles up as `info`
 

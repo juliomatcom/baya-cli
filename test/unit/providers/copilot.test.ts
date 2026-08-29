@@ -12,7 +12,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   provider: "copilot",
   model: null,
   depends_on: [],
-  writes: false,
+  access: "read-only",
   cwd: null,
   ...overrides,
 });
@@ -22,7 +22,7 @@ const request: TaskRequest = {
   kind: "task_request",
   run_id: "run-1",
   task: { id: "gen-schema", title: "t", instruction: "i" },
-  workspace: { cwd: "/work", writable: false, isolation: "shared" },
+  workspace: { cwd: "/work", access: "read-only", isolation: "shared" },
   context: [],
   response_contract: { schema_path: "/work/.baya/schema/task_result.schema.json" },
   constraints: { max_runtime_s: 900 },
@@ -68,7 +68,7 @@ describe("copilotAdapter.buildRun argv", () => {
   it("adds --allow-all-tools only for writing or dangerous tasks", () => {
     expect(copilotAdapter.buildRun(input()).argv).not.toContain("--allow-all-tools");
     expect(
-      copilotAdapter.buildRun(input({ task: task({ writes: true }) })).argv,
+      copilotAdapter.buildRun(input({ task: task({ access: "read-write" }) })).argv,
     ).toContain("--allow-all-tools");
     expect(copilotAdapter.buildRun(input({ dangerouslyAllowAll: true })).argv).toContain(
       "--allow-all-tools",

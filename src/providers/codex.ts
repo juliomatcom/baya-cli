@@ -4,6 +4,7 @@ import { parseResultJson, synthesizeFailure } from "./result.js";
 import type {
   BuildRunInput,
   ExtractContext,
+  Observation,
   ProviderAdapter,
   ProviderUsage,
   SpawnPlan,
@@ -23,27 +24,56 @@ import type {
 
 function sandboxFor(input: BuildRunInput): string {
   if (input.dangerouslyAllowAll) return "danger-full-access";
-  return input.task.writes ? "workspace-write" : "read-only";
+  return input.task.access === "read-write" ? "workspace-write" : "read-only";
 }
 
-/** Flags shared by `exec` and `exec resume`, in a fixed order for the snapshot. */
-function commonFlags(input: BuildRunInput): string[] {
-  const argv = [
-    "--json",
-    "--color",
-    "never",
-    "--skip-git-repo-check",
-    "-C",
-    input.cwd,
-    "-s",
-    sandboxFor(input),
-    "--output-schema",
-    input.schemaPath,
-    "-o",
-    input.resultFile,
-  ];
+/**
+ * ⚠️ `codex exec` and `codex exec resume` do **not** share a flag surface.
+ * Verified live 2026-08-29 against codex-cli 0.150.1: `resume` accepts
+ * `--json`, `--skip-git-repo-check`, `--output-schema`, `-o`, `-m` — and
+ * rejects `-C`, `-s`, and `--color`, exiting 2 with
+ * `error: unexpected argument '-C' found` before the model is ever reached.
+ *
+ * Passing the `exec` set to `resume` is what made every session continuation
+ * fail in the first real chain run. The consequences of the three it drops:
+ *
+ * - **`-C`** — the working directory comes from the spawn `cwd` instead, which
+ *   `SpawnPlan` already carries. No behavior is lost.
+ * - **`-s`** — a resumed turn **inherits the sandbox its session was opened
+ *   with**; codex offers no way to change it. That is why a chain may only
+ *   collapse across turns of the same `access` (execution.md §Session reuse).
+ * - **`--color`** — ANSI is stripped everywhere regardless (conventions #12),
+ *   so this costs nothing.
+ */
+function commonFlags(input: BuildRunInput, mode: "exec" | "resume"): string[] {
+  const argv = ["--json"];
+  if (mode === "exec") argv.push("--color", "never");
+  argv.push("--skip-git-repo-check");
+  if (mode === "exec") argv.push("-C", input.cwd, "-s", sandboxFor(input));
+  argv.push("--output-schema", input.schemaPath, "-o", input.resultFile);
   if (input.model !== null) argv.push("-m", input.model);
   return argv;
+}
+
+/**
+ * Paths touched by a `file_change` item.
+ *
+ * ⚠️ The field is `changes: [{path, kind}]`, **not** `path`. Reading `path`
+ * yielded a bare `Edit()` for every file change codex ever reported — the
+ * older shape is kept as a fallback because it costs one `??`.
+ */
+function changedPaths(item: Record<string, unknown>): string[] {
+  const changes = item["changes"];
+  if (Array.isArray(changes)) {
+    return changes
+      .map((change) => {
+        if (change === null || typeof change !== "object") return "";
+        return String((change as Record<string, unknown>)["path"] ?? "");
+      })
+      .filter((path) => path !== "");
+  }
+  const single = item["path"];
+  return typeof single === "string" && single !== "" ? [single] : [];
 }
 
 function toolNameFor(itemType: string, item: Record<string, unknown>): string {
@@ -51,7 +81,7 @@ function toolNameFor(itemType: string, item: Record<string, unknown>): string {
     case "command_execution":
       return `Shell(${String(item["command"] ?? "")})`;
     case "file_change":
-      return `Edit(${String(item["path"] ?? "")})`;
+      return `Edit(${changedPaths(item).join(", ")})`;
     case "mcp_tool_call":
       return `${String(item["server"] ?? "mcp")}.${String(item["tool"] ?? "")}`;
     case "web_search":
@@ -128,6 +158,9 @@ export const codexAdapter: ProviderAdapter = {
     events: "jsonl",
     sessionId: "capture",
     resume: "session",
+    // `--json` already carries `command_execution` (with `exit_code`) and
+    // `file_change`, so Baya's own `events.jsonl` is the record — no sidecar.
+    observations: "events",
     cwdFlag: true,
     modelFlag: true,
     maxConcurrency: 2,
@@ -137,7 +170,7 @@ export const codexAdapter: ProviderAdapter = {
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, "exec", ...commonFlags(input), "-"],
+      argv: [input.bin, "exec", ...commonFlags(input, "exec"), "-"],
       cwd: input.cwd,
       stdin: "pipe",
       stdinData: input.prompt,
@@ -146,16 +179,72 @@ export const codexAdapter: ProviderAdapter = {
 
   /**
    * `codex exec resume <thread_id>` — the id captured from `thread.started`.
-   * ⚠️ UNVERIFIED that `thread_id` is the identifier `resume` accepts; the
-   * contract tier (M3.7) is where that gets settled against the real binary.
+   * `thread_id` is a UUID and `resume` takes one positionally — verified live
+   * 2026-08-29. What was actually wrong was the flag set; see `commonFlags`.
    */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, "exec", "resume", sessionId, ...commonFlags(input), "-"],
+      argv: [
+        input.bin,
+        "exec",
+        "resume",
+        sessionId,
+        ...commonFlags(input, "resume"),
+        "-",
+      ],
       cwd: input.cwd,
       stdin: "pipe",
       stdinData: answer,
     };
+  },
+
+  /**
+   * The next task as another turn on the same thread. Identical argv to
+   * `buildResume` — only the payload differs, and it differs entirely: a whole
+   * `task_request`, not an answer to a question.
+   *
+   * The executor still falls back to a cold run when a continuation fails —
+   * that fallback is what turned this adapter's first real chain run into two
+   * wasted (and unbilled) spawns instead of two lost tasks.
+   */
+  buildContinue(sessionId: string, input: BuildRunInput): SpawnPlan {
+    return {
+      argv: [
+        input.bin,
+        "exec",
+        "resume",
+        sessionId,
+        ...commonFlags(input, "resume"),
+        "-",
+      ],
+      cwd: input.cwd,
+      stdin: "pipe",
+      stdinData: input.prompt,
+    };
+  },
+
+  extractObservations(ctx: ExtractContext): Observation[] {
+    const out: Observation[] = [];
+    for (const event of ctx.events) {
+      if (event.t !== "tool") continue;
+      const item = event.input;
+      if (item === null || typeof item !== "object") continue;
+      const record = item as Record<string, unknown>;
+      if (record["type"] === "command_execution") {
+        const command = record["command"];
+        if (typeof command !== "string" || command.trim() === "") continue;
+        // `exit_code` arrives as a string in the JSONL; `status` is the
+        // narrative version of the same thing and is the safer read.
+        const ok =
+          record["status"] === "completed" && String(record["exit_code"] ?? "0") === "0";
+        out.push({ kind: "command", command, ok });
+        continue;
+      }
+      if (record["type"] === "file_change") {
+        for (const path of changedPaths(record)) out.push({ kind: "write", path });
+      }
+    }
+    return out;
   },
 
   parseEvents(chunk: string): ProviderEvent[] {
@@ -220,6 +309,16 @@ export const codexAdapter: ProviderAdapter = {
       const u = usage as Record<string, unknown>;
       if (typeof u["input_tokens"] === "number") {
         out.input_tokens = (out.input_tokens ?? 0) + u["input_tokens"];
+      }
+      // codex reports the cache split on the same line; ignoring it hid that a
+      // continued turn reads ~96k of transcript to do 35k of work.
+      if (typeof u["cached_input_tokens"] === "number") {
+        out.cached_input_tokens =
+          (out.cached_input_tokens ?? 0) + u["cached_input_tokens"];
+      }
+      if (typeof u["cache_write_input_tokens"] === "number") {
+        out.cache_write_input_tokens =
+          (out.cache_write_input_tokens ?? 0) + u["cache_write_input_tokens"];
       }
       if (typeof u["output_tokens"] === "number") {
         out.output_tokens = (out.output_tokens ?? 0) + u["output_tokens"];

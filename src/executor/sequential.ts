@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import {
   PROTOCOL_VERSION,
   routeProvider,
@@ -17,6 +17,12 @@ import {
   type ContextStrategy,
   type Upstream,
 } from "../context/index.js";
+import {
+  DEFAULT_MEMORY_BUDGET,
+  deriveMemory,
+  renderMemory,
+  type TaskObservations,
+} from "../memory/index.js";
 import { classifyFailure } from "./classify.js";
 import type { RunPaths } from "./paths.js";
 import { StateStore, relativeArtifacts, type TaskState } from "./state.js";
@@ -49,6 +55,11 @@ export interface RunSequentialOptions {
   contextBudget?: number;
   maxRuntimeS?: number;
   dangerouslyAllowAll?: boolean;
+  /** Cross-task memory. Default on. */
+  memory?: boolean;
+  memoryBudget?: number;
+  /** Chain-collapse into one provider session. Default on. */
+  sessionReuse?: boolean;
   env?: NodeJS.ProcessEnv;
   /** Fires the moment a task settles, so `warn`/`action_required` notes print immediately. */
   onTaskSettled?: (taskId: string, state: TaskState, result: TaskResult) => void;
@@ -63,6 +74,40 @@ export interface RunOutcome {
 }
 
 const DEFAULT_MAX_RUNTIME_S = 900;
+
+/**
+ * How long a provider session stays worth continuing (execution.md §Session
+ * reuse). Anthropic's prompt cache expires 5 minutes after its last hit, and
+ * the session file outliving the cache is exactly the trap: past this window a
+ * resume re-reads the whole accumulated transcript at full price, which costs
+ * **more** than the cold start it replaced.
+ */
+export const SESSION_WARM_MS = 300_000;
+
+/**
+ * Turns per chain. The transcript only grows, and every turn pays ~10% of all
+ * of it; past a handful the dilution stops being worth the warmth.
+ */
+export const MAX_CHAIN_TURNS = 5;
+
+/** A live session an eligible task may continue. */
+interface SessionInfo {
+  sessionId: string;
+  provider: ProviderId;
+  model: string | null;
+  /** The access level the session was opened with. codex cannot change it later. */
+  access: Task["access"];
+  endedAtMs: number;
+  turns: number;
+  /** Task ids whose work is already visible in this session's transcript. */
+  chain: string[];
+}
+
+interface Continuation {
+  sessionId: string;
+  parentId: string;
+  chain: string[];
+}
 
 function toReadyStates(store: StateStore, tasks: Task[]): Map<string, ReadyState> {
   const states = new Map<string, ReadyState>();
@@ -83,6 +128,26 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
   const strategy = options.contextStrategy ?? "link-only";
   const budget = budgetFrom(options.contextBudget);
   const maxRuntimeS = options.maxRuntimeS ?? DEFAULT_MAX_RUNTIME_S;
+  const memoryEnabled = options.memory ?? true;
+  const memoryBudget = options.memoryBudget ?? DEFAULT_MEMORY_BUDGET;
+  const sessionReuse = options.sessionReuse ?? true;
+
+  /** Observations from every finished task, in completion order. */
+  const observed: TaskObservations[] = [];
+  /** Task id -> the session it left open and continuable. */
+  const sessions = new Map<string, SessionInfo>();
+  /**
+   * Tasks whose open session has already been taken over by a dependent.
+   *
+   * Keyed by the **parent task**, not by the session id. Keying it by session
+   * id capped every chain at two turns: `codex exec resume` keeps the same
+   * thread id, so turn 2's session id equals turn 1's, and turn 3 saw an id
+   * that was already claimed. Measured — a six-task chain collapsed 1→2 and
+   * then stopped. What actually needs guarding is two *siblings* both
+   * continuing one parent, which forks the conversation; extending a chain
+   * one turn at a time never does.
+   */
+  const claimed = new Set<string>();
 
   logger.info("run.started", { tasks: tasks.length });
 
@@ -90,9 +155,20 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     const ready = readySet(nodes, toReadyStates(store, tasks));
     if (ready.length === 0) break;
 
-    const taskId = ready[0] as string;
+    // Cache-aware ordering: among tasks that are ALREADY admissible, prefer one
+    // that can continue a warm session. This never widens the ready set, so
+    // dependency order is untouched — `readySet` has already established that
+    // every candidate here may run in any order.
+    const picked = selectNext(ready);
+    const taskId = picked.taskId;
+    const continuation = picked.continuation;
     const task = byId.get(taskId) as Task;
-    logger.debug("task.ready", { task_id: taskId, deps: task.depends_on });
+    logger.debug("task.ready", {
+      task_id: taskId,
+      deps: task.depends_on,
+      ready: ready.length,
+      continues: continuation?.parentId ?? null,
+    });
 
     // Explicit provider wins, then the model alias (`sonnet` -> claude), then
     // the run default. Validation has already rejected a provider/model clash.
@@ -116,8 +192,14 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       continue;
     }
 
+    const inSession = new Set(continuation?.chain ?? []);
     const upstreams = collectUpstreams(task, byId, paths, results);
-    const context = assembleContext(upstreams, { strategy, budget });
+    // An upstream the agent produced itself, earlier in this same session, is
+    // already in its transcript. Re-inlining it is the one cost a continuation
+    // would otherwise add.
+    const context = assembleContext(upstreams, { strategy, budget }).map((entry) =>
+      inSession.has(entry.task_id) ? { ...entry, inline: null } : entry,
+    );
     logger.debug("task.context.assembled", {
       task_id: taskId,
       upstream: upstreams.map((entry) => entry.taskId),
@@ -133,13 +215,26 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       task: { id: task.id, title: task.title, instruction: task.instruction },
       workspace: {
         cwd: task.cwd ?? options.cwd,
-        writable: task.writes,
+        access: task.access,
         isolation: "shared",
       },
       context,
       response_contract: { schema_path: options.schemaPath },
       constraints: { max_runtime_s: maxRuntimeS },
     };
+
+    const memoryBlock = memoryEnabled
+      ? renderMemory(deriveMemory(observed, { cwd: options.cwd }), {
+          budget: memoryBudget,
+          ...(inSession.size > 0 ? { alreadyInSession: inSession } : {}),
+        })
+      : "";
+    if (memoryBlock !== "") {
+      logger.debug("task.memory.rendered", {
+        task_id: taskId,
+        chars: memoryBlock.length,
+      });
+    }
 
     // Checkpoint before acting (conventions.md #14): a crash between here and
     // the spawn must still show that this task was started.
@@ -149,26 +244,70 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       model,
       attempts: (store.task(taskId)?.attempts ?? 0) + 1,
       started_at: new Date().toISOString(),
+      continued_from: continuation?.parentId ?? null,
     });
+    if (continuation) claimed.add(continuation.parentId);
 
-    const execution = await executeTask({
-      task,
-      request,
-      adapter,
-      bin: resolved.bin,
-      model,
-      cwd: task.cwd ?? options.cwd,
-      paths,
-      schemaPath: options.schemaPath,
-      logger,
-      timeoutMs: maxRuntimeS * 1000,
-      ...(options.env ? { env: options.env } : {}),
-      ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
-      onSpawn: (pid) => store.transition(taskId, { pid }),
-    });
+    const spawn = async (
+      continueFrom: Continuation | null,
+    ): Promise<Awaited<ReturnType<typeof executeTask>>> =>
+      executeTask({
+        task,
+        request,
+        adapter,
+        bin: resolved.bin,
+        model,
+        cwd: task.cwd ?? options.cwd,
+        paths,
+        schemaPath: options.schemaPath,
+        logger,
+        timeoutMs: maxRuntimeS * 1000,
+        ...(memoryBlock !== "" ? { memory: memoryBlock } : {}),
+        ...(continueFrom
+          ? {
+              continueFrom: {
+                sessionId: continueFrom.sessionId,
+                inSession: continueFrom.chain,
+              },
+            }
+          : {}),
+        ...(options.env ? { env: options.env } : {}),
+        ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
+        onSpawn: (pid) => store.transition(taskId, { pid }),
+      });
+
+    let execution = await spawn(continuation);
+    let continued = continuation !== null && execution.continued;
+
+    // A resume that the CLI itself rejected exits non-zero with nothing
+    // parseable — structurally distinct from a task that ran and reported
+    // failure through the schema (exit 0). codex `exec resume` is UNVERIFIED,
+    // so that case buys a cold retry rather than losing the task.
+    if (
+      continued &&
+      execution.result.status === "failed" &&
+      execution.exitCode !== 0 &&
+      !execution.timedOut
+    ) {
+      logger.warn("task.continue.failed", {
+        task_id: taskId,
+        provider,
+        session_id: continuation?.sessionId ?? null,
+        exit_code: execution.exitCode,
+      });
+      store.transition(taskId, { continued_from: null });
+      execution = await spawn(null);
+      continued = false;
+    }
 
     const result = execution.result;
     results.set(taskId, result);
+    // Memory is derived from what a task DID, so a failed task contributes too
+    // — its dead ends are the single most valuable thing it leaves behind.
+    if (memoryEnabled && execution.observations.length > 0) {
+      observed.push({ taskId, observations: execution.observations });
+      writeMemorySnapshot();
+    }
     logger.debug("task.result.parsed", {
       task_id: taskId,
       status: result.status,
@@ -203,20 +342,40 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       cost_usd: execution.usage.cost_usd ?? 0,
       input_tokens: execution.usage.input_tokens ?? 0,
       output_tokens: execution.usage.output_tokens ?? 0,
+      cached_input_tokens: execution.usage.cached_input_tokens ?? 0,
+      cache_write_input_tokens: execution.usage.cache_write_input_tokens ?? 0,
     };
 
     if (result.status === "ok") {
+      // Only a succeeded task leaves a session worth continuing: a chain built
+      // on a failed turn inherits its confusion along with its cache.
+      if (execution.sessionId !== null && adapter.buildContinue !== undefined) {
+        const parent =
+          continued && continuation ? sessions.get(continuation.parentId) : null;
+        sessions.set(taskId, {
+          sessionId: execution.sessionId,
+          provider,
+          model,
+          access: task.access,
+          endedAtMs: Date.now(),
+          turns: (parent?.turns ?? 0) + 1,
+          chain: [...(parent?.chain ?? []), taskId],
+        });
+      }
       store.transition(taskId, { ...common, state: "succeeded", failure: null });
       logger.info("task.succeeded", {
         task_id: taskId,
         provider,
         model,
+        continued_from: continued ? (continuation?.parentId ?? null) : null,
         duration_ms: execution.durationMs,
         summary: result.summary,
         files_changed: result.files_changed.length,
         note_count: result.notes.length,
         input_tokens: execution.usage.input_tokens ?? 0,
         output_tokens: execution.usage.output_tokens ?? 0,
+        cached_input_tokens: execution.usage.cached_input_tokens ?? 0,
+        cache_write_input_tokens: execution.usage.cache_write_input_tokens ?? 0,
         cost_usd: execution.usage.cost_usd ?? 0,
       });
       options.onTaskSettled?.(taskId, "succeeded", result);
@@ -265,6 +424,67 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     skipped: totals.skipped,
     parked: totals.parked,
   };
+
+  /**
+   * The session `taskId` may continue, or `null`.
+   *
+   * Deliberately narrow. Only a task whose **single** dependency left a warm
+   * session on the **same provider and model** qualifies:
+   *
+   * - one dependency, because a fan-in has no single conversation to rejoin;
+   * - same provider and model, because a session belongs to one model — this
+   *   is where per-task model routing and session reuse genuinely conflict,
+   *   and routing wins by construction;
+   * - same `access`, because `codex exec resume` takes no `-s`: a resumed turn
+   *   inherits the sandbox its session was opened with. Collapsing a read-only
+   *   turn onto a read-write session would silently widen its permissions, and
+   *   the reverse would deny it tools it was granted;
+   * - warm, because past the cache window a resume costs more than a cold start;
+   * - unclaimed, because two *siblings* continuing one parent would fork the
+   *   conversation. Extending a chain turn by turn is not a fork.
+   */
+  function continuationFor(id: string): Continuation | null {
+    if (!sessionReuse) return null;
+    const candidate = byId.get(id);
+    if (!candidate || candidate.depends_on.length !== 1) return null;
+    const parentId = candidate.depends_on[0] as string;
+    const info = sessions.get(parentId);
+    if (!info) return null;
+    if (claimed.has(parentId)) return null;
+    if (info.turns >= MAX_CHAIN_TURNS) return null;
+    if (Date.now() - info.endedAtMs > SESSION_WARM_MS) return null;
+    const provider = routeProvider(candidate, options.defaultProvider);
+    if (provider !== info.provider) return null;
+    if ((candidate.model ?? options.defaultModel) !== info.model) return null;
+    if (candidate.access !== info.access) return null;
+    if (registry.get(provider)?.buildContinue === undefined) return null;
+    return { sessionId: info.sessionId, parentId, chain: info.chain };
+  }
+
+  /**
+   * Manifest order, except that a warm continuation jumps the queue. Both
+   * halves are safe by construction: every id here came from `readySet`.
+   */
+  function selectNext(ready: readonly string[]): {
+    taskId: string;
+    continuation: Continuation | null;
+  } {
+    for (const id of ready) {
+      const continuation = continuationFor(id);
+      if (continuation) return { taskId: id, continuation };
+    }
+    return { taskId: ready[0] as string, continuation: null };
+  }
+
+  /** Memory as it stands, for debugging a run and for measuring the feature. */
+  function writeMemorySnapshot(): void {
+    try {
+      const entries = deriveMemory(observed, { cwd: options.cwd });
+      writeFileSync(paths.memory, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+    } catch {
+      // A snapshot is a convenience. Never fail a run over one.
+    }
+  }
 
   function settleFailure(
     id: string,

@@ -16,7 +16,7 @@ Per-provider caps conservative — consumer subscriptions throttle. Raise via `.
 
 ## Workspace isolation
 
-**v1 — `--isolation shared` (default).** `writes:false` tasks run fully parallel. Any `writes:true` task takes the **single-writer semaphore** — writers serialize against each other, readers continue.
+**v1 — `--isolation shared` (default).** `access:"read-only"` tasks run fully parallel. Any `access:"read-write"` task takes the **single-writer semaphore** — writers serialize against each other, readers continue.
 
 Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per directory ([recovery.md](recovery.md)) means no second process to coordinate with.
 
@@ -24,7 +24,7 @@ Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per di
 
 ## Permissions
 
-Never guessed. Task policy → adapter mapping: `writes:false` ⇒ read-only; `writes:true` ⇒ workspace-write. Full bypass requires explicit `--dangerously-allow-all` on the `baya` invocation — **never inferred from the task list**. Per-adapter flags: `providers.md`.
+Never guessed. Task policy → adapter mapping: `access:"read-only"` ⇒ read-only; `access:"read-write"` ⇒ workspace-write. Full bypass requires explicit `--dangerously-allow-all` on the `baya` invocation — **never inferred from the task list**. Per-adapter flags: `providers.md`.
 
 ## Context bus
 
@@ -37,6 +37,60 @@ Upstream results persist to `tasks/<id>/result.json` + `output.md`. A downstream
 | `summarize` `later`       | LLM-compress upstream output before injection.                   |
 
 Budgets: `--context-budget` 12000 chars total, 6000 per edge. `link-only` default: these providers are agentic and open files; a path costs ~40 tokens (unbounded), inlining 40 KB costs ~10k and still truncates. Fan-in of five 40 KB upstreams is the breaking case for naive prepending.
+
+## Memory
+
+The context bus follows **edges**. Two tasks in different branches share none, so both pay to rediscover the same repo facts. Memory is the **edgeless** channel: derived facts fan out to every later task regardless of the graph.
+
+**Derived only — never self-reported.** No `learnings[]` field on `task_result`. Every fact is read back out of a record the provider already wrote, so producing memory costs **zero tokens** and nothing in it can be hallucinated. Delivery costs ~1200 chars (~300 tokens) per prompt.
+
+Pipeline: adapter `extractObservations` → `Observation[]` → `deriveMemory` (pure) → `MemoryEntry[]` → `renderMemory` (pure) → one `# Known about this workspace` section in the prompt, placed with `# Workspace` (memory is workspace knowledge; `# Upstream results` means edges). Snapshot per run at `runs/<runId>/memory.json`.
+
+| Observation source           | Provider              | Read from                                                                                                |
+| :--------------------------- | :-------------------- | :------------------------------------------------------------------------------------------------------- |
+| `observations: "events"`     | `codex`               | Baya's own `events.jsonl` — `command_execution{command,exit_code,status}`, `file_change{changes[].path}` |
+| `observations: "transcript"` | `claude`              | `~/.claude/projects/*/<session-id>.jsonl` — `tool_use` Bash/Read/Edit + `tool_result.is_error`           |
+| `observations: "none"`       | `copilot`, `opencode` | nothing yet — consume memory, contribute none                                                            |
+
+⚠️ `claude --output-format json` prints **one object**, so `parseEvents` can never emit `tool` events. The transcript is the only source, and is richer than codex's: `Read` names a `file_path` outright where codex leaves it inside a `sed -n '1,220p' …` string. Located by globbing the pre-assigned session id, **never** by reproducing the cwd-slug escaping. Chosen over `--output-format stream-json --verbose` because it is additive and leaves the `extractResult` ladder untouched. A missing transcript thins memory; it never fails a task.
+
+Fact kinds, in value-per-token order — the budget is spent in this order, after every kind is guaranteed 2 items:
+
+| Kind               | Why it earns prompt space                                                                                                  |
+| :----------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| `command.deadend`  | Failed and never later succeeded. Most expensive thing to rediscover: rediscovering it means paying for the failure again. |
+| `command.verified` | Exit 0. Stops the "how do I check this" probe.                                                                             |
+| `file.changed`     | **Correctness**, not just cost — a later task must know what was already edited.                                           |
+| `file.hot`         | Read by ≥2 tasks. Kills the orientation phase.                                                                             |
+
+Keyed (`command:<cmd>` / `file:<path>`), so a later fact **replaces** an earlier one instead of appending a contradiction. Exploration commands (`sed`, `rg`, `git`, `env`, …) contribute paths only — `rg` exits 1 on "no matches", which is not a dead end. Caps: 6 items per kind, 120 chars per command. Both measured: without them, one task flailing through variations of one invocation produced 14 dead ends and crowded out every other kind.
+
+**Never carries command output** (`aggregated_output`, `tool_result.content`). It is most of the bytes and the only route by which untrusted repository text could enter memory. The block is framed as evidence, not instruction.
+
+Flags: `--no-memory` (off, for A/B measurement) · `--memory-budget <chars>` (default 1200).
+
+## Session reuse
+
+Every task otherwise spawns a fresh process and re-pays the fixed startup cost. **Chain-collapse:** a task whose **single** dependency left a warm session on the **same provider and model** runs as another turn in it (`claude --resume`, `codex exec resume`) via the adapter's `buildContinue`.
+
+Only chains, never siblings: a chain is already serial, so collapsing costs **zero** concurrency. Grouping siblings would cost it.
+
+| Guard                       | Value                     | Why                                                                                                                                                                                      |
+| :-------------------------- | :------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| single dependency           | —                         | A fan-in has no one conversation to rejoin.                                                                                                                                              |
+| same provider **and** model | —                         | A session belongs to one model. This is where per-task model routing and session reuse genuinely conflict; routing wins by construction, and the chain partitions at every model change. |
+| warm                        | `SESSION_WARM_MS` 300 000 | The session file outlives the prompt cache (5 min). Past it, a resume re-reads the whole grown transcript at full price — **more** than the cold start it replaced.                      |
+| turn cap                    | `MAX_CHAIN_TURNS` 5       | Every turn pays ~10% of an only-growing transcript.                                                                                                                                      |
+| unclaimed                   | —                         | Two tasks continuing one session would fork it.                                                                                                                                          |
+| `buildContinue` present     | —                         | An adapter without one never joins a chain. Honest default for an unexercised resume path.                                                                                               |
+
+Scheduling: among tasks **already in the ready-set**, a warm continuation jumps the queue. This never widens the ready-set, so dependency order is untouched — `readySet` has already established every candidate may run in any order. Cost: execution order within a layer is no longer manifest order.
+
+Context and memory are suppressed for what is already in the session — an upstream the agent produced itself is pointed at, not re-inlined.
+
+The cold-retry fallback earned its place on the first real chain run: a continuation that exits non-zero with nothing parseable — structurally distinct from a task that ran and reported failure through the schema at exit 0 — is retried **cold once**. codex rejected every resume because `exec resume` takes a different flag set (providers.md §codex), and the fallback turned two broken invocations into two wasted, unbilled spawns instead of two lost tasks. Keep it even now the flags are right: it is the only thing standing between a provider's CLI drifting and a run losing work.
+
+Flag: `--no-session-reuse`.
 
 ## Failure semantics
 

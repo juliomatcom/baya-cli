@@ -26,7 +26,7 @@ describe("TaskSchema", () => {
       provider: null,
       model: null,
       depends_on: [],
-      writes: false,
+      access: "read-only",
       cwd: null,
     });
   });
@@ -37,7 +37,7 @@ describe("TaskSchema", () => {
       provider: "codex" as const,
       model: "some-model",
       depends_on: ["design-api"],
-      writes: true,
+      access: "read-write",
       cwd: "/tmp/x",
     };
     expect(TaskSchema.parse(TaskSchema.parse(full))).toEqual(full);
@@ -74,7 +74,7 @@ describe("TaskRequestSchema", () => {
       kind: "task_request" as const,
       run_id: "20260828T2152Z-a1f4c9-1",
       task: { id: "gen-schema", title: "t", instruction: "i" },
-      workspace: { cwd: "/abs", writable: true, isolation: "shared" as const },
+      workspace: { cwd: "/abs", access: "read-write", isolation: "shared" as const },
       context: [
         {
           task_id: "design-api",

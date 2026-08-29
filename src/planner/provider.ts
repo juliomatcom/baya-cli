@@ -40,7 +40,7 @@ export function runPlannerProvider(
     kind: "task_request",
     run_id: options.runId,
     task: { id: PLANNER_TASK_ID, title: "Plan the task list", instruction: "" },
-    workspace: { cwd: options.cwd, writable: false, isolation: "shared" },
+    workspace: { cwd: options.cwd, access: "read-only", isolation: "shared" },
     context: [],
     response_contract: { schema_path: options.schemaPath },
     constraints: { max_runtime_s: Math.floor((options.timeoutMs ?? 300_000) / 1000) },
@@ -62,7 +62,7 @@ export function runPlannerProvider(
         model: options.model,
         depends_on: [],
         // Planning reads the repo; it never writes to it.
-        writes: false,
+        access: "read-only",
         cwd: null,
       },
       request,

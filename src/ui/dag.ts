@@ -47,14 +47,16 @@ export function renderDag(
       if (!task) continue;
       const deps =
         task.depends_on.length > 0 ? theme.note(` ← ${task.depends_on.join(", ")}`) : "";
-      const writes = task.writes ? theme.warn(" writes") : "";
+      // Only the tasks that may act are badged. Badging every read-only task
+      // too would spend the reader's attention on the harmless majority.
+      const access = task.access === "read-write" ? theme.warn(" read-write") : "";
       const provider =
         task.provider ??
         (defaultProvider ? routeProvider(task, defaultProvider) : null) ??
         "default";
       const label = task.model ? `${provider} ${task.model}` : provider;
       lines.push(
-        `    ${theme.status("pending")} ${theme.taskId(id.padEnd(16))} ${theme.provider(label.padEnd(18))} ${task.title}${writes}${deps}`,
+        `    ${theme.status("pending")} ${theme.taskId(id.padEnd(16))} ${theme.provider(label.padEnd(18))} ${task.title}${access}${deps}`,
       );
     }
   });

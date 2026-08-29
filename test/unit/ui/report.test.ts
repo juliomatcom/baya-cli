@@ -17,7 +17,7 @@ const manifest: Manifest = {
       provider: "codex",
       model: null,
       depends_on: [],
-      writes: true,
+      access: "read-write",
       cwd: null,
     },
     {
@@ -27,7 +27,7 @@ const manifest: Manifest = {
       provider: "codex",
       model: null,
       depends_on: ["gen-schema"],
-      writes: true,
+      access: "read-write",
       cwd: null,
     },
   ],
@@ -49,6 +49,9 @@ function state(overrides: Partial<RunState> = {}): RunState {
       isolation: "shared",
       context_strategy: "link-only",
       context_budget: 12_000,
+      memory: true,
+      memory_budget: 1200,
+      session_reuse: true,
     },
     totals: {
       succeeded: 2,
@@ -60,6 +63,8 @@ function state(overrides: Partial<RunState> = {}): RunState {
       cost_usd: 0.42,
       input_tokens: 0,
       output_tokens: 0,
+      cached_input_tokens: 0,
+      cache_write_input_tokens: 0,
     },
     tasks: {
       "gen-schema": emptyTaskEntry({
@@ -164,6 +169,8 @@ describe("renderReport", () => {
         cost_usd: 0,
         input_tokens: 122_271,
         output_tokens: 1570,
+        cached_input_tokens: 0,
+        cache_write_input_tokens: 0,
       },
     });
     const text = renderReport(report(withTokens), theme);

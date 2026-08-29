@@ -20,7 +20,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   provider: "claude",
   model: null,
   depends_on: [],
-  writes: false,
+  access: "read-only",
   cwd: null,
   ...overrides,
 });
@@ -30,7 +30,7 @@ const request: TaskRequest = {
   kind: "task_request",
   run_id: "run-1",
   task: { id: "gen-schema", title: "t", instruction: "i" },
-  workspace: { cwd: "/work", writable: false, isolation: "shared" },
+  workspace: { cwd: "/work", access: "read-only", isolation: "shared" },
   context: [],
   response_contract: { schema_path: "/work/.baya/schema/task_result.schema.json" },
   constraints: { max_runtime_s: 900 },
@@ -77,16 +77,18 @@ describe("claudeAdapter.buildRun argv", () => {
   // The two regressions this pins: `acceptEdits` pre-approves edits only and
   // `plan` refuses every non-readonly tool, so under `-p` — with nobody to
   // answer a prompt — both had Bash denied outright.
-  it("uses auto whether or not the task writes", () => {
+  it("uses auto at either access level", () => {
     const ro = claudeAdapter.buildRun(input()).argv;
     expect(ro[ro.indexOf("--permission-mode") + 1]).toBe("auto");
-    const rw = claudeAdapter.buildRun(input({ task: task({ writes: true }) })).argv;
+    const rw = claudeAdapter.buildRun(
+      input({ task: task({ access: "read-write" }) }),
+    ).argv;
     expect(rw[rw.indexOf("--permission-mode") + 1]).toBe("auto");
     expect([...ro, ...rw]).not.toContain("acceptEdits");
     expect([...ro, ...rw]).not.toContain("plan");
   });
 
-  // `writes:false` bounds what a task may mutate, not whether it may act: a
+  // `access: "read-only"` bounds what a task may mutate, not whether it may act: a
   // task that runs the suite and reports back needs Bash and writes nothing.
   it("withholds the editing tools from a read-only task, but never Bash", () => {
     const argv = claudeAdapter.buildRun(input()).argv;
@@ -96,7 +98,9 @@ describe("claudeAdapter.buildRun argv", () => {
   });
 
   it("withholds nothing from a writing task", () => {
-    const argv = claudeAdapter.buildRun(input({ task: task({ writes: true }) })).argv;
+    const argv = claudeAdapter.buildRun(
+      input({ task: task({ access: "read-write" }) }),
+    ).argv;
     expect(argv).not.toContain("--disallowed-tools");
   });
 
@@ -150,6 +154,28 @@ describe("claudeAdapter.buildRun argv", () => {
     expect(
       claudeAdapter.buildResume("sess-9", "use postgres", input()).argv,
     ).toMatchSnapshot();
+  });
+
+  it("never pairs --resume with --session-id, which would create and continue at once", () => {
+    const withId = input({ sessionId: "sess-9" });
+    expect(claudeAdapter.buildResume("sess-9", "answer", withId).argv).not.toContain(
+      "--session-id",
+    );
+    expect(claudeAdapter.buildContinue?.("sess-9", withId).argv).not.toContain(
+      "--session-id",
+    );
+    // A cold run still pre-assigns it.
+    expect(claudeAdapter.buildRun(withId).argv).toContain("--session-id");
+  });
+
+  it("continues a chain by sending the next task_request into --resume", () => {
+    const plan = claudeAdapter.buildContinue?.("sess-9", input());
+    expect(plan?.argv.slice(0, 3)).toEqual([
+      "/usr/local/bin/claude",
+      "--resume",
+      "sess-9",
+    ]);
+    expect(plan?.stdinData).toBe(input().prompt);
   });
 });
 
@@ -312,5 +338,72 @@ describe("claudeAdapter.extractUsage", () => {
 
   it("returns nothing when there is no final blob", () => {
     expect(claudeAdapter.extractUsage?.([])).toEqual({});
+  });
+});
+
+describe("claude usage accounting", () => {
+  it("reports the cache split as well as the gross input total", () => {
+    const events = claudeAdapter.parseEvents(
+      JSON.stringify({
+        session_id: "s",
+        result: "done",
+        total_cost_usd: 0.39,
+        usage: {
+          input_tokens: 8,
+          cache_creation_input_tokens: 60683,
+          cache_read_input_tokens: 313029,
+          output_tokens: 16636,
+        },
+      }),
+    );
+    expect(claudeAdapter.extractUsage?.(events)).toMatchObject({
+      cost_usd: 0.39,
+      input_tokens: 8 + 60683 + 313029,
+      cache_write_input_tokens: 60683,
+      cached_input_tokens: 313029,
+      output_tokens: 16636,
+    });
+  });
+});
+
+describe("claude observations", () => {
+  const ctx = (transcript: string | null) => ({
+    taskId: "t1",
+    events: [],
+    resultFileContents: null,
+    exitCode: 0,
+    stderr: "",
+    transcript,
+  });
+
+  it("declares the transcript as its source, because its events cannot carry tools", () => {
+    expect(claudeAdapter.capabilities.observations).toBe("transcript");
+    expect(claudeAdapter.capabilities.events).toBe("json");
+    expect(typeof claudeAdapter.transcriptPath).toBe("function");
+  });
+
+  it("reads observations out of the transcript it is handed", () => {
+    const transcript = [
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "u1",
+              name: "Read",
+              input: { file_path: "/repo/a.ts" },
+            },
+          ],
+        },
+      }),
+    ].join("\n");
+    expect(claudeAdapter.extractObservations?.(ctx(transcript))).toEqual([
+      { kind: "read", path: "/repo/a.ts" },
+    ]);
+  });
+
+  it("contributes nothing, and fails nothing, when no transcript was found", () => {
+    expect(claudeAdapter.extractObservations?.(ctx(null))).toEqual([]);
   });
 });

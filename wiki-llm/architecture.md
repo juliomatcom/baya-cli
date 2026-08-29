@@ -13,6 +13,7 @@
 | 4   | Providers    | `src/providers/`  | One adapter per CLI. argv construction, prompt delivery, event parsing, result extraction, resume.                   | Pure build + I/O resolve |
 | 5   | Execution    | `src/executor/`   | Scheduler, concurrency budgets, writer semaphore, subprocess lifecycle, signals.                                     | I/O                      |
 | 6   | Context      | `src/context/`    | Result persistence, context assembly, budgeting strategies.                                                          | Mostly pure              |
+| 6b  | Memory       | `src/memory/`     | Provider records → observations → keyed facts → the prompt block. Derived only, never self-reported.                 | **Pure** + one file read |
 | 7   | Escalation   | `src/escalation/` | Park queue, stdin ownership, question rendering, session resume dispatch.                                            | I/O                      |
 | 8   | Presentation | `src/ui/`         | DAG preview, live status, run report, `--json` output. `theme.ts` is the sole chalk importer.                        | I/O                      |
 | 9   | Entry        | `src/cli/`        | Arg parsing, config load, command routing, exit codes.                                                               | I/O                      |
@@ -90,6 +91,7 @@ pending ──deps met──► ready ──budget+lock──► running
    ├─ state.json              # atomic checkpoint: task states, pids, session ids
    ├─ baya.jsonl              # the orchestrator's own trace, every level
    ├─ plan-draft.json         # the planner's raw output for this run
+   ├─ memory.json             # derived cross-task facts (execution.md §Memory)
    ├─ report.json
    └─ tasks/<taskId>/
       ├─ request.json         # what we sent
@@ -104,11 +106,12 @@ pending ──deps met──► ready ──budget+lock──► running
 
 ## Trust boundaries
 
-| Boundary                 | Rule                                                                                                                                                                     |
-| :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Task text → planner      | Untrusted content (any UTF-8 text file). Never interpolated into argv.                                                                                                   |
-| Planner → manifest       | **Privilege boundary.** Manifest may name `provider` (closed enum) and `model` (string). Never argv, shell, env, or executable paths.                                    |
-| Manifest → adapter       | Adapter alone constructs argv. `shell: true` is banned repo-wide and lint-enforced.                                                                                      |
-| Provider → orchestrator  | Untrusted output. Parsed as JSON against a schema, never regexed for meaning.                                                                                            |
-| Logs → disk              | Secret-shaped strings redacted before write.                                                                                                                             |
-| Provider ANSI → terminal | Provider stdout is untrusted and may carry escape sequences. Disable provider color at the flag level where possible, and **strip ANSI** before rendering or persisting. |
+| Boundary                 | Rule                                                                                                                                                                                                                                                                                                            |
+| :----------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task text → planner      | Untrusted content (any UTF-8 text file). Never interpolated into argv.                                                                                                                                                                                                                                          |
+| Provider record → memory | Derived facts fan out to **every** later task, so memory is the widest untrusted channel in the system. Carries command strings and paths only — **never command output** (`aggregated_output`, `tool_result.content`), which is where repository text would enter. Rendered as evidence, never as instruction. |
+| Planner → manifest       | **Privilege boundary.** Manifest may name `provider` (closed enum) and `model` (string). Never argv, shell, env, or executable paths.                                                                                                                                                                           |
+| Manifest → adapter       | Adapter alone constructs argv. `shell: true` is banned repo-wide and lint-enforced.                                                                                                                                                                                                                             |
+| Provider → orchestrator  | Untrusted output. Parsed as JSON against a schema, never regexed for meaning.                                                                                                                                                                                                                                   |
+| Logs → disk              | Secret-shaped strings redacted before write.                                                                                                                                                                                                                                                                    |
+| Provider ANSI → terminal | Provider stdout is untrusted and may carry escape sequences. Disable provider color at the flag level where possible, and **strip ANSI** before rendering or persisting.                                                                                                                                        |

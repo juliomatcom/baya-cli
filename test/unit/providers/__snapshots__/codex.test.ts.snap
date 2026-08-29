@@ -7,13 +7,7 @@ exports[`codexAdapter.buildRun argv builds a resume around the captured thread i
   "resume",
   "thread-42",
   "--json",
-  "--color",
-  "never",
   "--skip-git-repo-check",
-  "-C",
-  "/work",
-  "-s",
-  "read-only",
   "--output-schema",
   "/work/.baya/schema/task_result.schema.json",
   "-o",
@@ -42,7 +36,7 @@ exports[`codexAdapter.buildRun argv matches the recorded surface 1`] = `
 ]
 `;
 
-exports[`codexAdapter.buildRun argv uses workspace-write only when the task writes 1`] = `
+exports[`codexAdapter.buildRun argv uses the workspace-write sandbox only for read-write access 1`] = `
 [
   "/usr/local/bin/codex",
   "exec",

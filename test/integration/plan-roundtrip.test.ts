@@ -11,7 +11,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: [],
-      writes: false,
+      access: "read-only",
       cwd: null,
     },
     {
@@ -21,7 +21,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: ["a"],
-      writes: false,
+      access: "read-only",
       cwd: null,
     },
   ],
@@ -109,5 +109,41 @@ describe("--plan-out / --plan-in", () => {
     });
     expect(result.code).toBe(2);
     expect(result.stderr).toContain("dependency cycle");
+  });
+
+  /**
+   * `writes` became `access` (a clean break — the manifest is versioned and
+   * nothing is published against it). A stale plan file must be refused
+   * loudly: silently defaulting it to `read-only` would strip a task's
+   * permission to run its own tests and blame the provider for the denials.
+   */
+  it("refuses a plan file still carrying the old `writes` key", async () => {
+    const workspace = makeWorkspace();
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(
+      join(workspace.cwd, "stale.json"),
+      JSON.stringify({
+        version: 1,
+        source: { path: "tasks.md", sha256: "x" },
+        tasks: [
+          {
+            id: "a",
+            title: "A",
+            instruction: "i",
+            provider: null,
+            model: null,
+            depends_on: [],
+            writes: true,
+            cwd: null,
+          },
+        ],
+      }),
+    );
+
+    const result = await runCli(
+      ["run", "./tasks.md", "--plan-in", "stale.json", "--yes"],
+      { workspace },
+    );
+    expect(result.code).toBe(2);
   });
 });

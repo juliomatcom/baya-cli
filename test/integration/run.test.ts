@@ -14,7 +14,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: [],
-      writes: false,
+      access: "read-write",
       cwd: null,
     },
     {
@@ -24,7 +24,7 @@ const PLAN = {
       provider: "codex",
       model: null,
       depends_on: ["design-api"],
-      writes: true,
+      access: "read-write",
       cwd: null,
     },
   ],
@@ -110,7 +110,12 @@ describe("a two-task chain, end to end", () => {
   });
 
   it("feeds the upstream result downstream as context", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+    // Cold path. With session reuse on, `gen-schema` continues `design-api`'s
+    // session and the upstream is pointed at instead of inlined — that case is
+    // covered below; this one is the context bus itself.
+    const result = await runCli(["./tasks.md", "--yes", "--no-session-reuse"], {
+      scenario,
+    });
     const request = result.readJson(result.paths!.request("gen-schema")) as {
       context: Array<{ task_id: string; summary: string; inline: string | null }>;
     };
@@ -120,6 +125,55 @@ describe("a two-task chain, end to end", () => {
       summary: "Defined 6 REST endpoints and their error shapes.",
       inline: "## API\n\nsix endpoints",
     });
+  });
+
+  it("continues the chain in one session and stops re-inlining what is in it", async () => {
+    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+    const state = result.readJson(result.paths!.state) as {
+      tasks: Record<string, { continued_from: string | null }>;
+    };
+    expect(state.tasks["design-api"]?.continued_from).toBeNull();
+    expect(state.tasks["gen-schema"]?.continued_from).toBe("design-api");
+
+    // The upstream is the agent's own earlier turn, so its text is not repeated.
+    const request = result.readJson(result.paths!.request("gen-schema")) as {
+      context: Array<{ task_id: string; inline: string | null }>;
+    };
+    expect(request.context[0]).toMatchObject({ task_id: "design-api", inline: null });
+  });
+
+  /**
+   * `codex exec resume` takes no `-s`, so a resumed turn inherits the sandbox
+   * its session was opened with. Collapsing across a change of `access` would
+   * silently widen or narrow a task's permissions.
+   */
+  it("refuses to collapse a chain whose access level changes", async () => {
+    const mixed = {
+      ...scenario,
+      __planner__: {
+        final: {
+          tasks: [
+            { ...PLAN.tasks[0], access: "read-only" },
+            { ...PLAN.tasks[1], access: "read-write" },
+          ],
+        },
+      },
+    };
+    const result = await runCli(["./tasks.md", "--yes"], { scenario: mixed });
+    const state = result.readJson(result.paths!.state) as {
+      tasks: Record<string, { continued_from: string | null }>;
+    };
+    expect(state.tasks["gen-schema"]?.continued_from).toBeNull();
+  });
+
+  it("--no-session-reuse starts every task cold", async () => {
+    const result = await runCli(["./tasks.md", "--yes", "--no-session-reuse"], {
+      scenario,
+    });
+    const state = result.readJson(result.paths!.state) as {
+      tasks: Record<string, { continued_from: string | null }>;
+    };
+    expect(state.tasks["gen-schema"]?.continued_from).toBeNull();
   });
 
   it("records the manifest and a config snapshot a resume could reproduce", async () => {

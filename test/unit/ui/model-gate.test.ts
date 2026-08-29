@@ -16,7 +16,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   provider: null,
   model: null,
   depends_on: [],
-  writes: false,
+  access: "read-only",
   cwd: null,
   ...overrides,
 });

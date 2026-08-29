@@ -14,7 +14,7 @@ const task = (overrides: Partial<Task> = {}): Task => ({
   provider: "codex",
   model: null,
   depends_on: [],
-  writes: false,
+  access: "read-only",
   cwd: null,
   ...overrides,
 });
@@ -24,7 +24,7 @@ const request: TaskRequest = {
   kind: "task_request",
   run_id: "run-1",
   task: { id: "gen-schema", title: "t", instruction: "i" },
-  workspace: { cwd: "/work", writable: false, isolation: "shared" },
+  workspace: { cwd: "/work", access: "read-only", isolation: "shared" },
   context: [],
   response_contract: { schema_path: "/work/.baya/schema/task_result.schema.json" },
   constraints: { max_runtime_s: 900 },
@@ -48,9 +48,9 @@ describe("codexAdapter.buildRun argv", () => {
     expect(codexAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
-  it("uses workspace-write only when the task writes", () => {
+  it("uses the workspace-write sandbox only for read-write access", () => {
     expect(
-      codexAdapter.buildRun(input({ task: task({ writes: true }) })).argv,
+      codexAdapter.buildRun(input({ task: task({ access: "read-write" }) })).argv,
     ).toMatchSnapshot();
   });
 
@@ -106,6 +106,20 @@ describe("codexAdapter.parseEvents", () => {
       '{"type":"item.completed","item":{"type":"file_change","path":"a.sql"}}',
     );
     expect(event).toMatchObject({ t: "tool", name: "Edit(a.sql)" });
+  });
+
+  it("names every path in a file_change — the field is `changes`, not `path`", () => {
+    // The real shape. Reading `path` produced a bare `Edit()` for every file
+    // change codex has ever reported.
+    const [event] = codexAdapter.parseEvents(
+      '{"type":"item.completed","item":{"type":"file_change","changes":' +
+        '[{"path":"/repo/src/a.ts","kind":"update"},{"path":"/repo/t/a.test.ts","kind":"add"}],' +
+        '"status":"completed"}}',
+    );
+    expect(event).toMatchObject({
+      t: "tool",
+      name: "Edit(/repo/src/a.ts, /repo/t/a.test.ts)",
+    });
   });
 
   it("surfaces a completed `error` item as a full error event, not an abbreviated tool", () => {
@@ -239,5 +253,107 @@ describe("codexAdapter.extractUsage", () => {
   it("returns nothing when codex emitted no usage line", () => {
     const events = codexAdapter.parseEvents('{"type":"turn.started"}');
     expect(codexAdapter.extractUsage?.(events)).toEqual({});
+  });
+});
+
+describe("codex usage accounting", () => {
+  it("keeps the cache split, which decides whether a continuation was cheap", () => {
+    // Discarding these made a continued turn that read 96k of transcript look
+    // like a straight 3.5x regression instead of a mostly-cached one.
+    const events = codexAdapter.parseEvents(
+      '{"type":"turn.completed","usage":{"input_tokens":123952,' +
+        '"cached_input_tokens":95763,"cache_write_input_tokens":28171,"output_tokens":2112}}',
+    );
+    expect(codexAdapter.extractUsage?.(events)).toMatchObject({
+      input_tokens: 123952,
+      cached_input_tokens: 95763,
+      cache_write_input_tokens: 28171,
+      output_tokens: 2112,
+    });
+  });
+});
+
+describe("codex observations", () => {
+  const ctx = (events: ReturnType<typeof codexAdapter.parseEvents>) => ({
+    taskId: "t1",
+    events,
+    resultFileContents: null,
+    exitCode: 0,
+    stderr: "",
+    transcript: null,
+  });
+
+  it("reads commands and their exit status straight out of the event stream", () => {
+    const events = codexAdapter.parseEvents(
+      '{"type":"item.completed","item":{"type":"command_execution","command":' +
+        '"/bin/zsh -lc \'npm test\'","exit_code":"1","status":"failed"}}\n' +
+        '{"type":"item.completed","item":{"type":"command_execution","command":' +
+        '"/bin/zsh -lc \'npm run lint\'","exit_code":"0","status":"completed"}}',
+    );
+    expect(codexAdapter.extractObservations?.(ctx(events))).toEqual([
+      { kind: "command", command: "/bin/zsh -lc 'npm test'", ok: false },
+      { kind: "command", command: "/bin/zsh -lc 'npm run lint'", ok: true },
+    ]);
+  });
+
+  it("reports every changed path, which the `path` bug used to swallow", () => {
+    const events = codexAdapter.parseEvents(
+      '{"type":"item.completed","item":{"type":"file_change","changes":' +
+        '[{"path":"src/a.ts","kind":"update"}],"status":"completed"}}',
+    );
+    expect(codexAdapter.extractObservations?.(ctx(events))).toEqual([
+      { kind: "write", path: "src/a.ts" },
+    ]);
+  });
+
+  it("reads its observations from its own events, needing no sidecar", () => {
+    expect(codexAdapter.capabilities.observations).toBe("events");
+    expect(codexAdapter.transcriptPath).toBeUndefined();
+  });
+});
+
+describe("codex session continuation", () => {
+  it("continues a thread with the next task_request on stdin", () => {
+    const plan = codexAdapter.buildContinue?.("thread-9", input());
+    expect(plan?.argv.slice(0, 4)).toEqual([
+      "/usr/local/bin/codex",
+      "exec",
+      "resume",
+      "thread-9",
+    ]);
+    expect(plan?.stdinData).toBe(input().prompt);
+  });
+
+  /**
+   * ⚠️ The regression that made every real continuation fail: `exec resume`
+   * does NOT take `exec`'s flags. Passing them exits 2 with
+   * `error: unexpected argument '-C' found`, before the model is reached.
+   * Verified live 2026-08-29 against codex-cli 0.150.1.
+   */
+  it.each([
+    ["buildContinue", () => codexAdapter.buildContinue?.("t-9", input())?.argv ?? []],
+    ["buildResume", () => codexAdapter.buildResume("t-9", "answer", input()).argv],
+  ])("%s passes no flag `exec resume` rejects", (_name, argv) => {
+    for (const rejected of ["-C", "-s", "--color"]) {
+      expect(argv()).not.toContain(rejected);
+    }
+  });
+
+  it.each([
+    ["buildContinue", () => codexAdapter.buildContinue?.("t-9", input())?.argv ?? []],
+    ["buildResume", () => codexAdapter.buildResume("t-9", "answer", input()).argv],
+  ])("%s keeps the flags `exec resume` does accept", (_name, argv) => {
+    for (const kept of ["--json", "--skip-git-repo-check", "--output-schema", "-o"]) {
+      expect(argv()).toContain(kept);
+    }
+  });
+
+  it("still gives `exec` its full surface", () => {
+    const argv = codexAdapter.buildRun(input()).argv;
+    for (const kept of ["-C", "-s", "--color"]) expect(argv).toContain(kept);
+  });
+
+  it("relies on the spawn cwd once -C is gone", () => {
+    expect(codexAdapter.buildContinue?.("t-9", input())?.cwd).toBe("/work");
   });
 });

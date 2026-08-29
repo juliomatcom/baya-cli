@@ -8,6 +8,7 @@ import {
   type TaskResult,
 } from "../manifest/index.js";
 import type { Logger } from "../log/index.js";
+import type { Observation } from "../memory/index.js";
 import type { ProviderAdapter, ProviderUsage } from "../providers/index.js";
 import { runProcess } from "./spawn.js";
 import type { RunPaths } from "./paths.js";
@@ -35,6 +36,14 @@ export interface ExecuteTaskOptions {
   timeoutMs: number;
   dangerouslyAllowAll?: boolean;
   onSpawn?: (pid: number, pgid: number) => void;
+  /** Rendered memory block, injected into the prompt. `""`/absent => no section. */
+  memory?: string;
+  /**
+   * Run this task as another turn in an existing session rather than a fresh
+   * process (execution.md §Session reuse). `inSession` names the tasks already
+   * visible in that transcript, so their context is pointed at, not repeated.
+   */
+  continueFrom?: { sessionId: string; inSession: readonly string[] };
 }
 
 export interface TaskExecution {
@@ -47,6 +56,10 @@ export interface TaskExecution {
   durationMs: number;
   usage: ProviderUsage;
   argv: string[];
+  /** What the agent did, for cross-task memory. Empty for `observations: 'none'`. */
+  observations: Observation[];
+  /** True when this ran as a turn in an existing session rather than a fresh one. */
+  continued: boolean;
 }
 
 function writeFileEnsuringDir(path: string, contents: string): void {
@@ -69,7 +82,12 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
   const { task, adapter, logger, paths } = options;
   const taskId = task.id;
 
-  const prompt = renderPrompt(options.request);
+  const prompt = renderPrompt(options.request, {
+    ...(options.memory ? { memory: options.memory } : {}),
+    ...(options.continueFrom
+      ? { continuation: { inSession: options.continueFrom.inSession } }
+      : {}),
+  });
   writeFileEnsuringDir(
     paths.request(taskId),
     `${JSON.stringify(options.request, null, 2)}\n`,
@@ -80,7 +98,7 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
     bytes: Buffer.byteLength(prompt, "utf8"),
   });
 
-  const plan = adapter.buildRun({
+  const buildInput = {
     bin: options.bin,
     task,
     request: options.request,
@@ -92,7 +110,15 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
     resultFile: paths.result(taskId),
     prompt,
     ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
-  });
+  };
+  // `buildContinue` is optional by design: an adapter without one never joins
+  // a chain, so the executor degrades to a cold run rather than guessing an
+  // argv for a resume path that provider has not proven.
+  const continueFrom = options.continueFrom;
+  const plan =
+    continueFrom && adapter.buildContinue
+      ? adapter.buildContinue(continueFrom.sessionId, buildInput)
+      : adapter.buildRun(buildInput);
 
   for (const file of plan.files ?? []) {
     writeFileEnsuringDir(file.path, file.contents);
@@ -184,12 +210,45 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
     resultFileContents = null;
   }
 
-  const result = adapter.extractResult({
+  // The provider's own session log, for adapters whose event stream cannot
+  // carry tool calls (`claude --output-format json` is a single object). Read
+  // after the process exits, keyed by the session id it reported. A missing or
+  // unreadable transcript thins memory; it never fails the task.
+  let transcript: string | null = null;
+  if (
+    sessionId !== null &&
+    adapter.capabilities.observations === "transcript" &&
+    adapter.transcriptPath
+  ) {
+    const path = adapter.transcriptPath(sessionId);
+    if (path !== null) {
+      try {
+        transcript = readFileSync(path, "utf8");
+      } catch {
+        transcript = null;
+      }
+    }
+    logger.debug("task.transcript", {
+      task_id: taskId,
+      path,
+      found: transcript !== null,
+    });
+  }
+
+  const extractContext = {
     taskId,
     events,
     resultFileContents,
     exitCode: outcome.code,
     stderr: outcome.stderr,
+    transcript,
+  };
+  const result = adapter.extractResult(extractContext);
+  const observations = adapter.extractObservations?.(extractContext) ?? [];
+  logger.debug("task.observations", {
+    task_id: taskId,
+    provider: adapter.id,
+    count: observations.length,
   });
 
   // Rewrite result.json from the validated object: whatever the provider left
@@ -207,5 +266,7 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
     durationMs,
     usage: adapter.extractUsage?.(events) ?? {},
     argv: plan.argv,
+    observations,
+    continued: continueFrom !== undefined && adapter.buildContinue !== undefined,
   };
 }

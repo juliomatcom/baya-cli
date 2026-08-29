@@ -65,10 +65,23 @@ export const TaskStateEntrySchema = z
     cost_usd: z.number().default(0),
     input_tokens: z.number().default(0),
     output_tokens: z.number().default(0),
+    /**
+     * Parts of `input_tokens`, kept separate because they are priced
+     * differently — a cache read costs about a tenth of fresh input, a cache
+     * write more than it. Fresh input is the remainder.
+     */
+    cached_input_tokens: z.number().default(0),
+    cache_write_input_tokens: z.number().default(0),
     /** Which rung of the degradation ladder produced the result. */
     result_rung: z.string().nullable().default(null),
     /** For `skipped`: the failed ancestor that caused it. */
     blocked_by: z.string().nullable().default(null),
+    /**
+     * For a task run as another turn in an earlier task's provider session
+     * (execution.md §Session reuse): which task opened that session. `null`
+     * means this task started cold.
+     */
+    continued_from: z.string().nullable().default(null),
   })
   .strict();
 export type TaskStateEntry = z.infer<typeof TaskStateEntrySchema>;
@@ -87,6 +100,10 @@ export const ConfigSnapshotSchema = z
     isolation: z.string(),
     context_strategy: z.string(),
     context_budget: z.number().int(),
+    /** Cross-task memory settings, so a run can be compared against `--no-memory`. */
+    memory: z.boolean().default(true),
+    memory_budget: z.number().int().default(0),
+    session_reuse: z.boolean().default(true),
   })
   .strict();
 export type ConfigSnapshot = z.infer<typeof ConfigSnapshotSchema>;
@@ -112,6 +129,8 @@ export const RunStateSchema = z
         cost_usd: z.number(),
         input_tokens: z.number().default(0),
         output_tokens: z.number().default(0),
+        cached_input_tokens: z.number().default(0),
+        cache_write_input_tokens: z.number().default(0),
       })
       .strict(),
     tasks: z.record(z.string(), TaskStateEntrySchema),
@@ -134,11 +153,15 @@ function recomputeTotals(state: RunState): void {
     cost_usd: 0,
     input_tokens: 0,
     output_tokens: 0,
+    cached_input_tokens: 0,
+    cache_write_input_tokens: 0,
   };
   for (const entry of Object.values(state.tasks)) {
     totals.cost_usd += entry.cost_usd;
     totals.input_tokens += entry.input_tokens;
     totals.output_tokens += entry.output_tokens;
+    totals.cached_input_tokens += entry.cached_input_tokens;
+    totals.cache_write_input_tokens += entry.cache_write_input_tokens;
     if (entry.state in totals) {
       totals[entry.state as keyof typeof totals] += 1;
     }
