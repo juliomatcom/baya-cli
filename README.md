@@ -238,6 +238,8 @@ Contributing a corrected entry to `BUILTIN_CATALOG` in `src/providers/catalog.ts
 
 **Why not just use one CLI's built-in agent?** Because you probably pay for more than one, and they are good at different things. Baya lets a task list say "plan with one, build with another" and handles the plumbing.
 
+**Can this save me money?** Yes. A task list picks the model per task, so the light steps can run on a cheap model (`luna`, `terra`) while the expensive ones are reserved for the work that earns them. You are still spending under subscriptions you already pay for — Baya just stops the top-tier model from doing work a cheaper one would have done fine.
+
 **Does this need API keys?** No. It drives locally installed CLIs under whatever subscription you already have.
 
 **Is it safe to run in parallel?** Read-only tasks run concurrently; anything that writes is serialized by the scheduler. One Baya runs per directory — a second is refused rather than left to fight over the same files. To run two task lists against one repo, give each its own `git worktree`.
