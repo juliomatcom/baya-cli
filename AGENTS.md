@@ -24,8 +24,9 @@
 
 - **Route First:** Read `wiki-llm/index.md` BEFORE open-ended grep to answer an operational, architectural, or CLI question. Open ONLY the page the index names.
 - **Update-On-Change:** Update the affected `wiki-llm/` page in the SAME commit as any change to dev commands, service topology, runbooks, stack, protocol, provider surfaces, or config schema. New page -> add its `index.md` row. Prohibit orphan pages.
-- **Token-Optimize Gate (MANDATORY):** Run the `token-optimize` skill (`.agents/skills/token-optimize/SKILL.md`) on every new or edited `wiki-llm/` page before the commit that ships it. No `wiki-llm/` page reaches a commit un-optimized. Preserve each page's Maintenance Invariant header and its `> **Answers:**` routing line; never alter meaning, invariants, IDs, or commands.
+- **Token-Optimize Standard (write inline):** Author every `wiki-llm/` edit directly to the token-optimized standard — telegraphic, imperative, one fact per line, no narrative prose, no rule repeated across sections, no multi-line mock examples (describe schemas/blocks inline). Preserve each page's `Maintenance Invariant` header and `> **Answers:**` routing line; never alter meaning, invariants, IDs, or commands. Run the full `token-optimize` skill (`.agents/skills/token-optimize/SKILL.md`) ONLY for a new page or a large rewrite — not routine edits.
 - **README Scope:** `README.md` carries ONLY what the project is, quickstart, repo layout, and the wiki pointer. Prohibit runbooks, CLI reference, or design prose in `README.md`.
+- **License Invariant:** Project is **MIT** (`LICENSE`, root); contributions accepted under MIT. Prohibit per-file license headers. Keep `LICENSE` copyright line, `package.json` `"license"`, and `wiki-llm/conventions.md` §License identical. New dependency MUST carry an MIT/BSD/ISC/Apache-2.0-compatible license.
 
 ---
 

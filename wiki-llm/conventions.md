@@ -1,7 +1,11 @@
 # Conventions
 
 > **Maintenance Invariant:** Repo rules, layout, toolchain. Hard rules non-negotiable; changing one requires updating its lint rule in the SAME commit. Token-optimized: imperative, no prose, no redundancy.
-> **Answers:** Repo layout. Toolchain + settings. Hard rules. Definition of done.
+> **Answers:** Repo layout. Toolchain + settings. Hard rules. Definition of done. License.
+
+## License
+
+**MIT** — `LICENSE` (root), copyright `2026 Julio Cesar Martin`. Opening a PR asserts the contribution is MIT-licensed. Prohibit per-file license headers. Keep `LICENSE` copyright line and `package.json` `"license"` identical. New dependency MUST be MIT/BSD/ISC/Apache-2.0 compatible.
 
 ## Toolchain
 
@@ -73,7 +77,7 @@ specs/001/     point-in-time refinement record
 - [ ] `npm run typecheck && npm run lint && npm test` clean.
 - [ ] New behavior has a test; bug fixes have a failing-first regression test.
 - [ ] No network or real-provider I/O outside the contract tier.
-- [ ] Affected `wiki-llm/` page updated + run through the `token-optimize` skill (AGENTS.md §0) in the same commit; new page ⇒ `index.md` row.
+- [ ] Affected `wiki-llm/` page updated in the same commit, written to the `token-optimize` skill's rules inline (AGENTS.md §0); full skill run only for a new page or large rewrite; new page ⇒ `index.md` row.
 - [ ] Comments only where the WHY is unrecoverable from the code.
 - [ ] Formatter run before commit.
 

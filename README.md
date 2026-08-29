@@ -3,6 +3,7 @@
 **Orchestrate local AI coding CLIs from a plain Markdown task list.**
 
 [![CI](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Write what you want done in ordinary Markdown. Baya asks a model to turn it into a dependency graph, then routes each task to the AI coding CLI you already have installed and logged in — `codex`, `claude`, `copilot`, `opencode` — running independent work in parallel and piping each task's output into the ones that depend on it.
 
@@ -186,4 +187,4 @@ Adding a provider is deliberately small: one adapter, one capability block, one 
 
 ## License
 
-_TBD._
+[MIT](LICENSE) © 2026 Julio Cesar Martin. Contributions are accepted under the same license.
