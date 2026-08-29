@@ -54,12 +54,15 @@ function writeFileEnsuringDir(path: string, contents: string): void {
   writeFileSync(path, contents, "utf8");
 }
 
-/** Display abbreviation only — the file keeps the full input (logging.md rule 3). */
-function abbreviateToolInput(input: unknown, limit = 120): string {
+/**
+ * Flatten a tool input to one line for the terminal — whitespace collapsed so
+ * it sits on the `⚒` line, but never truncated. The renderer wraps it; the file
+ * keeps the exact bytes either way (logging.md rule 3).
+ */
+function flattenToolInput(input: unknown): string {
   if (input === undefined) return "";
   const text = typeof input === "string" ? input : JSON.stringify(input);
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
+  return text.replace(/\s+/g, " ").trim();
 }
 
 export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExecution> {
@@ -123,7 +126,7 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
           task_id: taskId,
           provider: adapter.id,
           name: event.name,
-          input: abbreviateToolInput(event.input),
+          input: flattenToolInput(event.input),
         });
         break;
       case "error":

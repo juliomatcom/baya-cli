@@ -27,13 +27,12 @@ const INDENT = "  ";
 const PREFIX_WIDTH = 20;
 
 /**
- * The attribution column. Padded to a fixed width so the `│` gutter lines up;
- * over-long ids are cut with an ellipsis so a truncated name reads as
- * truncated, not as a typo ("create-number-gen…" not "create-number-gen").
+ * The attribution column. Padded to a fixed width so the `│` gutter lines up
+ * for the common case; an over-long id overflows the column in full rather than
+ * being cut — a task id is information, and a run is never opaque about it.
  */
 function taskLabel(taskId: string): string {
-  if (taskId.length <= PREFIX_WIDTH) return taskId.padEnd(PREFIX_WIDTH);
-  return `${taskId.slice(0, PREFIX_WIDTH - 1)}…`;
+  return taskId.padEnd(PREFIX_WIDTH);
 }
 
 function str(line: LogLine, key: string): string {
@@ -128,6 +127,15 @@ export function createEventRenderer(
 
       case "provider.stderr":
         return quiet ? null : prefixed(taskId, str(line, "text"), theme.note);
+
+      case "provider.error":
+        // A provider's own diagnostic — shown in full and wrapped, never
+        // truncated: this is the line a human needs to act on.
+        return prefixed(
+          taskId,
+          `${theme.glyphs.warn} ${str(line, "message")}`,
+          theme.warn,
+        );
 
       case "task.succeeded": {
         if (quiet) return null;

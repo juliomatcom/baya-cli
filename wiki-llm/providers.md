@@ -80,7 +80,7 @@ Flags: `-m/--model` · `-C/--cd <DIR>` · `--add-dir` · `-s/--sandbox {read-onl
 
 ⚠️ **`-p` is `--profile`, NOT prompt.** Canonical drift trap.
 
-Events (`--json`): `thread.started`→`thread_id` · `turn.started` · `item.completed`→`item.type:"agent_message"`/`item.text` · `turn.completed`→`usage`.
+Events (`--json`): `thread.started`→`thread_id` · `turn.started` · `item.completed`→`item.type:"agent_message"`/`item.text`, `item.type:"error"`→error event (full message, e.g. an unknown-model metadata warning) · top-level `type:"error"`→error event · `turn.completed`→`usage`.
 
 Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-file'` · `sessionId 'capture'` · `resume 'session'` · `cwdFlag true` · `maxConcurrency 2`.
 

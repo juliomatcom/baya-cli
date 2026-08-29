@@ -108,6 +108,16 @@ describe("codexAdapter.parseEvents", () => {
     expect(event).toMatchObject({ t: "tool", name: "Edit(a.sql)" });
   });
 
+  it("surfaces a completed `error` item as a full error event, not an abbreviated tool", () => {
+    const message =
+      "Model metadata for `gpt-5-mini` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.";
+    expect(
+      codexAdapter.parseEvents(
+        `{"type":"item.completed","item":{"id":"item_0","type":"error","message":${JSON.stringify(message)}}}`,
+      ),
+    ).toEqual([{ t: "error", kind: "other", message }]);
+  });
+
   it("keeps an unrecognized type as unknown rather than dropping it", () => {
     expect(codexAdapter.parseEvents('{"type":"turn.started"}')).toEqual([
       { t: "unknown", raw: '{"type":"turn.started"}' },
@@ -180,6 +190,20 @@ describe("codexAdapter.extractResult", () => {
     const result = codexAdapter.extractResult({
       taskId: "gen-schema",
       events: [{ t: "error", kind: "auth", message: "unauthorized" }],
+      resultFileContents: null,
+      exitCode: 1,
+      stderr: "noise",
+    });
+    expect(result.error).toEqual({ message: "unauthorized", retryable: false });
+  });
+
+  it("reports the last error, past a non-fatal diagnostic that came first", () => {
+    const result = codexAdapter.extractResult({
+      taskId: "gen-schema",
+      events: [
+        { t: "error", kind: "other", message: "Model metadata for `x` not found." },
+        { t: "error", kind: "auth", message: "unauthorized" },
+      ],
       resultFileContents: null,
       exitCode: 1,
       stderr: "noise",

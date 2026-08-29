@@ -62,16 +62,17 @@ Everything a provider CLI emits reaches the main process, surfaced at `info` —
 | Normalized event         | Log event                                    | Level          | Terminal rendering                                                          |
 | :----------------------- | :------------------------------------------- | :------------- | :-------------------------------------------------------------------------- |
 | `text` (assistant prose) | `provider.text`                              | **`info`**     | Wrapped, task-prefixed                                                      |
-| `tool` (tool invocation) | `provider.tool`                              | **`info`**     | One line: `⚒ Read(src/db.ts)`; inputs truncated to the line                 |
+| `tool` (tool invocation) | `provider.tool`                              | **`info`**     | `⚒ Read(src/db.ts)`; input whitespace-flattened, wrapped, never ellipsis-cut |
 | child **stderr** lines   | `provider.stderr`                            | **`info`**     | Task-prefixed, ANSI-stripped — this is where CLIs put their own diagnostics |
-| `error`                  | `task.failed` / `task.retried`               | `warn`/`error` | Full                                                                        |
+| `error` (provider diagnostic) | `provider.error`                        | `warn`         | Task-prefixed, wrapped, **full** — never abbreviated, and shown under `--quiet` |
+| `error` → run outcome    | `task.failed` / `task.retried`               | `warn`/`error` | Full                                                                        |
 | `session`, `unknown`     | `provider.session`, `provider.event.unknown` | `debug`        | Hidden by default — pure noise                                              |
 
 ### Rules
 
 1. **Attribution is mandatory.** Every forwarded line carries `task_id` and `provider`, and is **prefixed on screen**. Unprefixed output from parallel tasks is unreadable.
 2. **ANSI-stripped before forwarding.** Provider output is untrusted (`providers.md`); escape sequences never reach the terminal raw.
-3. **Never truncate in the file.** `events.jsonl` and `baya.jsonl` keep the full stream; only the _display_ abbreviates tool inputs.
+3. **Never truncate — file or terminal.** `events.jsonl` and `baya.jsonl` keep the full stream; the terminal wraps rather than cutting, and no line is abbreviated with an ellipsis. The only shortening is editorial: a completion line shows the summary's _first line_ (the rest is in the report).
 4. **Forward through `src/ui/progress.ts`**, never straight to stderr, or the spinner line is garbled.
 5. **`debug` is where noise lives** — session ids, unknown event types, state checkpoints. `info` stays readable.
 

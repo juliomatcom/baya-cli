@@ -26,12 +26,13 @@ export function wrap(text: string, width: number): string[] {
   return out;
 }
 
-/** The completion line's rule: first line only, capped (cli.md §Run output). */
-export function firstLine(text: string, max = 120): string {
-  const line = (
-    text.split("\n").find((candidate) => candidate.trim() !== "") ?? ""
-  ).trim();
-  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+/**
+ * The completion line's rule: the first non-empty line, in full (cli.md §Run
+ * output). Not truncated — a status line is never cut with an ellipsis; the
+ * terminal soft-wraps a long one and the end-of-run report has the rest.
+ */
+export function firstLine(text: string): string {
+  return (text.split("\n").find((candidate) => candidate.trim() !== "") ?? "").trim();
 }
 
 /** Single-quote an argv token for display when it holds anything shell-special. */

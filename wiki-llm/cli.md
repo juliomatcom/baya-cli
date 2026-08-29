@@ -127,7 +127,7 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
 | Element                                  | Rule                                                                                                                           |
 | :--------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
 | Model resolution line                    | Printed at the gate when a task-named model resolves to a different id or via a user alias.                                    |
-| Completion line                          | `summary`, first line, ≤120 chars. Full text in `output.md` + the report.                                                      |
+| Completion line                          | `summary`, first line, in full (terminal soft-wraps; never ellipsis-cut). Full text in `output.md` + the report.               |
 | `warn` / `action_required` notes         | Printed **the moment the task finishes**, wrapped + indented under it.                                                         |
 | `info` notes                             | Held for the end-of-run report.                                                                                                |
 | Full `output`                            | Printed in full **only** for a single-task run, or under `--verbose`.                                                          |
