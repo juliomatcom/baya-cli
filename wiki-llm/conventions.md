@@ -30,7 +30,7 @@ src/
 ├─ cli/        arg parsing, command routing, exit codes
 ├─ config/     layered config load/merge, first-run wizard
 │  └─ wizard.ts  one of two modules permitted to import @inquirer/prompts
-├─ planner/    markdown → manifest, repair, fallback
+├─ planner/    task text (any UTF-8: md/txt/yaml/…) → manifest, repair, fallback
 ├─ manifest/   zod schemas + validation            [pure]
 ├─ graph/      topo sort, ready-set, descendants   [pure]
 ├─ providers/  one adapter per CLI + registry

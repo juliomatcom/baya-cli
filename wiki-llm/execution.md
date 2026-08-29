@@ -24,7 +24,7 @@ Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per di
 
 ## Permissions
 
-Never guessed. Task policy → adapter mapping: `writes:false` ⇒ read-only; `writes:true` ⇒ workspace-write. Full bypass requires explicit `--dangerously-allow-all` on the `baya` invocation — **never inferred from Markdown**. Per-adapter flags: `providers.md`.
+Never guessed. Task policy → adapter mapping: `writes:false` ⇒ read-only; `writes:true` ⇒ workspace-write. Full bypass requires explicit `--dangerously-allow-all` on the `baya` invocation — **never inferred from the task list**. Per-adapter flags: `providers.md`.
 
 ## Context bus
 

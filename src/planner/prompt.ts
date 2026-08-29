@@ -1,12 +1,13 @@
 import type { ProviderId, ValidationError } from "../manifest/index.js";
 
 /**
- * The planning prompt. The Markdown is untrusted content (architecture.md
+ * The planning prompt. The task text is untrusted content (architecture.md
  * trust boundaries) — it is delimited, never interpolated into argv, and the
- * planner's only privilege is naming a provider from a closed enum.
+ * planner's only privilege is naming a provider from a closed enum. The text
+ * is any format the user wrote their tasks in: Markdown, plain `.txt`, YAML, …
  */
 export interface PlannerPromptOptions {
-  markdown: string;
+  taskText: string;
   sourcePath: string;
   maxTasks: number;
   providers: readonly ProviderId[];
@@ -17,6 +18,8 @@ export interface PlannerPromptOptions {
 export function plannerPrompt(options: PlannerPromptOptions): string {
   return [
     "You are Baya's planner. Turn the task list below into an execution DAG.",
+    "The task list is freeform text — Markdown, plain text, YAML, or similar.",
+    "Read it for intent and extract the discrete units of work it describes.",
     "",
     "Rules:",
     `- Emit at most ${options.maxTasks} tasks. Fewer is better; do not invent work.`,
@@ -37,7 +40,7 @@ export function plannerPrompt(options: PlannerPromptOptions): string {
     `Respond with a single JSON object matching the schema at ${options.schemaPath}.`,
     "",
     `<task_list path="${options.sourcePath}">`,
-    options.markdown,
+    options.taskText,
     "</task_list>",
   ].join("\n");
 }

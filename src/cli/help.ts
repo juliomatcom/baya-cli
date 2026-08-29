@@ -25,11 +25,11 @@ export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
   });
 
   return [
-    "baya — orchestrate local AI coding CLIs from a Markdown task list",
+    "baya — orchestrate local AI coding CLIs from a plain-text task list",
     "",
     theme.taskId("USAGE"),
-    "  baya <file.md> [options]        run a task list (default)",
-    "  baya run|plan <file.md>         explicit form",
+    "  baya <file> [options]           run a task list (default)",
+    "  baya run|plan <file>            explicit form",
     "  baya doctor                     check provider installs",
     "  baya config [--show|path|set|refresh-models]",
     "",
@@ -41,7 +41,7 @@ export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
     "  -y, --yes                  auto-confirm the plan gate",
     "  --plan-out <f>             write the manifest and exit",
     "  --plan-in <f>              execute a manifest directly, skipping planning",
-    "  --planner-provider <id>    provider that plans the Markdown",
+    "  --planner-provider <id>    provider that plans the task list",
     "  --planner-model <m>        unset means the provider's own default",
     "  --default-provider <id>    provider for tasks that name none",
     "  --default-model <m>        unset means the provider's own default",
@@ -58,7 +58,7 @@ export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
     "",
     theme.taskId("EXAMPLES"),
     "  baya ./tasks.md",
-    "  baya ./tasks.md --default-provider codex",
+    "  baya ./TODO.txt --default-provider codex",
     "  baya ./tasks.md --dry-run          # show the plan, run nothing",
     "  baya plan tasks.md --plan-out plan.json",
     "  baya run tasks.md --plan-in plan.json --yes",

@@ -5,7 +5,7 @@ import type { TaskRequest } from "../manifest/index.js";
  * is the contract and is always written to disk; this is its human-readable
  * envelope, because these CLIs take a prompt, not an API payload.
  *
- * Untrusted Markdown reaches here (architecture.md trust boundaries) but never
+ * Untrusted task text reaches here (architecture.md trust boundaries) but never
  * argv — it travels by stdin or file, so nothing in it can become a flag.
  */
 export function renderPrompt(request: TaskRequest): string {

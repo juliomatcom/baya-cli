@@ -12,15 +12,17 @@ baya ./tasks.md            # ≡ baya run ./tasks.md
 baya tasks.md --yes        # ≡ baya run tasks.md --yes
 ```
 
-**Resolution:** first positional matching a known subcommand ⇒ that subcommand; else ⇒ Markdown path for `run`. A file named `doctor` ⇒ write `./doctor`.
+**Resolution:** first positional matching a known subcommand ⇒ that subcommand; else ⇒ task-list path for `run`. A file named `doctor` ⇒ write `./doctor`.
+
+**Task-list file:** any UTF-8 text file — Markdown, `.txt`, YAML, whatever names the work. Empty or binary (C0 control bytes) ⇒ exit `2` before planning. The planner extracts tasks from the text; the deterministic fallback splitter (headings → list items → enumerated lines → blank-line blocks → whole doc) covers a planner failure.
 
 ## Commands
 
 | Command               | Purpose                                                                                                                                   | Status    |
 | :-------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- | :-------- |
-| `baya <file.md>`      | Default form. Alias for `run`.                                                                                                            | v1        |
-| `baya run <file.md>`  | Plan, resolve models, confirm, execute.                                                                                                   | v1        |
-| `baya plan <file.md>` | Plan + render DAG; never executes. ≡ `run --dry-run`.                                                                                     | v1        |
+| `baya <file>`         | Default form. Alias for `run`.                                                                                                            | v1        |
+| `baya run <file>`     | Plan, resolve models, confirm, execute.                                                                                                   | v1        |
+| `baya plan <file>`    | Plan + render DAG; never executes. ≡ `run --dry-run`.                                                                                     | v1        |
 | `baya doctor`         | Resolve every provider: path, version, capabilities. Reap stray process groups (gated on a stale lock).                                   | v1        |
 | `baya config`         | Re-run the wizard. Subactions `--show` \| `path` \| `set <key> <value>` \| `refresh-models`. [config.md](config.md).                      | v1        |
 | `baya resume <runId>` | Re-execute unfinished nodes; `--provider <id>` re-runs elsewhere. No `runId` ⇒ pick from a list, never guess. [recovery.md](recovery.md). | v1 — M2.8 |
@@ -32,7 +34,7 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 
 | Flag                      | Default       | Meaning                                                                                                                    |
 | :------------------------ | :------------ | :------------------------------------------------------------------------------------------------------------------------- |
-| `--planner-provider <id>` | _from config_ | Provider that parses the Markdown into a manifest.                                                                         |
+| `--planner-provider <id>` | _from config_ | Provider that parses the task list into a manifest.                                                                        |
 | `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                                                            |
 | `--default-provider <id>` | _from config_ | Fallback for tasks with no stated provider. **Bypasses the first-run wizard.**                                             |
 | `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                                                            |
@@ -48,7 +50,7 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                                                         |
 | `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                    |
 | `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                    |
-| `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from Markdown.                                                                      |
+| `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from the task list.                                                                 |
 | `--json`                  | off           | Machine-readable run report to stdout.                                                                                     |
 | `--verbose`               | off           | Alias for `--log-level debug`.                                                                                             |
 | `--no-color`              | off           | Disable ANSI. `NO_COLOR` / `FORCE_COLOR` honored natively by chalk.                                                        |
@@ -67,11 +69,11 @@ Unannotated flags are implemented + covered by `test/unit/cli/args.test.ts`.
 **Requirement:** help lists every registered provider (from the adapter registry, never hard-coded — a new adapter updates help with no other edit) + at least one runnable example. Where cheap, annotate each provider with resolution status so `--help` doubles as a sanity check.
 
 ```
-baya — orchestrate local AI coding CLIs from a Markdown task list
+baya — orchestrate local AI coding CLIs from a plain-text task list
 
 USAGE
-  baya <file.md> [options]        run a task list (default)
-  baya run|plan <file.md>         explicit form
+  baya <file> [options]           run a task list (default)
+  baya run|plan <file>            explicit form
   baya doctor                     check provider installs
   baya config [--show|path|set|refresh-models]
 
@@ -83,7 +85,7 @@ PROVIDERS
 
 EXAMPLES
   baya ./tasks.md
-  baya ./tasks.md --default-provider codex
+  baya ./TODO.txt --default-provider codex
   baya ./tasks.md --dry-run          # show the plan, run nothing
   baya plan tasks.md --plan-out plan.json
   baya run tasks.md --plan-in plan.json --yes

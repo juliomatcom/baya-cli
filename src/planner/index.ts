@@ -17,18 +17,49 @@ export { linearFallback, slugify, splitSections } from "./fallback.js";
 export { plannerPrompt, repairPrompt } from "./prompt.js";
 export { runPlannerProvider, type RunPlannerProviderOptions } from "./provider.js";
 
-/** Reads the Markdown and its identity in one step; `sha256` guards resume. */
-export function readSource(path: string): { source: Source; markdown: string } {
-  const markdown = readFileSync(path, "utf8");
-  const sha256 = createHash("sha256").update(markdown, "utf8").digest("hex");
-  return { source: { path, sha256 }, markdown };
+/**
+ * Reads the task list and its identity in one step; `sha256` guards resume.
+ * The file is any UTF-8 text that names work to do â Markdown, plain `.txt`,
+ * YAML, whatever. Baya never parses it structurally here; the planner (and, if
+ * it fails, the deterministic fallback splitter) is what turns text into tasks.
+ */
+export function readSource(path: string): { source: Source; taskText: string } {
+  const taskText = readFileSync(path, "utf8");
+  const sha256 = createHash("sha256").update(taskText, "utf8").digest("hex");
+  return { source: { path, sha256 }, taskText };
+}
+
+/**
+ * A readable-content check separate from the filesystem read: `readSource`
+ * surfaces "cannot read", this surfaces "read it, but there is nothing to plan".
+ * Returns a user-facing message, or `null` when the text is usable.
+ */
+export function checkTaskText(taskText: string, path: string): string | null {
+  if (taskText.trim() === "") {
+    return `the task list at ${path} is empty`;
+  }
+  // A binary file decoded as "utf8" hands the planner mojibake it then chokes
+  // on. The giveaway is C0 control bytes (tab / newline / CR excepted, DEL
+  // included) — a NUL alone, or a scattering of them across the sample.
+  const sample = Math.min(taskText.length, 8192);
+  let controls = 0;
+  for (let i = 0; i < sample; i += 1) {
+    const code = taskText.charCodeAt(i);
+    if (code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)) {
+      controls += 1;
+    }
+  }
+  if (controls > sample * 0.01) {
+    return `${path} does not look like a text file — baya needs a plain-text task list (Markdown, .txt, YAML, and the like)`;
+  }
+  return null;
 }
 
 /** Injectable so every planner test runs offline against a scripted response. */
 export type PlannerRunner = (prompt: string, attempt: number) => Promise<string>;
 
 export interface PlanOptions {
-  markdown: string;
+  taskText: string;
   source: Source;
   runner: PlannerRunner;
   logger: Logger;
@@ -36,7 +67,7 @@ export interface PlanOptions {
   defaultProvider: ProviderId;
   schemaPath: string;
   maxTasks?: number;
-  /** Attempts after the first. architecture.md: repair ×2, then fall back. */
+  /** Attempts after the first. architecture.md: repair Ã2, then fall back. */
   maxRepairs?: number;
 }
 
@@ -52,7 +83,7 @@ const DEFAULT_MAX_REPAIRS = 2;
 /**
  * Rung order for a plan payload. Unlike a `task_result`, a manifest has no
  * provider that enforces it natively for every CLI, so a fenced block is a
- * realistic shape — but this still parses JSON, never prose (conventions.md #3).
+ * realistic shape â but this still parses JSON, never prose (conventions.md #3).
  */
 export function parsePlanDraft(raw: string): unknown | null {
   const text = stripAnsi(raw).trim();
@@ -83,7 +114,7 @@ function draftToManifest(draft: unknown, source: Source): unknown {
 }
 
 /**
- * Markdown -> manifest, with a bounded repair loop and a fallback that cannot
+ * Task text -> manifest, with a bounded repair loop and a fallback that cannot
  * fail. **Never abort on a bad plan**: the planner is the least reliable link
  * in the system, and a user with a valid task list should always get a run.
  */
@@ -94,7 +125,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
   const warnings: string[] = [];
 
   const base = plannerPrompt({
-    markdown: options.markdown,
+    taskText: options.taskText,
     sourcePath: source.path,
     maxTasks,
     providers: options.providers,
@@ -156,7 +187,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     attempts: maxRepairs + 1,
   });
 
-  const manifest = linearFallback(options.markdown, source, { maxTasks });
+  const manifest = linearFallback(options.taskText, source, { maxTasks });
   logger.info("plan.validated", {
     tasks: manifest.tasks.length,
     edges: Math.max(0, manifest.tasks.length - 1),

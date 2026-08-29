@@ -1,4 +1,5 @@
 import {
+  checkTaskText,
   linearFallback,
   plan,
   parsePlanDraft,
@@ -40,7 +41,7 @@ function scripted(responses: string[]): {
 }
 
 const options = (runner: (p: string, a: number) => Promise<string>) => ({
-  markdown: "# One\n\ndo a\n\n# Two\n\ndo b\n",
+  taskText: "# One\n\ndo a\n\n# Two\n\ndo b\n",
   source,
   runner,
   logger: captureLogger().logger,
@@ -160,7 +161,52 @@ describe("linearFallback", () => {
   });
 
   it("is deterministic", () => {
-    const markdown = "# A\n\na\n\n# B\n\nb";
-    expect(linearFallback(markdown, source)).toEqual(linearFallback(markdown, source));
+    const taskText = "# A\n\na\n\n# B\n\nb";
+    expect(linearFallback(taskText, source)).toEqual(linearFallback(taskText, source));
+  });
+});
+
+describe("splitSections — non-Markdown inputs", () => {
+  it("splits a plain-text file on enumerated lines", () => {
+    const txt = "1 design the api\n2 build the ui\n3 write the tests\n";
+    expect(splitSections(txt).map((s) => s.title)).toEqual([
+      "design the api",
+      "build the ui",
+      "write the tests",
+    ]);
+  });
+
+  it("splits an unmarked file on blank lines", () => {
+    const txt =
+      "Design the orders API.\n\nGenerate the schema from it.\n\nBuild the table.";
+    expect(splitSections(txt)).toHaveLength(3);
+  });
+
+  it("splits a YAML-ish list", () => {
+    const yaml = "tasks:\n  - design the api\n  - build the ui\n";
+    expect(splitSections(yaml).map((s) => s.title)).toEqual([
+      "design the api",
+      "build the ui",
+    ]);
+  });
+
+  it("still treats a single paragraph as one task", () => {
+    expect(splitSections("just do the thing, then ship it")).toHaveLength(1);
+  });
+});
+
+describe("checkTaskText", () => {
+  it("passes usable text", () => {
+    expect(checkTaskText("- do a thing\n", "tasks.txt")).toBeNull();
+  });
+
+  it("rejects an empty file", () => {
+    expect(checkTaskText("   \n", "tasks.txt")).toContain("empty");
+  });
+
+  it("rejects a binary file", () => {
+    expect(checkTaskText("PK\u0003\u0004", "archive.zip")).toContain(
+      "does not look like a text file",
+    );
   });
 });
