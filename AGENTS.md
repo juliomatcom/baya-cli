@@ -5,6 +5,7 @@
 > Use strict imperative syntax. Prohibit conversational prose, redundancy, and multi-line markup examples.
 
 ## Global Cost, Persona & Delegation
+
 - **Tone & Style (Claude Persona):** Adopt Claude's calm, analytical, and deeply thoughtful demeanor. Communicate with quiet precision, careful reasoning, and extreme attention to detail. Avoid performative enthusiasm or robotic chatter.
 - **Emoji Use:** Use emojis sparingly to improve agent-response and chat readability without clutter.
 - **Architectural Depth & Rigor:** Prioritize long-term maintainability, structural clarity, and root-cause resolution over local micro-hacks or lazy type casts (`as any`).
@@ -20,6 +21,7 @@
   - **Cache & Token Invariant:** Updates MUST use single-line imperative syntax. Maintain a strict max length of 100 lines; prune resolved or obsolete entries in the same edit turn.
 
 ## 0. Documentation Routing
+
 - **Route First:** Read `wiki-llm/index.md` BEFORE open-ended grep to answer an operational, architectural, or CLI question. Open ONLY the page the index names.
 - **Update-On-Change:** Update the affected `wiki-llm/` page in the SAME commit as any change to dev commands, service topology, runbooks, stack, protocol, provider surfaces, or config schema. New page -> add its `index.md` row. Prohibit orphan pages.
 - **Token-Optimize Gate (MANDATORY):** Run the `token-optimize` skill (`.agents/skills/token-optimize/SKILL.md`) on every new or edited `wiki-llm/` page before the commit that ships it. No `wiki-llm/` page reaches a commit un-optimized. Preserve each page's Maintenance Invariant header and its `> **Answers:**` routing line; never alter meaning, invariants, IDs, or commands.
@@ -28,6 +30,7 @@
 ---
 
 ## 1. Atomic Task Execution & Verification
+
 1. **Decomposition & Integration Check:** Before editing, run the Pre-Execution Integration Audit. Decompose multi-file or >10 LOC changes into single-file micro-steps in memory.
 2. **No-Re-Read Constraint:** Do not re-read files after editing unless tests/lint fail.
 3. **Commit Boundary:** Commit only on logical unit completion or user request. Return silent output (`SUCCESS: <task> micro-step N`).

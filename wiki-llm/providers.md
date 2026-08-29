@@ -49,7 +49,11 @@ interface ProviderAdapter {
     maxConcurrency: number;
   };
   buildRun(task, env): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
-  buildResume(sessionId, answer, env): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
+  buildResume(
+    sessionId,
+    answer,
+    env,
+  ): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
   parseEvents(chunk: string): ProviderEvent[]; // fed complete lines only
   extractResult(ctx: ExtractContext): TaskResult;
   extractUsage?(events): { cost_usd?; input_tokens?; output_tokens? };
@@ -111,7 +115,7 @@ Flags: `--model` · `-C <dir>` · `--add-dir` · `--output-format {text,json}` (
 Events: `{type, data, ephemeral, id, timestamp, parentId}`. **15/20 events `ephemeral:true` — filter.** Terminal `{"type":"result","sessionId":…,"exitCode":…,"usage":{"codeChanges":{"filesModified":[…]}}}` → session id + exit code + `files_changed`. Error `{"type":"session.error","data":{"errorType":"quota","errorCode":"quota_exceeded","statusCode":402}}`.
 
 💡 Set `--no-ask-user` — disables the `ask_user` tool so a question returns as `status:"needs_input"` instead of blocking.
-⚠️ `--allow-all-tools`: help says "required for non-interactive", but a run reached quota without it. Treat as required for unattended tool *execution*, not parsing. Re-verify post-quota.
+⚠️ `--allow-all-tools`: help says "required for non-interactive", but a run reached quota without it. Treat as required for unattended tool _execution_, not parsing. Re-verify post-quota.
 
 Capabilities: `promptDelivery ['argv']` · `structuredOutput 'none'` · `sessionId 'preassign'` · `resume 'session'` · `cwdFlag true` · `maxConcurrency 1`.
 

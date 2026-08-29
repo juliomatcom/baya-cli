@@ -7,13 +7,13 @@
 
 Highest wins. Every value records its source for `baya config --show`.
 
-| # | Layer | Location |
-| :-- | :-- | :-- |
-| 1 | CLI flags | `--default-provider`, `--planner-model`, … |
-| 2 | Env | `BAYA_*` |
-| 3 | Project | `./.baya/config.json` (gitignored — personal overrides) |
-| 4 | **User** | `$XDG_CONFIG_HOME/baya/config.json`, else `~/.config/baya/config.json` |
-| 5 | Built-in | provider defaults |
+| #   | Layer     | Location                                                               |
+| :-- | :-------- | :--------------------------------------------------------------------- |
+| 1   | CLI flags | `--default-provider`, `--planner-model`, …                             |
+| 2   | Env       | `BAYA_*`                                                               |
+| 3   | Project   | `./.baya/config.json` (gitignored — personal overrides)                |
+| 4   | **User**  | `$XDG_CONFIG_HOME/baya/config.json`, else `~/.config/baya/config.json` |
+| 5   | Built-in  | provider defaults                                                      |
 
 Wizard writes **layer 4**. `defaults`/`planner`/`providers` merge per key; `modelAliases`/`modelCatalog` merge per entry key.
 
@@ -58,21 +58,21 @@ Every run, before the plan gate, each task that **names** a model resolves (`src
 
 ## Non-TTY / zero-provider
 
-| Situation | Behavior |
-| :-- | :-- |
-| No config, not a TTY, **one** provider | Use it, warn to stderr, proceed. |
+| Situation                                   | Behavior                                                                |
+| :------------------------------------------ | :---------------------------------------------------------------------- |
+| No config, not a TTY, **one** provider      | Use it, warn to stderr, proceed.                                        |
 | No config, not a TTY, **several** providers | Exit `2`: pass `--default-provider` or run `baya config`. Never prompt. |
-| **Zero** providers (any context) | Exit `2` with install hints → `baya doctor`. |
+| **Zero** providers (any context)            | Exit `2` with install hints → `baya doctor`.                            |
 
 ## Commands
 
-| Command | Purpose |
-| :-- | :-- |
-| `baya config` | Re-run the wizard, overwrite stored defaults. |
-| `baya config --show` | Resolved config + source layer per value + `modelAliases` / `modelCatalog` counts. |
-| `baya config refresh-models` | Re-fetch `opencode models`, rewrite `modelCatalog` (hardcoded lists unchanged). |
-| `baya config set <key> <value>` | `defaults.*`, `planner.*`, or `modelAliases.<name>` (`null` drops). |
-| `baya config path` | Print the user config file path. |
+| Command                         | Purpose                                                                            |
+| :------------------------------ | :--------------------------------------------------------------------------------- |
+| `baya config`                   | Re-run the wizard, overwrite stored defaults.                                      |
+| `baya config --show`            | Resolved config + source layer per value + `modelAliases` / `modelCatalog` counts. |
+| `baya config refresh-models`    | Re-fetch `opencode models`, rewrite `modelCatalog` (hardcoded lists unchanged).    |
+| `baya config set <key> <value>` | `defaults.*`, `planner.*`, or `modelAliases.<name>` (`null` drops).                |
+| `baya config path`              | Print the user config file path.                                                   |
 
 ## Implementation notes
 
