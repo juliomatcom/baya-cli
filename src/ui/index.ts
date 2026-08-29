@@ -29,6 +29,7 @@ export { confirmPlan, type ConfirmOutcome, type ConfirmPlanOptions } from "./con
 export {
   planModelGate,
   runModelGate,
+  buildModelAsk,
   type ModelGateOptions,
   type ModelGateOutcome,
   type ModelGatePlan,

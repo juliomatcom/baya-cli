@@ -46,7 +46,10 @@ export interface TaskModelAsk {
   taskId: string;
   requested: string;
   candidates: ResolvedModel[];
-  /** Where "run on the default model" would send this task. */
+  /**
+   * Where "run on the default model" would send this task: the task's own
+   * provider, else the model name's pattern route, else the run default.
+   */
   fallbackProvider: ProviderId;
 }
 
@@ -58,6 +61,13 @@ export interface ModelGatePlan {
 }
 
 const DEFAULT_AUTO_THRESHOLD = 0.85;
+
+/**
+ * Below this score a candidate is a coincidental string overlap, not a real
+ * suggestion. It is still listed (it might be what the user meant), but the
+ * cursor starts on "Run <default> on its default model" instead.
+ */
+const SUGGEST_THRESHOLD = 0.5;
 
 export function planModelGate(
   manifest: Manifest,
@@ -94,11 +104,13 @@ export function planModelGate(
       taskId: task.id,
       requested: task.model,
       candidates,
+      // "Run on the default model" means: the provider the task named, else the
+      // one its model name pattern-routes to, else the *run's* default provider.
+      // A fuzzy catalog match (which can be a 20-30% string hit against an
+      // unrelated provider) must never decide this — that surprised users by
+      // offering, say, copilot when the run default is codex.
       fallbackProvider:
-        task.provider ??
-        candidates[0]?.provider ??
-        providerForModel(task.model) ??
-        opts.defaultProvider,
+        task.provider ?? providerForModel(task.model) ?? opts.defaultProvider,
     });
   }
 
@@ -119,6 +131,40 @@ function applyRewrites(
 }
 
 const pct = (score: number): string => `${Math.round(score * 100)}% match`;
+
+const EXIT = "__exit__";
+
+/**
+ * The `select` payload for one unresolved task, built as pure data so the
+ * choice list and starting cursor are testable without opening a prompt.
+ */
+export function buildModelAsk(
+  ask: TaskModelAsk,
+  theme: Theme,
+): {
+  message: string;
+  choices: Array<{ name: string; value: string }>;
+  default?: string;
+} {
+  const fallbackValue = JSON.stringify({ provider: ask.fallbackProvider, model: null });
+  const choices = [
+    ...ask.candidates.map((c) => ({
+      name: `${c.provider} ${c.model}  ${theme.note(`(${pct(c.score)})`)}`,
+      value: JSON.stringify({ provider: c.provider, model: c.model }),
+    })),
+    { name: `Run ${ask.fallbackProvider} on its default model`, value: fallbackValue },
+    { name: "Exit — I'll fix the task list", value: EXIT },
+  ];
+  // Only let a candidate own the cursor when it is a real match; otherwise
+  // start on the default-provider fallback so a coincidental string overlap is
+  // never the pre-selected answer.
+  const strongTop = (ask.candidates[0]?.score ?? 0) >= SUGGEST_THRESHOLD;
+  return {
+    message: `${ask.taskId} names model "${ask.requested}" — no exact match. Use:`,
+    choices,
+    ...(strongTop ? {} : { default: fallbackValue }),
+  };
+}
 
 function unresolvedMessage(asks: TaskModelAsk[]): string {
   const lines = asks.map(
@@ -176,22 +222,8 @@ export async function runModelGate(options: ModelGateOptions): Promise<ModelGate
   // Interactive: one question per unresolved task.
   options.beforePrompt?.();
   for (const ask of plan.asks) {
-    const choices = [
-      ...ask.candidates.map((c) => ({
-        name: `${c.provider} ${c.model}  ${options.theme.note(`(${pct(c.score)})`)}`,
-        value: JSON.stringify({ provider: c.provider, model: c.model }),
-      })),
-      {
-        name: `Run ${ask.fallbackProvider} on its default model`,
-        value: JSON.stringify({ provider: ask.fallbackProvider, model: null }),
-      },
-      { name: "Exit — I'll fix the task list", value: "__exit__" },
-    ];
-    const answer = await select({
-      message: `${ask.taskId} names model "${ask.requested}" — no exact match. Use:`,
-      choices,
-    });
-    if (answer === "__exit__") {
+    const answer = await select(buildModelAsk(ask, options.theme));
+    if (answer === EXIT) {
       return {
         decision: "aborted",
         message: `stopped at the model gate — ${ask.taskId} names "${ask.requested}".`,
