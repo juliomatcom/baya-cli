@@ -1,15 +1,15 @@
 # Testing
 
-> **Maintenance Invariant:** Strategy and commands only. Every new adapter adds an argv snapshot test and a contract test in the SAME commit. Update when test tiers or commands change.
-> **Answers:** How is an orchestrator of paid, nondeterministic LLM CLIs tested? What is the fake-provider harness? Which command runs which tier?
+> **Maintenance Invariant:** Strategy + commands only. Every new adapter adds an argv snapshot test + a contract-test case in the SAME commit. Update when tiers or commands change. Token-optimized: imperative, no prose, no redundancy.
+> **Answers:** How a paid, nondeterministic LLM-CLI orchestrator is tested. The fake-provider harness. Which command runs which tier.
 
-## The core problem
+## Core problem
 
-Every component depends on spawning nondeterministic, rate-limited, paid subprocesses. Untestable unless designed for fakes from day one — which is why the fake provider is built in **P0, before any adapter**, not retrofitted.
+Every component spawns nondeterministic, rate-limited, paid subprocesses. The fake provider is built in **P0, before any adapter** — not retrofitted.
 
 ## Fake-provider harness
 
-`test/fixtures/fake-provider.mjs` — a real executable that any adapter can be pointed at via `.baya/config.json` binary override. It reads a scenario from `BAYA_FAKE_SCRIPT` (a JSON file) and replays it deterministically:
+`test/fixtures/fake-provider.mjs` — a real executable pointed at via `.baya/config.json` binary override. Reads a scenario from `BAYA_FAKE_SCRIPT` (JSON) and replays it deterministically:
 
 ```json
 {
@@ -17,72 +17,66 @@ Every component depends on spawning nondeterministic, rate-limited, paid subproc
     { "delay_ms": 10, "line": "{\"type\":\"session\",\"id\":\"s-1\"}" },
     { "delay_ms": 10, "line": "{\"type\":\"text\",\"text\":\"working\"}" }
   ],
-  "final": {
-    "baya": "1",
-    "kind": "task_result",
-    "task_id": "t1",
-    "status": "ok",
-    "summary": "done",
-    "output": "…"
-  },
+  "final": { "baya": "1", "kind": "task_result", "task_id": "t1", "status": "ok", "summary": "done", "output": "…" },
   "exit_code": 0,
   "on_signal": "exit"
 }
 ```
 
-Scenario knobs it must support — each maps to a real failure mode:
+Required knobs, each mapping to a real failure mode:
 
-| Knob                                 | Exercises                                          |
-| :----------------------------------- | :------------------------------------------------- |
-| `final.status: needs_input`          | Park → bubble → resume path                        |
-| `exit_code: 1` + `stderr`            | Failure → descendants `skipped`                    |
-| `final` = malformed / prose-wrapped  | Result-parsing degradation ladder                  |
-| `hang_ms` + `on_signal: "ignore"`    | SIGINT teardown, grace window, SIGKILL escalation  |
-| `spawn_child: true`                  | **Grandchild reaping** — process-group teardown    |
-| `emit` with unknown event types      | `ProviderEvent.unknown` passthrough                |
-| `emit` lines containing ANSI escapes | ANSI stripping before persist/render               |
-| `error.kind: rate_limit`             | Retry classification and backoff                   |
-| `writes_file`                        | Workspace write-lock serialization                 |
-| `expect_stdin` / `expect_file`       | Prompt-delivery preference chain                   |
-| `by_task` map keyed by task id       | One scenario file scripting a whole multi-task run |
+| Knob | Exercises |
+| :-- | :-- |
+| `final.status: needs_input` | Park → bubble → resume path |
+| `exit_code: 1` + `stderr` | Failure → descendants `skipped` |
+| `final` malformed / prose-wrapped | Result-parsing degradation ladder |
+| `hang_ms` + `on_signal: "ignore"` | SIGINT teardown, grace, SIGKILL escalation |
+| `spawn_child: true` | Grandchild reaping — process-group teardown |
+| `emit` unknown event types | `ProviderEvent.unknown` passthrough |
+| `emit` lines with ANSI escapes | ANSI stripping before persist/render |
+| `error.kind: rate_limit` | Retry classification + backoff |
+| `writes_file` | Workspace write-lock serialization |
+| `expect_stdin` / `expect_file` | Prompt-delivery preference chain |
+| `by_task` map keyed by task id | One scenario file scripting a whole multi-task run |
 
-The fixture also emulates the **codex file-out contract**: when argv carries `-o <path>`, `final` is written to that file rather than to stdout, and the task id is read back from the path (`tasks/<id>/result.json`). That is what lets one scenario file script an entire run with no stdin coordination — and it is why `test/helpers/runCli.ts` can drive the real CLI end to end by pointing `.baya/config.json` at the fixture, exactly as a user would set a binary override.
+Emulates the **codex file-out contract**: when argv carries `-o <path>`, `final` is written there (not stdout) and the task id is read back from `tasks/<id>/result.json`. This lets one scenario file script a whole run with no stdin coordination, and lets `test/helpers/runCli.ts` drive the real CLI end to end via a `.baya/config.json` binary override — exactly as a user would.
 
-**Every engine test runs against this. Zero network, zero LLM, zero cost, deterministic.**
+Every engine test runs against this: zero network, zero LLM, zero cost, deterministic.
 
 ## Tiers
 
-| Tier            | Scope                                                                                                                                      | Command                                 | CI         |
-| :-------------- | :----------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :--------- |
-| **Unit**        | Pure layers: manifest validation, cycle detection, topo order, alias resolution, context budgeting, redaction, **adapter argv snapshots**. | `npm test`                              | ✅         |
-| **Integration** | Full engine against fake providers.                                                                                                        | `npm test`                              | ✅         |
-| **Contract**    | Real binaries, trivial prompt, asserts flag surfaces still hold.                                                                           | `BAYA_CONTRACT=1 npm run test:contract` | ❌ offline |
+| Tier | Scope | Command | CI |
+| :-- | :-- | :-- | :-- |
+| **Unit** | Pure layers: manifest validation, cycle detection, topo order, model catalog + alias resolution, context budgeting, redaction, failure classifier, **adapter argv snapshots**. | `npm test` | ✅ |
+| **Integration** | Full engine against fake providers. | `npm test` | ✅ |
+| **Contract** | Real binaries, trivial prompt, asserts flag surfaces still hold; unresolved binary ⇒ skipped. | `npm run test:contract` (sets `BAYA_CONTRACT=1`) | ❌ offline |
 
-Contract tests are the defense against provider drift — exactly the class of bug that made the original spec's universal `-p` assumption wrong (`codex -p` = `--profile`). Run before every release; never in offline CI.
+Run tests via `npm test`, never bare `npx jest` (needs `--experimental-vm-modules`). Contract tier = the defense against provider drift (the class of bug that made the spec's universal `-p` wrong: `codex -p` = `--profile`). Run before every release; never in offline CI. Config `jest.contract.config.js`, excluded from `jest.config.js` via `testPathIgnorePatterns`.
 
 ## Integration cases that must exist
 
-1. **Fan-out/fan-in** — 1→3 parallel→1 join; assert concurrency never exceeds budgets and the join sees all three contexts.
-2. **Failure isolation** — mid-graph failure marks only descendants `skipped`; a parallel independent branch still reaches `succeeded`; exit code `1`.
-3. **Park and resume** — `needs_input` parks one node, other branches keep running, an injected answer resumes the session, run completes `0`.
-4. **SIGINT teardown** — start long-running fakes that spawn grandchildren, send SIGINT, assert exit `130` and **zero surviving pids** (verify via `ps`, not just the promise).
-5. **Write serialization** — two `writes: true` tasks with no dependency between them never overlap; two readers do.
-6. **Context budgeting** — a 200 KB upstream output yields a `link-only` context entry with `inline: null` and a valid `output_path`.
-7. **Malformed plan recovery** — planner returns a cycle, then dangling deps, then valid; assert the repair path and the linear fallback.
-8. **Result degradation** — prose-wrapped JSON, fenced JSON, and garbage each land on the right rung of the ladder.
-9. **Non-TTY** — `needs_input` with no TTY fails cleanly rather than hanging. **A hang here is the worst failure mode in the system.**
+1. **Fan-out/fan-in** — 1→3 parallel→1 join; concurrency never exceeds budgets; the join sees all three contexts.
+2. **Failure isolation** — mid-graph failure marks only descendants `skipped`; a parallel independent branch still `succeeds`; exit `1`.
+3. **Park and resume** — `needs_input` parks one node, other branches run, injected answer resumes the session, run completes `0`.
+4. **SIGINT teardown** — long fakes spawning grandchildren; SIGINT ⇒ exit `130` + **zero surviving pids** (verify via `ps`, not the promise).
+5. **Write serialization** — two independent `writes:true` tasks never overlap; two readers do.
+6. **Context budgeting** — 200 KB upstream ⇒ `link-only` entry, `inline: null`, valid `output_path`.
+7. **Malformed plan recovery** — planner returns cycle → dangling → valid; assert the repair path + linear fallback.
+8. **Result degradation** — prose-wrapped, fenced, garbage each land on the right rung.
+9. **Non-TTY** — `needs_input` with no TTY fails cleanly, never hangs (a hang here is the worst failure mode).
 10. **Plan round-trip** — `--plan-out` then `--plan-in` produces an identical execution.
+11. **Model gate** — a task-named model resolves via catalog/alias; an unresolvable name aborts (exit `2`), never defaults.
 
 ## Color in tests
 
-- **All snapshot tests run with color forced off** (`FORCE_COLOR=0`, chalk level `0`, set in Jest global setup). Colored snapshots are unstable across CI/TTY environments and unreadable in diffs.
-- A dedicated test asserts the inverse: with color forced _on_, `theme` tokens emit the expected ANSI and every status still carries its glyph.
-- A test asserts `--json` output parses as JSON **with color forced on** — the regression guard for ANSI leaking into machine-readable output.
-- A test feeds ANSI escape sequences through the fake provider's output and asserts they are stripped from `events.jsonl`, `stdout.log`, and the rendered display.
+- **All snapshot tests run with color forced off** (`FORCE_COLOR=0`, chalk level `0`, Jest global setup).
+- A test asserts the inverse: color forced *on* ⇒ `theme` tokens emit expected ANSI + every status carries its glyph.
+- A test asserts `--json` output parses as JSON with color forced on — regression guard for ANSI leaking into machine output.
+- A test feeds ANSI escapes through the fake provider and asserts they are stripped from `events.jsonl`, `stdout.log`, and the display.
 
 ## Conventions
 
-- Jest with `@swc/jest` (see `conventions.md` for the ESM caveat). Coverage gate on `src/manifest`, `src/graph`, `src/context` — the pure layers — at 90% statements/lines/functions. The branch floor is lower and deliberately so: `noUncheckedIndexedAccess` forces a `?? []` on every `Map.get`, and those arms describe states earlier validation stages have already ruled out. Chasing them would mean writing tests for impossible inputs.
+- Jest + `@swc/jest` (ESM caveat: `conventions.md`). Coverage gate on `src/manifest`/`src/graph`/`src/context` at 90% statements/lines/functions. Branch floor lower by design — `noUncheckedIndexedAccess` forces `?? []` on every `Map.get`, arms describing states earlier validation already ruled out.
 - No test touches the network or a real provider outside the contract tier.
 - No test writes outside its own `tmp` dir; `.baya/` roots are per-test temp dirs.
 - Every bug fix lands with a failing-first regression test.

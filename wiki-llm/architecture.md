@@ -1,7 +1,7 @@
 # Architecture
 
-> **Maintenance Invariant:** Structure and data flow only. No flag reference (see `cli.md`), no schemas (see `protocol.md`). Update in the SAME commit as any module boundary change.
-> **Answers:** What are the layers, how does data flow end to end, what is the task state machine, where does each concern live on disk?
+> **Maintenance Invariant:** Structure + data flow only. No flag reference (`cli.md`), no schemas (`protocol.md`). Update in the SAME commit as any module boundary change. Token-optimized: imperative, no prose, no redundancy.
+> **Answers:** The layers. End-to-end data flow. Task state machine. Where each concern lives on disk.
 
 ## Layers
 
@@ -25,9 +25,11 @@
 ```
 tasks.md
    │
-   ├─(1) planner provider ──► Manifest JSON ──►(2) validate ──► repair ×2 ──► linear fallback
+   ├─(1) planner provider ──► Manifest JSON ──►(2) validate ──► repair ×1 ──► linear fallback
    │                                                │
    │                                          (3) topo sort
+   │                                                │
+   │                            model gate: resolve task-named models vs catalog
    │                                                │
    │                                    ┌───── dry-run gate ─────┐
    │                                    │  render DAG, confirm   │

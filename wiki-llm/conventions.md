@@ -1,7 +1,7 @@
 # Conventions
 
-> **Maintenance Invariant:** Repo rules, layout, and toolchain. Hard rules are non-negotiable; changing one requires updating the lint rule that enforces it in the SAME commit.
-> **Answers:** How is the repo laid out? What toolchain and settings? What are the hard rules and the definition of done?
+> **Maintenance Invariant:** Repo rules, layout, toolchain. Hard rules non-negotiable; changing one requires updating its lint rule in the SAME commit. Token-optimized: imperative, no prose, no redundancy.
+> **Answers:** Repo layout. Toolchain + settings. Hard rules. Definition of done.
 
 ## Toolchain
 
@@ -17,7 +17,7 @@
 | Package        | **`baya-cli`** on npm (`baya` itself is taken by an unrelated package)                                                                                                                                   |
 | Bin            | `baya` → `dist/cli/index.js`                                                                                                                                                                             |
 
-> **Known friction: Jest + ESM.** Jest's ESM support requires `--experimental-vm-modules` and trips on `.js` extension resolution under `NodeNext`. **`chalk` v6 is ESM-only and is the usual thing that detonates here** — include it in the spike, not later. Settle in M0.2: `@swc/jest` + `extensionsToTreatAsEsm` + a `moduleNameMapper` stripping `.js` from relative imports.
+> **Jest + ESM friction (settled M0.2):** needs `--experimental-vm-modules` (run tests via `npm test`, never bare `npx jest`); trips on `.js` extension resolution under `NodeNext`; `chalk` v6 is ESM-only and detonates first. Fix: `@swc/jest` + `extensionsToTreatAsEsm` + `moduleNameMapper` stripping `.js` from relative imports.
 
 ## Layout
 
@@ -73,7 +73,7 @@ specs/001/     point-in-time refinement record
 - [ ] `npm run typecheck && npm run lint && npm test` clean.
 - [ ] New behavior has a test; bug fixes have a failing-first regression test.
 - [ ] No network or real-provider I/O outside the contract tier.
-- [ ] Affected `wiki-llm/` page updated in the same commit; new page ⇒ `index.md` row.
+- [ ] Affected `wiki-llm/` page updated + run through the `token-optimize` skill (AGENTS.md §0) in the same commit; new page ⇒ `index.md` row.
 - [ ] Comments only where the WHY is unrecoverable from the code.
 - [ ] Formatter run before commit.
 
@@ -81,7 +81,7 @@ specs/001/     point-in-time refinement record
 
 | Location     | Holds                                                                                                                                        |
 | :----------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wiki-llm/`  | **Source of truth.** Architecture, protocol, provider surfaces, commands, runbooks, conventions. Kept current.                               |
+| `wiki-llm/`  | **Source of truth.** Architecture, protocol, provider surfaces, commands, runbooks, conventions. Kept current; every page token-optimized (AGENTS.md §0).                        |
 | `specs/001/` | Point-in-time record of this refinement: what the original spec got wrong, the refined target, the phased plan. Not updated as code evolves. |
 | `README.md`  | Only: what Baya is, quickstart, repo layout, pointer to `wiki-llm/index.md`. No runbooks, no CLI reference.                                  |
 | `AGENTS.md`  | Agent operating rules.                                                                                                                       |

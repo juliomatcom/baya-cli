@@ -1,9 +1,9 @@
 # Logging
 
-> **Maintenance Invariant:** The event vocabulary is a contract. Adding an emit site adds its event name to the table below in the SAME commit. Names are `noun.verb`, past tense, never renamed once shipped.
-> **Answers:** What does Baya record about its own behavior, where does it go, and what is the full event vocabulary?
+> **Maintenance Invariant:** The event vocabulary is a contract. A new emit site adds its event name to the table below in the SAME commit. Names `noun.verb`, past tense, never renamed once shipped. Token-optimized: imperative, no prose, no redundancy.
+> **Answers:** What Baya records about itself, where it goes, the full event vocabulary.
 
-**Every internal move is logged.** Reading the Markdown, calling the planner, spawning a CLI, each normalized provider event, every state transition, every signal. If Baya did it, there is a line for it.
+Every internal move is logged: source read, planner call, CLI spawn, each normalized provider event, every state transition, every signal.
 
 ## Two sinks, different volumes
 
@@ -12,11 +12,7 @@
 | `.baya/runs/<runId>/baya.jsonl` | **`trace` — everything**                                          | JSONL                          | Forensics. Nothing is filtered out here.                                 |
 | stderr                          | `info` (`--log-level`; `--verbose` ⇒ `debug`, `--quiet` ⇒ `warn`) | rendered via `src/ui/theme.ts` | A readable narrative while it works, **including live provider output**. |
 
-The file always gets the full stream. The terminal gets a filtered view. That is how "log every internal move" coexists with a usable display.
-
-**Never stdout** — stdout carries only the `--json` report, so `baya … --json | jq` stays valid.
-
-This is distinct from the per-task `events.jsonl`, which holds _provider transport_ events. `baya.jsonl` is the orchestrator's own reasoning.
+File always gets the full stream; terminal gets a filtered view. **Never stdout** — stdout carries only the `--json` report (`baya … --json | jq` stays valid). Distinct from per-task `events.jsonl` (provider transport events); `baya.jsonl` is the orchestrator's own trace.
 
 ## Line shape
 
@@ -37,9 +33,9 @@ This is distinct from the per-task `events.jsonl`, which holds _provider transpo
 }
 ```
 
-Every line carries **`run_id`**, so concurrent Baya processes stay distinguishable when logs are read together.
+Every line carries `run_id` — concurrent Baya processes stay distinguishable.
 
-**Redaction is mandatory** (`conventions.md` §9): secret-shaped strings are scrubbed, and a prompt is never inlined into `argv` — it is elided to `prompt_bytes` with a pointer to `request.json`. Logs are pasted into issues; prompts contain source code.
+**Redaction mandatory** (`conventions.md` §9): secret-shaped strings scrubbed; a prompt is never inlined into `argv` — elided to `prompt_bytes` + a pointer to `request.json` (logs get pasted into issues; prompts contain source).
 
 ## Event vocabulary
 
@@ -61,7 +57,7 @@ Every line carries **`run_id`**, so concurrent Baya processes stay distinguishab
 
 ## Provider output bubbles up as `info`
 
-**Everything a provider CLI emits reaches the main process and is surfaced at `info`.** The child's work is not a black box between spawn and result.
+Everything a provider CLI emits reaches the main process, surfaced at `info` — the child's work is never a black box between spawn and result.
 
 | Normalized event         | Log event                                    | Level          | Terminal rendering                                                          |
 | :----------------------- | :------------------------------------------- | :------------- | :-------------------------------------------------------------------------- |
@@ -91,9 +87,9 @@ Every line carries **`run_id`**, so concurrent Baya processes stay distinguishab
 
 `resume.requested` · `resume.state.loaded` · `resume.source.stale` (sha256 mismatch) · `resume.planned` (re-run vs kept) · `lock.acquired` · `lock.refused` (holder pid/run/verdict) · `lock.reclaimed` (stale) · `lock.heartbeat_failed` (`debug`)
 
-The lock trio fires on every `run`, not only on `resume` — the directory lock is taken at startup (M1.7h), before planning, so a refused run spends nothing.
+The lock trio fires on every `run`, not only `resume` — the directory lock is taken at startup (M1.7h), before planning, so a refused run spends nothing.
 
-> `provider.event` and `state.checkpointed` are the high-volume pair. They stay in the file at `debug`/`trace` and reach the terminal only under `--verbose`.
+High-volume pair: `provider.event` + `state.checkpointed` — file only at `debug`/`trace`, terminal only under `--verbose`.
 
 ## Rules
 

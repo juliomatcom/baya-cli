@@ -20,8 +20,14 @@ Baya is a local multi-provider CLI orchestrator: freeform Markdown → LLM-plann
 
 ## Status
 
-**M1 walking skeleton landed** on top of the M0 foundation. `baya ./tasks.md` now plans with `codex`, renders the DAG, confirms, runs the tasks sequentially, streams provider output live, writes every artifact, and prints a report with an aggregated **Flagged** section. Also in: the zod protocol schemas, manifest validation with cycle paths, the pure graph layer, provider resolution + `baya doctor`, the codex adapter, the context bus (`link-only`/`truncate`), `state.json` checkpointing, the directory lock, layered config + first-run wizard, and `ora` progress. Sequential by design — parallelism, retries, and resume are M2. Refinement record: [../specs/001/](../specs/001/) — `00-validation.md` (what was wrong with the original spec), `01-spec.md` (refined spec v2), `02-plan.md` (phased task plan).
+Landed: M0 foundation, M1 walking skeleton, M3 provider breadth. `baya ./tasks.md` plans → renders DAG → confirms → resolves task-named models → runs sequentially → streams provider output → writes artifacts → prints report with **Flagged** section.
+
+- Protocol: zod schemas, manifest validation (cycle paths), pure graph layer, degradation ladder (native/verbatim/fenced/synthesized).
+- Providers: `codex`/`claude`/`opencode`/`copilot` adapters, registry + `baya doctor`, model catalog + resolution + model gate, failure classifier, contract tier (`BAYA_CONTRACT=1`).
+- Runtime: context bus (`link-only`/`truncate`), `state.json` checkpointing, directory lock, layered config + wizard + `modelAliases`/`modelCatalog`, `ora` progress.
+
+Sequential still — parallelism, retries, resume, signal teardown are M2. Plan + build order: [../specs/001/02-plan.md](../specs/001/02-plan.md). Refinement record: [../specs/001/](../specs/001/) (`00-validation.md`, `01-spec.md`, `02-plan.md`).
 
 ## Authoring
 
-Every page here is authored and compressed with the `token-optimize` skill (`.agents/skills/token-optimize/SKILL.md`, `/token-optimize`), mandated by `AGENTS.md` §0. Run it on any new or edited page before the commit that ships it. Keep the Maintenance Invariant header and the `> **Answers:**` routing line.
+Every page: authored/compressed via the `token-optimize` skill (`/token-optimize`), mandated by `AGENTS.md` §0. Run it on any new/edited page before commit. Keep the Maintenance Invariant header and `> **Answers:**` line.
