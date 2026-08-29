@@ -20,9 +20,6 @@ import type {
  *
  * ⚠️ No working-directory flag exists — `--add-dir` only *widens* access. The
  * working directory is the spawn `cwd` and nothing else.
- * ⚠️ The `--permission-mode` map below is UNVERIFIED pending the contract tier
- * (M3.7). Flags are real; which mode yields the cleanest non-interactive run is
- * not yet measured.
  */
 
 /** Drop the `$schema` meta-pointer claude's validator cannot resolve; keep the rest. */
@@ -33,13 +30,40 @@ function withoutSchemaKey(schemaContents: string): Record<string, unknown> {
   return rest;
 }
 
-/** Non-interactive `-p` cannot prompt, so the mode has to pre-decide everything. */
+/**
+ * The editing tools, withheld from a task that declared it writes nothing.
+ * Bash is deliberately NOT in this list — see `permissionModeFor`.
+ */
+const EDIT_TOOLS = ["Write", "Edit", "NotebookEdit"] as const;
+
+/**
+ * Non-interactive `-p` cannot prompt, so the mode has to pre-decide everything
+ * — and both halves of the old map pre-decided wrong.
+ *
+ * `writes` says whether a task may **mutate the tree**, not whether it may act
+ * at all: a task that runs the suite and reports back writes nothing and still
+ * needs Bash. codex has always read the bit that way — its `read-only` sandbox
+ * executes commands freely and blocks mutation at the OS level — so the two
+ * providers disagreed about what the same manifest meant.
+ *
+ * - `acceptEdits` pre-approves file edits *only*; Bash still wants a prompt
+ *   `-p` has nobody to answer, so every command was denied. Measured: a real
+ *   12-task run logged 54 `Bash` denials — `npm test`, `tsc`, bare `grep` —
+ *   and shipped unverified work with an apology in the summary.
+ * - `plan` is worse: it refuses every non-readonly tool, so a `writes:false`
+ *   task could not run a test or a linter, and plan mode bends the output into
+ *   a plan proposal on top of that.
+ *
+ * Hence `auto` for both, with `writes:false` enforced by removing the editing
+ * tools rather than by muzzling the session.
+ *
+ * ⚠️ That guard is narrower than codex's. `read-only` is an OS sandbox; this is
+ * a tool withdrawal, so a `writes:false` task can still mutate the tree through
+ * a shell redirect. `auto` classifies those calls, but the enforcement is not
+ * equivalent — a task that must not touch the tree belongs on codex.
+ */
 function permissionModeFor(input: BuildRunInput): string {
-  if (input.dangerouslyAllowAll) return "bypassPermissions";
-  // `plan` is the only mode that actually prevents file writes; a read-only
-  // task gets it so a misclassified `writes:false` fails safe instead of
-  // silently modifying the tree the way codex's `read-only` sandbox blocks.
-  return input.task.writes ? "acceptEdits" : "plan";
+  return input.dangerouslyAllowAll ? "bypassPermissions" : "auto";
 }
 
 /** Flags shared by `-p` and `--resume`, in a fixed order for the snapshot. */
@@ -57,6 +81,11 @@ function commonFlags(input: BuildRunInput): string[] {
     "--permission-mode",
     permissionModeFor(input),
   ];
+  // Comma-joined, not spread: `--disallowed-tools` is variadic and would
+  // otherwise swallow whatever flag follows it.
+  if (!input.task.writes && !input.dangerouslyAllowAll) {
+    argv.push("--disallowed-tools", EDIT_TOOLS.join(","));
+  }
   if (input.model !== null) argv.push("--model", input.model);
   // `--session-id` pre-assigns the id so resume needs no event parsing (M4.1).
   if (input.sessionId !== undefined) argv.push("--session-id", input.sessionId);
@@ -123,6 +152,33 @@ function deniedTools(obj: ClaudeResult): string[] {
     }
     return String(entry);
   });
+}
+
+/**
+ * A result that parsed is still a result — but a task refused its tools along
+ * the way did work it could not verify, and that has to reach the report
+ * rather than only the prose the model wrote about it. The failure path in
+ * `extractResult` fires only when *nothing* parsed, so without this a denied
+ * run reports a clean `succeeded` and the caveat lives in a summary nobody
+ * greps. `warn` is precisely the "done, but you should know…" channel.
+ */
+function withDenialNote(result: TaskResult, denied: string[]): TaskResult {
+  if (denied.length === 0) return result;
+  const counts = new Map<string, number>();
+  for (const name of denied) counts.set(name, (counts.get(name) ?? 0) + 1);
+  const listed = [...counts.entries()]
+    .map(([name, n]) => (n > 1 ? `${name} \u00d7${n}` : name))
+    .join(", ");
+  return {
+    ...result,
+    notes: [
+      ...result.notes,
+      {
+        severity: "warn",
+        message: `claude was denied permission for: ${listed}. Whatever the task could not run, it could not verify.`,
+      },
+    ],
+  };
 }
 
 export const claudeAdapter: ProviderAdapter = {
@@ -200,18 +256,20 @@ export const claudeAdapter: ProviderAdapter = {
     const obj = lastFinalObject(ctx.events);
 
     if (obj) {
+      // Read before the rungs, not after: a denial is news on a *successful*
+      // result too, and both rungs below return early.
+      const denied = deniedTools(obj);
       // Rung 1: the schema-enforced object claude parsed for us.
       if (obj.structured_output !== null && typeof obj.structured_output === "object") {
         const parsed = parseResultJson(ctx.taskId, JSON.stringify(obj.structured_output));
-        if (parsed) return parsed;
+        if (parsed) return withDenialNote(parsed, denied);
       }
       // Rungs 2–3: `.result` is the same payload as a string — often clean
       // JSON, sometimes prose around a fenced block.
       if (typeof obj.result === "string") {
         const fromText = extractResultFromText(ctx.taskId, obj.result);
-        if (fromText) return fromText.result;
+        if (fromText) return withDenialNote(fromText.result, denied);
       }
-      const denied = deniedTools(obj);
       if (denied.length > 0) {
         return synthesizeFailure(
           ctx.taskId,
