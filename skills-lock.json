@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/git-commit/SKILL.md",
       "computedHash": "2607fc60629b82b257136dd2a7a373f0a4466c0b49df7746d845d59313c99b21"
+    },
+    "token-optimize": {
+      "source": "local:apps/tapescan/.agents/skills/token-optimize",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/token-optimize/SKILL.md",
+      "computedHash": "7cb0d6df3ae969bc508548ff812929ad38ced38028b9a10159be6e519768de86"
     }
   }
 }
