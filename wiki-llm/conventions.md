@@ -12,7 +12,7 @@
 | Tests          | **Jest** + `@swc/jest`                                                                                                                                                                                   |
 | Validation     | `zod` — one schema per envelope, `z.infer` for types. Never hand-write a type that a schema already implies.                                                                                             |
 | Terminal color | **`chalk` v6** (ESM-only — matches our `type: module`). Used _only_ through `src/ui/theme.ts`.                                                                                                           |
-| Prompts        | **`@inquirer/prompts` v8** (ESM; modular `select`/`search`/`input`). Used _only_ in `src/config/wizard.ts` (setup) and `src/ui/confirm.ts` (the plan gate); `src/recovery/prompt.ts` joins them at M2.9. |
+| Prompts        | **`@inquirer/prompts` v8** (ESM; modular `select`/`search`/`input`). Used _only_ in `src/config/wizard.ts` (setup), `src/ui/confirm.ts` (the plan gate), and `src/ui/model-gate.ts` (unresolved-model picker); `src/recovery/prompt.ts` joins them at M2.9. |
 | Progress       | **`ora` v9** (ESM). Used _only_ through `src/ui/progress.ts`.                                                                                                                                            |
 | Package        | **`baya-cli`** on npm (`baya` itself is taken by an unrelated package)                                                                                                                                   |
 | Bin            | `baya` → `dist/cli/index.js`                                                                                                                                                                             |
@@ -56,7 +56,7 @@ specs/001/     point-in-time refinement record
 8. **`state.json` writes are atomic** (tmp + `rename`).
 9. **No raw `console.*`** — use the shared logger. Redact secret-shaped strings before any write.
 10. **Push logic into the pure layers** (`manifest`, `graph`, `context`) where it is cheap to test.
-11. **Each terminal-owning library has a single importer**, lint-enforced by `no-restricted-imports`: `chalk` only in `src/ui/theme.ts`, `ora` only in `src/ui/progress.ts`, `@inquirer/prompts` only in `src/config/wizard.ts` and `src/ui/confirm.ts`. Everywhere else uses semantic tokens (`theme.ok`, `theme.taskId`). A bare `chalk.green` outside `theme.ts` is a lint error.
+11. **Each terminal-owning library has a single importer**, lint-enforced by `no-restricted-imports`: `chalk` only in `src/ui/theme.ts`, `ora` only in `src/ui/progress.ts`, `@inquirer/prompts` only in `src/config/wizard.ts`, `src/ui/confirm.ts`, and `src/ui/model-gate.ts`. Everywhere else uses semantic tokens (`theme.ok`, `theme.taskId`). A bare `chalk.green` outside `theme.ts` is a lint error.
 12. **Color never enters machine-readable output.** `--json`, `report.json`, `result.json`, `events.jsonl`, `stdout.log` are always ANSI-free — forced, not inferred from TTY detection.
 13. **No test may open an interactive prompt.** Wizard logic lives in pure choice-builder functions; `BAYA_NO_INPUT=1` and `--default-provider` bypass the prompt entirely.
 14. **`state.json` is written before an action is taken, never after** — a crash must never lose a transition.

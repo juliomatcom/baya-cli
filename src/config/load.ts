@@ -155,6 +155,8 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
     defaults: { ...BUILTIN_CONFIG.defaults },
     planner: { ...BUILTIN_CONFIG.planner },
     providers: {},
+    modelAliases: {},
+    modelCatalog: {},
   };
   const sources: Record<string, LayerName> = {
     "defaults.provider": "built-in",
@@ -183,6 +185,19 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
       for (const key of Object.keys(settings)) {
         sources[`providers.${providerId}.${key}`] = layer.name;
       }
+    }
+    for (const [name, target] of Object.entries(layer.values.modelAliases ?? {})) {
+      config.modelAliases[name] = target;
+      sources[`modelAliases.${name}`] = layer.name;
+    }
+    for (const [id, models] of Object.entries(layer.values.modelCatalog ?? {})) {
+      const providerId = id as ProviderId;
+      const byId = new Map(
+        (config.modelCatalog[providerId] ?? []).map((model) => [model.id, model]),
+      );
+      for (const model of models) byId.set(model.id, model);
+      config.modelCatalog[providerId] = [...byId.values()];
+      sources[`modelCatalog.${providerId}`] = layer.name;
     }
   }
 
@@ -241,6 +256,17 @@ export function setConfigValue(
   const path = userConfigPath(env);
   const current = readConfigFile(path) ?? {};
   const [section, field] = key.split(".");
+
+  // `baya config set modelAliases.luna gpt-5.6-luna` — or `... null` to drop it.
+  if (section === "modelAliases" && field) {
+    const next: ConfigFile = { ...current, modelAliases: { ...current.modelAliases } };
+    const map = next.modelAliases as Record<string, string>;
+    if (value === "null") delete map[field];
+    else map[field] = value;
+    if (Object.keys(map).length === 0) delete next.modelAliases;
+    writeConfigFile(path, next);
+    return path;
+  }
 
   if ((section !== "defaults" && section !== "planner") || !field) {
     throw new ConfigError(path, `unknown config key "${key}"`);

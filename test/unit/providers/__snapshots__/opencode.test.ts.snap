@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`opencodeAdapter.buildRun argv builds a resume around the captured session id 1`] = `
+[
+  "/home/u/.opencode/bin/opencode",
+  "run",
+  "--format",
+  "json",
+  "--dir",
+  "/work",
+  "-s",
+  "ses_abc",
+  "-f",
+  "/work/.baya/runs/r1/tasks/gen-schema/prompt.md",
+]
+`;
+
+exports[`opencodeAdapter.buildRun argv matches the recorded surface 1`] = `
+[
+  "/home/u/.opencode/bin/opencode",
+  "run",
+  "--format",
+  "json",
+  "--dir",
+  "/work",
+  "-f",
+  "/work/.baya/runs/r1/tasks/gen-schema/prompt.md",
+]
+`;

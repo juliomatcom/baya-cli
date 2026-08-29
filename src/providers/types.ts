@@ -36,8 +36,13 @@ export interface BuildRunInput {
   model: string | null;
   /** Working directory for the spawn; also the value of a `cwd` flag where one exists. */
   cwd: string;
-  /** `.baya/schema/task_result.schema.json`, for providers that enforce a schema. */
+  /** `.baya/schema/task_result.schema.json`, for providers that take a schema **file**. */
   schemaPath: string;
+  /**
+   * The schema document itself, for providers that take it **inline** (`claude
+   * --json-schema` rejects a file path). Same contents as `schemaPath` names.
+   */
+  schemaContents: string;
   /** Where a `schema-file` provider should leave its conforming JSON. */
   resultFile: string;
   /** The rendered prompt. Delivered by file, stdin, or argv per capabilities. */

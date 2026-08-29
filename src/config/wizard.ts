@@ -1,6 +1,6 @@
 import { select, input } from "@inquirer/prompts";
 import type { ProviderId } from "../manifest/index.js";
-import type { ProviderStatus } from "../providers/index.js";
+import type { Catalog, CatalogModel, ProviderStatus } from "../providers/index.js";
 import { writeConfigFile } from "./load.js";
 
 /**
@@ -25,15 +25,20 @@ export const PROVIDER_DEFAULT_MODEL = "__provider_default__";
 export const MODEL_MANUAL_ENTRY = "__manual__";
 
 /**
- * Curated per-provider model lists, filled in as each adapter lands (M3.5b).
+ * Curated per-provider model lists (M3.5b), filled in as each adapter lands.
  * Deliberately sparse: model ids churn faster than this tool ships, and an
  * out-of-date suggestion is worse than none — "provider default" always works.
- * `opencode` stays empty because its list is enumerated live.
+ *
+ * `claude` lists its **stable aliases** (they never churn — the CLI resolves
+ * them to whatever is current). `codex` has no such aliases and its ids carry
+ * version+date suffixes, so it stays empty. `opencode` is enumerated live from
+ * `opencode models`. `copilot` exposes `auto` plus a couple of stable family
+ * names.
  */
 export const CURATED_MODELS: Record<string, string[]> = {
   codex: [],
   claude: ["opus", "sonnet", "haiku"],
-  copilot: ["auto"],
+  copilot: ["auto", "claude-sonnet-4.5", "gpt-5"],
   opencode: [],
 };
 
@@ -74,10 +79,13 @@ export function buildProviderChoices(statuses: ProviderStatus[]): WizardChoice[]
  */
 export function buildModelChoices(
   provider: ProviderId,
-  enumerated: string[] = [],
+  models: Array<string | CatalogModel> = [],
 ): WizardChoice[] {
-  const suggestions =
-    enumerated.length > 0 ? enumerated : (CURATED_MODELS[provider] ?? []);
+  const source: Array<string | CatalogModel> =
+    models.length > 0 ? models : (CURATED_MODELS[provider] ?? []);
+  const entries = source.map((m) =>
+    typeof m === "string" ? { id: m, description: "" } : m,
+  );
   return [
     {
       value: PROVIDER_DEFAULT_MODEL,
@@ -85,9 +93,10 @@ export function buildModelChoices(
       description: "Let the CLI pick. Model ids churn; this never goes stale.",
       disabled: false,
     },
-    ...suggestions.map((model) => ({
-      value: model,
-      name: model,
+    ...entries.map((model) => ({
+      value: model.id,
+      name: model.id,
+      ...(model.description ? { description: model.description } : {}),
       disabled: false as const,
     })),
     {
@@ -170,7 +179,13 @@ export interface WizardResult {
 export interface RunWizardOptions {
   statuses: ProviderStatus[];
   configPath: string;
-  /** Live model list where the provider can supply one (`opencode models`). */
+  /**
+   * The merged catalog (built-in lists + live `opencode models`). When given,
+   * it drives the model picker *and* is cached into the user config so later
+   * runs resolve names without a probe.
+   */
+  catalog?: Catalog;
+  /** Live model list where the provider can supply one — used only if `catalog` is absent. */
   enumerateModels?: (provider: ProviderId) => Promise<string[]>;
 }
 
@@ -185,10 +200,12 @@ export async function runWizard(options: RunWizardOptions): Promise<WizardResult
     choices: providerChoices,
   })) as ProviderId;
 
-  const enumerated = (await options.enumerateModels?.(provider)) ?? [];
+  const fromCatalog = options.catalog?.[provider];
+  const models: Array<string | CatalogModel> =
+    fromCatalog ?? (await options.enumerateModels?.(provider)) ?? [];
   const picked = await select({
     message: `Default model for ${provider}`,
-    choices: buildModelChoices(provider, enumerated),
+    choices: buildModelChoices(provider, models),
   });
 
   let model: string | null = null;
@@ -202,6 +219,7 @@ export async function runWizard(options: RunWizardOptions): Promise<WizardResult
   writeConfigFile(options.configPath, {
     defaults: { provider, model },
     planner: { provider, model },
+    ...(options.catalog ? { modelCatalog: options.catalog } : {}),
   });
 
   return { provider, model, configPath: options.configPath };

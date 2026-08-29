@@ -49,7 +49,7 @@ export interface ParsedArgs {
   /** The Markdown path for `run`/`plan`. */
   file: string | null;
   /** `--show` | `path` | `set` | wizard (undefined). */
-  configAction?: "show" | "path" | "set";
+  configAction?: "show" | "path" | "set" | "refresh-models";
   configKey?: string;
   configValue?: string;
   flags: RunFlags;
@@ -221,7 +221,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     const action = rest[0];
     if (action === "--show" || action === "show") parsed.configAction = "show";
     else if (action === "path") parsed.configAction = "path";
-    else if (action === "set") {
+    else if (action === "refresh-models" || action === "refresh") {
+      parsed.configAction = "refresh-models";
+    } else if (action === "set") {
       parsed.configAction = "set";
       const key = rest[1];
       const value = rest[2];

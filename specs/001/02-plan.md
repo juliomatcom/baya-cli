@@ -12,13 +12,15 @@
 | :-------------------------- | -----: | -----: | :-------------- |
 | M0 Foundation               |      8 |      8 | ████████        |
 | M1 Walking skeleton         |     20 |     20 | ████████        |
-| M2 Concurrency & resilience |      0 |     10 | ░░░░░░░░        |
-| M3 Provider breadth         |      0 |      8 | ░░░░░░░░        |
+| M3 Provider breadth         |      7 |      8 | ███████░        |
+| M2 Concurrency & resilience |      2 |     10 | ██░░░░░░        |
 | M4 Escalation               |      0 |      6 | ░░░░░░░░        |
 | M5 Hardening                |      — |      — | prose checklist |
-| **Total**                   | **28** | **52** |                 |
+| **Total**                   | **37** | **52** |                 |
 
-**Next up:** M1 is complete — `baya ./tasks.md` runs end to end on `codex`, sequentially. M2 begins with `M2.1` the parallel scheduler, then `M2.2` the writer semaphore and `M2.3` failure semantics under concurrency.
+**Reprioritized 2026-08-29 — M3 before M2.** Baya's value proposition is "a different CLI per task"; shipping on `codex` alone is an MVP of the engine, not of the product. Breadth now leads; concurrency and resume widen it afterward. Task ids are unchanged — only the execution order moved. See **Execution order** below.
+
+**Next up:** M3 is landed bar `M3.4` (re-probe `copilot` — blocked on quota reset). All four adapters are registered and unit-covered; `codex` + `claude` run end to end, `opencode` + `copilot` await a local environment fix and are settled by `npm run test:contract`. Then **`M2.4` signal teardown** — the gate before calling this an MVP.
 
 ## Scope tiers
 
@@ -27,6 +29,23 @@
 | 4 providers, JSON protocol, planner + validation + fallback, parallel scheduling, context bus (`link-only`/`truncate`), failure isolation, park & resume, SIGINT teardown, **one Baya per directory**, `doctor`, **layered config + first-run wizard**, **`ora` progress**, **`state.json` + `baya resume`/`runs` + recovery prompt**, `--plan-out/--plan-in` | worktree isolation · `summarize` context · plan cache · `--edit` · repair round-trip for malformed results · cold resume · adaptive rate-limit backoff · `gemini` |
 
 ---
+
+## Execution order
+
+The milestone sections below are numbered by theme, not by build order. Since the 2026-08-29 reprioritization the sequence is:
+
+| Step | Task                                                                                                | Milestone | Why here                                                                                                                                                                                                                      |
+| :--: | :-------------------------------------------------------------------------------------------------- | :-------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  1   | **M2.6** result degradation ladder (rungs 2–3)                                                      | M2        | Hard prerequisite: `opencode` and `copilot` enforce no schema, so without `verbatim`/`fenced` extraction they cannot return a result at all. The `native` and `synthesized` rungs already exist in `src/providers/result.ts`. |
+|  2   | **M3.3** claude adapter                                                                             | M3        | Verified surface; `claude` is on the reference machine and runs today. First real second provider — a genuine two-CLI run.                                                                                                    |
+|  3   | **M3.1** opencode adapter                                                                           | M3        | Exercises the file-delivery path (`-f`), proving the abstraction against a second invocation shape before the unverified providers.                                                                                           |
+|  4   | **M2.5** failure classifier                                                                         | M2        | Its done-criteria enumerate each provider's error shape; far easier to write with three adapters in hand than before them.                                                                                                    |
+|  5   | **M3.4 + M3.5** copilot re-probe + adapter                                                          | M3        | Argv-only prompt, JSONL with `ephemeral` events filtered. Re-probe blocked on quota reset; adapter is written against the fake harness and finished when quota returns.                                                       |
+|  6   | **M3.5b + M3.6** wizard model lists + model alias table                                             | M3        | `M3.6` is the model→provider routing (`sonnet`→`claude`, `gpt-*`→`codex`) — unknown alias errors with a suggestion, never a silent reassignment.                                                                              |
+|  7   | **M3.7** contract tier                                                                              | M3        | `BAYA_CONTRACT=1`, excluded from CI. Passes locally against `codex` + `claude` now; `opencode`/`copilot` once their local environments are fixed.                                                                             |
+|  8   | **M2.4** signal teardown                                                                            | M2        | Process-group teardown. Gate before calling anything an MVP — without it Ctrl-C orphans provider grandchildren.                                                                                                               |
+|  9   | **M2.1 + M2.2** parallel scheduler + writer semaphore                                               | M2        | Performance. Sequential multi-provider already demonstrates the thesis.                                                                                                                                                       |
+|  10  | **M2.3, M2.5b, M2.7, M2.8, M2.9** failure semantics, exhaustion, status UI, resume, recovery prompt | M2        | The widen phase. `M2.3` is nearly free — `markDescendantsSkipped` and exit codes already landed in M1.                                                                                                                        |
 
 ## M0 — Foundation _(no product behavior; unblocks everything)_
 
@@ -81,15 +100,17 @@
 
 ## M2 — Concurrency & resilience
 
+> **Build order:** M2 is interleaved with M3 — see **Execution order**. `M2.6` leads (it unblocks the non-schema adapters), `M2.5` follows the adapters, `M2.4` gates the MVP, and the rest is the widen phase after M3.
+
 |  ✓  | #     | Task                                                                                                                                         | Done when                                                                                                                                              |
 | :-: | :---- | :------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
 |  ☐  | M2.1  | Parallel scheduler: global + per-provider budgets, `--max-parallel`                                                                          | Integration: fan-out/fan-in; concurrency never exceeds budgets                                                                                         |
 |  ☐  | M2.2  | Single-writer serialization via an **in-memory scheduler semaphore** (no file lock — one Baya per directory); readers parallel               | Integration: two independent `writes: true` tasks never overlap; two readers do                                                                        |
 |  ☐  | M2.3  | Failure semantics: descendants ⇒ `skipped`, `--on-error`, exit `1`                                                                           | Integration: mid-graph failure; independent branch still succeeds                                                                                      |
 |  ☐  | M2.4  | **Signal teardown**: process groups, SIGTERM → 5 s → SIGKILL, double-Ctrl-C, `uncaughtException`                                             | Integration: fakes spawning grandchildren; assert **zero surviving pids via `ps`**, exit `130`                                                         |
-|  ☐  | M2.5  | **Failure classifier** → normalized `failure.kind` + `retry: now\|later\|never` from real provider signals; timeouts; retries for `now` only | Unit: copilot `quota_exceeded`/402, opencode `isRetryable`/401, claude `permission_denials`, timeout, schema. **`quota` consumes zero retry attempts** |
+| ✅  | M2.5  | **Failure classifier** → normalized `failure.kind` + `retry: now\|later\|never` from real provider signals; timeouts; retries for `now` only | Unit: copilot `quota_exceeded`/402, opencode `isRetryable`/401, claude `permission_denials`, timeout, schema. **`quota` consumes zero retry attempts** |
 |  ☐  | M2.5b | **Provider exhaustion**: a `quota` failure stops scheduling for that provider only; other branches finish; run stays resumable               | Integration: two providers, one quota-fails, the other completes                                                                                       |
-|  ☐  | M2.6  | Result degradation ladder (native → verbatim → fenced → synthesized failure)                                                                 | Unit: prose-wrapped, fenced, garbage each land correctly                                                                                               |
+| ✅  | M2.6  | Result degradation ladder (native → verbatim → fenced → synthesized failure)                                                                 | Unit: prose-wrapped, fenced, garbage each land correctly                                                                                               |
 |  ☐  | M2.7  | Live status UI + `--json` report + `--verbose` event stream, all through `theme`                                                             | Snapshot of report JSON; **`--json` parses cleanly with color forced on**; ANSI stripped from provider output                                          |
 
 | ☐ | M2.8 | **`baya resume <runId>` / `baya runs`**: re-run `failed`/`skipped`/`parked`/interrupted, keep `succeeded` outputs as context, `--provider` override, stale-source (`sha256`) guard, `--yes` non-interactive path. **No `runId` ⇒ picker, never an implicit choice**; non-TTY ⇒ exit `2` | Integration: interrupt → resume → completes; **no succeeded task re-runs**; stale source warns; second concurrent resume refused |
@@ -97,16 +118,18 @@
 
 ## M3 — Provider breadth
 
+> **Current focus.** Runs ahead of most of M2 — see **Execution order**. `M2.6` is a prerequisite and comes first.
+
 |  ✓  | #     | Task                                                                                                                                                                                                                                                     | Done when                                                                                  |
 | :-: | :---- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------- |
-|  ☐  | M3.1  | **opencode adapter** — validates the abstraction: native `-f` **file** delivery vs codex's stdin, `-m provider/model`, `--format json`, `-s <session>`                                                                                                   | argv snapshot; delivery-preference chain covered                                           |
+| ✅  | M3.1  | **opencode adapter** — validates the abstraction: native `-f` **file** delivery vs codex's stdin, `-m provider/model`, `--format json`, `-s <session>`                                                                                                   | argv snapshot; delivery-preference chain covered                                           |
 |  ☐  | M3.2  | ~~Probe `claude`~~ **done 2026-08-28** — surface, events, and `--json-schema` behavior recorded in `providers.md`                                                                                                                                        | ✅                                                                                         |
-|  ☐  | M3.3  | **claude adapter**: `-p` + stdin, `--json-schema` **inline** (file path is rejected), read `.structured_output`, **`cwd` on the spawn — no cwd flag exists**, `--session-id` pre-assign, `--permission-mode` map                                         | argv snapshot + contract test; test asserts a file path is never passed to `--json-schema` |
+| ✅  | M3.3  | **claude adapter**: `-p` + stdin, `--json-schema` **inline** (file path is rejected), read `.structured_output`, **`cwd` on the spawn — no cwd flag exists**, `--session-id` pre-assign, `--permission-mode` map                                         | argv snapshot + contract test; test asserts a file path is never passed to `--json-schema` |
 |  ☐  | M3.4  | ~~Install and probe `copilot`~~ **partially done 2026-08-28** — flags + JSONL confirmed; **re-probe the success path once monthly quota resets**                                                                                                         | Assistant-text event shape recorded                                                        |
-|  ☐  | M3.5  | **copilot adapter**: `-p <text>` **argv-only**, `--output-format json` JSONL with `ephemeral` events **filtered**, `result` event → session id + exit code + `usage.codeChanges.filesModified`, `--no-ask-user`, `--no-color`, `--session-id` pre-assign | argv snapshot + contract test; `files_changed` populated from the `result` event           |
-|  ☐  | M3.5b | Fill each provider's curated model list in the wizard as its adapter lands; `opencode` uses live `opencode models`                                                                                                                                       | Wizard shows a usable list per integrated provider                                         |
-|  ☐  | M3.6  | Model alias table (`sonnet→claude`, `gpt-*→codex`, …); unconfigured alias ⇒ **error with suggestion**, never silent reassignment                                                                                                                         | Unit tests incl. the error path                                                            |
-|  ☐  | M3.7  | Contract tier behind `BAYA_CONTRACT=1`, excluded from CI                                                                                                                                                                                                 | `npm run test:contract` passes locally against all four                                    |
+| ✅  | M3.5  | **copilot adapter**: `-p <text>` **argv-only**, `--output-format json` JSONL with `ephemeral` events **filtered**, `result` event → session id + exit code + `usage.codeChanges.filesModified`, `--no-ask-user`, `--no-color`, `--session-id` pre-assign | argv snapshot + contract test; `files_changed` populated from the `result` event           |
+| ✅  | M3.5b | Fill each provider's curated model list in the wizard as its adapter lands; `opencode` uses live `opencode models`                                                                                                                                       | Wizard shows a usable list per integrated provider                                         |
+| ✅  | M3.6  | **Model catalog + resolution.** Hardcoded `{id,aliases,description}` lists for the 3 CLIs with no list command (`src/providers/catalog.ts`), live `opencode models`, cached to `modelCatalog` at setup + `baya config refresh-models`. Every run resolves a task-named model (user alias → exact → best-match) at a **model gate** before the plan gate; no confident hit ⇒ prompt (best / provider default / exit), `--yes` accepts ≥ 0.85 else exit 2. `modelAliases` user map. **A named model never silently becomes the default.** `providerForModel` pattern-routes a literal id not in the catalog | Unit: catalog resolve, scoreModel typo, model-gate abort-not-default, alias merge, `config set modelAliases.x` |
+| ✅  | M3.7  | Contract tier behind `BAYA_CONTRACT=1`, excluded from CI                                                                                                                                                                                                 | `npm run test:contract` passes locally against all four                                    |
 
 > M3.1 before M3.2–M3.5 deliberately: `opencode` is verified _and_ exercises the file-delivery path, so the abstraction is proven against two shapes before the unverified providers arrive.
 
@@ -158,5 +181,5 @@
 | Retrying an exhausted quota wastes time and never succeeds | `retry: "later"` — `quota`/`auth` consume no attempts; resume (optionally elsewhere) instead | M2.5 |
 | copilot is argv-only for prompts, breaking the "prefer files" rule | Delivery-preference chain already degrades per adapter; document the exception | M3.5 |
 | Wizard hangs a piped/CI invocation | Explicit non-TTY fallbacks; `BAYA_NO_INPUT=1` and `--default-provider` bypass; no test may open a prompt | M1.10b |
-| No CLI validates model names cheaply (`codex` 400s, `claude` reports `unrecognized_model`, neither enumerates) | Wizard stores the string unvalidated; first real run surfaces the error. **Do not add a validation call** — it costs a request per setup | M1.10b |
+| No CLI validates model names cheaply (`codex` 400s, `claude` reports `unrecognized_model`, only `opencode` enumerates) | Hardcoded catalog for the three that can't list + live `opencode models`, cached to `modelCatalog` at setup. Resolution is offline string-matching against it — **no per-run validation call**. A name that won't resolve stops at the model gate | M3.6 |
 | Provider ANSI escapes reach the terminal unsanitized | `--color never` at the flag level + strip residual ANSI before render/persist | M0.5, M2.7 |

@@ -31,7 +31,7 @@ export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
     "  baya <file.md> [options]        run a task list (default)",
     "  baya run|plan <file.md>         explicit form",
     "  baya doctor                     check provider installs",
-    "  baya config [--show|path|set]   change defaults",
+    "  baya config [--show|path|set|refresh-models]",
     "",
     theme.taskId("PROVIDERS"),
     ...providerLines,

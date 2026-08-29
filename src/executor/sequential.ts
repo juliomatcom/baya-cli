@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import {
   PROTOCOL_VERSION,
+  routeProvider,
   type Manifest,
   type ProviderId,
   type Task,
@@ -16,6 +17,7 @@ import {
   type ContextStrategy,
   type Upstream,
 } from "../context/index.js";
+import { classifyFailure } from "./classify.js";
 import type { RunPaths } from "./paths.js";
 import { StateStore, relativeArtifacts, type TaskState } from "./state.js";
 import { executeTask } from "./task.js";
@@ -92,7 +94,9 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     const task = byId.get(taskId) as Task;
     logger.debug("task.ready", { task_id: taskId, deps: task.depends_on });
 
-    const provider = task.provider ?? options.defaultProvider;
+    // Explicit provider wins, then the model alias (`sonnet` -> claude), then
+    // the run default. Validation has already rejected a provider/model clash.
+    const provider = routeProvider(task, options.defaultProvider);
     const model = task.model ?? options.defaultModel;
     const adapter = registry.get(provider);
     const resolved = adapter
@@ -233,14 +237,13 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       continue;
     }
 
-    const failure = {
-      kind: execution.timedOut ? ("timeout" as const) : ("crash" as const),
-      message: result.error?.message ?? "task failed",
-      provider_code: null,
-      status_code: null,
-      retry: ((result.error?.retryable ?? true) ? "now" : "never") as "now" | "never",
-      occurred_at: new Date().toISOString(),
-    };
+    const failure = classifyFailure({
+      timedOut: execution.timedOut,
+      exitCode: execution.exitCode,
+      events: execution.events,
+      errorMessage: result.error?.message ?? "task failed",
+      retryable: result.error?.retryable ?? true,
+    });
     store.transition(taskId, { ...common, state: "failed", failure });
     logger.error("task.failed", {
       task_id: taskId,

@@ -1,3 +1,4 @@
+import { checkModelRouting } from "./aliases.js";
 import {
   ManifestSchema,
   PROVIDER_IDS,
@@ -18,6 +19,7 @@ export type ValidationCode =
   | "dep_unresolved"
   | "dep_cycle"
   | "provider_not_allowed"
+  | "model_routing"
   | "too_many_tasks";
 
 export interface ValidationError {
@@ -70,6 +72,7 @@ export function validateManifest(
     checkDepsResolve(tasks),
     checkAcyclic(tasks),
     checkProviders(tasks, allowlist),
+    checkModelAliases(tasks, allowlist),
     checkTaskCount(tasks, maxTasks),
   ];
   for (const errors of staged) {
@@ -214,6 +217,22 @@ function checkProviders(
       taskId: task.id,
       message: `task "${task.id}" names provider "${task.provider as string}", not in the allowlist [${allowlist.join(", ")}]`,
     }));
+}
+
+/**
+ * Model → provider routing (M3.6). A model that belongs to a different provider
+ * than the one named, or to a provider not in this release, is an error with a
+ * concrete suggestion — never a silent reassignment.
+ */
+function checkModelAliases(
+  tasks: Task[],
+  allowlist: readonly ProviderId[],
+): ValidationError[] {
+  return checkModelRouting(tasks, allowlist).map((issue) => ({
+    code: "model_routing" as const,
+    taskId: issue.taskId,
+    message: issue.message,
+  }));
 }
 
 function checkTaskCount(tasks: Task[], maxTasks: number): ValidationError[] {

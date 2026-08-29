@@ -37,6 +37,7 @@ const input = (overrides = {}) => ({
   model: null,
   cwd: "/work",
   schemaPath: "/work/.baya/schema/task_result.schema.json",
+  schemaContents: '{"type":"object"}',
   resultFile: "/work/.baya/runs/r1/tasks/gen-schema/result.json",
   prompt: "do the thing",
   ...overrides,

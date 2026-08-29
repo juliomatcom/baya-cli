@@ -6,6 +6,8 @@
 v1 set: **`opencode`, `codex`, `claude`, `copilot`**. `gemini` verified, deferred to v1.1.
 All four **live-probed 2026-08-28** (help text + real invocation), not read from docs.
 
+**Adapter status (M3, landed 2026-08-29):** all four adapters implemented and registered in `src/providers/registry.ts`; each has an argv **snapshot test** and a **contract test** (`test/contract/`, `BAYA_CONTRACT=1`). `codex` and `claude` verified end to end on the reference machine. `opencode` (local key invalid) and `copilot` (monthly quota) have their engine paths covered by unit tests; their **success-path event shapes remain UNVERIFIED** and are flagged inline below — the contract tier settles them once each environment is fixed.
+
 ## Capability matrix
 
 |                           | codex                       | claude                               | copilot                      | opencode              |
@@ -124,6 +126,13 @@ argv: `codex exec --json --color never --skip-git-repo-check -C <cwd> -s <sandbo
 
 Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-inline'` · `sessionId 'preassign'` · `resume 'session'` · `cwdFlag false` · `maxConcurrency 1` (subscription-throttled until measured).
 
+**Adapter (M3.3, landed 2026-08-29)** — `src/providers/claude.ts`, argv snapshot in `test/unit/providers/claude.test.ts`.
+
+argv: `claude -p --output-format json --json-schema <inline JSON> --permission-mode <mode> [--model <m>] [--session-id <uuid>]`, prompt on stdin, **`cwd` on the spawn**. `--json-schema` is fed `JSON.stringify(JSON.parse(schemaContents))` — inline, never the path. `--output-format json` (not `stream-json`): one object, parsed once; `.structured_output` is rung 1, `.result` feeds rungs 2–3, `permission_denials[]` ⇒ non-retryable `permission` failure, `is_error` ⇒ failure classified by message.
+
+⚠️ **`--permission-mode` map is UNVERIFIED** pending the contract tier: `writes:false ⇒ plan` (the only mode that actually blocks file writes), `writes:true ⇒ acceptEdits`, `--dangerously-allow-all ⇒ bypassPermissions`. Flags are real; which mode gives the cleanest unattended run is not yet measured. `plan` may change output style for read-only tasks — revisit in M3.7.
+💡 usage: `total_cost_usd` ⇒ `cost_usd`; `usage.{input,output}_tokens` + both cache token fields folded into `input_tokens`.
+
 ## copilot — ⚠️ partially verified 2026-08-28 (v1.0.81; **monthly quota exhausted**, success path unverified)
 
 `copilot -p/--prompt <text>`. **Prompt is a flag value — argv only.** `--attachment` takes images/native documents, not a prompt file.
@@ -138,6 +147,16 @@ Events: `{type, data, ephemeral, id, timestamp, parentId}`. **15 of 20 events ar
 
 Capabilities: `promptDelivery ['argv']` · `structuredOutput 'none'` · `sessionId 'preassign'` · `resume 'session'` · `cwdFlag true` · `maxConcurrency 1`.
 
+**Adapter (M3.5, landed 2026-08-29)** — `src/providers/copilot.ts`, argv snapshot in `test/unit/providers/copilot.test.ts`.
+
+argv: `copilot -p <text> --output-format json -C <cwd> --no-color --no-ask-user [--allow-all-tools] [--model <m>] [--session-id <id>]`. `-p <text>` is the **one place a prompt rides in argv** anywhere in Baya. `--allow-all-tools` is added only for `writes:true` / `--dangerously-allow-all` — copilot has no read-only sandbox, so a reader simply runs without it. `parseEvents` drops `ephemeral:true` lines; the terminal `result` line gives session id, exit code, and `usage.codeChanges.filesModified` ⇒ `files_changed`. No schema ⇒ degradation ladder over assistant text.
+
+⚠️ **UNVERIFIED (quota exhausted 2026-08-28):** the assistant-text event shape. `readText` guesses `data.{text,content,message}` on a `type` containing `assistant`/`message`/`text`. `session.error` ⇒ `rate_limit`/`auth` event + raw line kept for the classifier; `quota`/402 ⇒ non-retryable here (`retry: "later"` is the scheduler's call). M3.4 re-probe + M3.7 contract settle the success path.
+
+## M3.4 — re-probe copilot _(blocked: monthly quota, retry after reset)_
+
+The success path (assistant text events, `result` usage fields, `--allow-all-tools` as a parse vs execution requirement) is still unprobed. The adapter is written to the documented flags and covered by fake-stream unit tests; run `BAYA_CONTRACT=1 npm run test:contract` once quota returns and fill the shapes above in the SAME commit.
+
 ## opencode — ⚠️ partially verified 2026-08-28 (flags ✅; **local install misconfigured**, success path unverified)
 
 `opencode run [message..]`. Prompt: positional, or **`-f/--file`** (native file attach — the only true file delivery in the set).
@@ -148,7 +167,13 @@ Events: JSONL with `{type, timestamp, sessionID, …}`. Errors: `{"type":"error"
 
 ⚠️ **Environment issue, not a Baya bug:** this machine's opencode holds an invalid OpenAI key (literal `"asd"`), so every run 401s. Fix local auth before the M3.1 contract test.
 
-Capabilities: `promptDelivery ['file','argv']` · `structuredOutput 'none'` · `sessionId 'capture'` · `resume 'session'` · `cwdFlag true`.
+Capabilities: `promptDelivery ['file','argv']` · `structuredOutput 'none'` · `sessionId 'capture'` · `resume 'session'` · `cwdFlag true` · `maxConcurrency 2`.
+
+**Adapter (M3.1, landed 2026-08-29)** — `src/providers/opencode.ts`, argv snapshot in `test/unit/providers/opencode.test.ts`. This is the adapter that proves the abstraction against a **third** prompt-delivery shape: codex and claude use stdin, opencode uses a **file** (`-f`).
+
+argv: `opencode run --format json --dir <cwd> [-m <provider/model>] -f <promptFile>`, `stdin: "ignore"`, prompt written to `<taskDir>/prompt.md` via `SpawnPlan.files`. `-m` is passed through verbatim (the compound `provider/model` form). No schema ⇒ degradation ladder over assistant text.
+
+⚠️ **UNVERIFIED (invalid local key):** the success-path event shape. `readText` tries `text` / `content` / `part.{type:"text",text}` / `message.content`. The error shape **is** known: `{"type":"error","error":{"name","data":{"statusCode","isRetryable}}}` — `isRetryable` is a real boolean and is preserved by keeping the raw line as an `unknown` event alongside the normalized `error` event, so `extractResult` and the M2.5 classifier can both read it. `extractUsage` reads `tokens.{input,output}` + `cost` off `step-finish` lines. M3.7 contract settles the rest.
 
 ## gemini — ✅ verified 2026-08-28 (help), deferred to v1.1
 
@@ -169,6 +194,13 @@ Provider stdout is **untrusted input** — model output can carry escape sequenc
 These CLIs ship weekly; `codex -p` will recur.
 
 1. argv **snapshot tests** on `buildRun`/`buildResume` — any change fails loudly and forces review.
-2. **Contract tests** run the real binaries behind `BAYA_CONTRACT=1`; offline CI never runs them. Run before each release.
+2. **Contract tests** — `test/contract/providers.contract.test.ts`, config `jest.contract.config.js`, run by `npm run test:contract` (sets `BAYA_CONTRACT=1`). Excluded from `jest.config.js` via `testPathIgnorePatterns`, so offline CI never runs them. Each adapter is driven `buildRun → spawn → parseEvents → extractResult` against a trivial task; a provider whose binary does not resolve is **skipped, not failed**. Run before each release.
 3. `baya doctor` records each provider's version; a change since the last successful run emits a warning.
-4. Adding a provider = adapter + capability block + a section here + a contract test. No other file changes.
+4. Adding a provider = adapter + capability block + a section here + a contract-test case. No other file changes.
+
+## Model catalog, routing, and failure classification
+
+- **Model catalog** (`src/providers/catalog.ts`, M3.6). `codex`, `claude`, and `copilot` have no "list models" command, so their `{ id, aliases, description }` lists are **hardcoded** here — edit them when they drift. `opencode` enumerates live (`opencode models`). The wizard writes the merged catalog to the user config's `modelCatalog`; `baya config refresh-models` rewrites the `opencode` part. Full ids are known at the time of writing: codex `gpt-5.6-{sol,terra,luna}`; claude `claude-{fable-5,opus-5,sonnet-5,haiku-4-5-20251001}`.
+- **Resolution** (`src/ui/model-gate.ts`). Every run, before the plan gate: a task-named model is resolved against the catalog — user alias → exact id/alias → best match (character-bigram Dice handles typos, description is scored too). No confident hit ⇒ the gate prompts (best match / provider default / exit); `--yes`/non-TTY takes a best match only at score ≥ 0.85, else exits `2`. **A named model never silently becomes the default.** An explicit `task.provider` wins ties, then the run default.
+- **`providerForModel`** (`src/manifest/aliases.ts`). The fallback when a name is _not_ in the catalog: a pattern match (`gpt-*`→codex, `claude-*`/`sonnet`/`opus`→claude) supplies a provider for a plausible literal id. `validateManifest` still rejects — with a suggestion — an explicit `provider` paired with a model that pattern-matches another provider, or a `gemini`-family model (deferred).
+- **Failure classifier** (`src/executor/classify.ts`, M2.5). Maps the timeout flag, exit code, normalized `error` events, and the adapter's `error.retryable` onto a `Failure` `{ kind, retry }`. **`quota` ⇒ `retry: "later"`, `auth`/`permission`/bad-model ⇒ `"never"`** so a run never spends its attempt budget on an endpoint that will keep refusing.

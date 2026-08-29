@@ -1,4 +1,4 @@
-import type { Manifest } from "../manifest/index.js";
+import { routeProvider, type Manifest, type ProviderId } from "../manifest/index.js";
 import { topoLayers } from "../graph/index.js";
 import type { Theme } from "./theme.js";
 
@@ -6,8 +6,17 @@ import type { Theme } from "./theme.js";
  * The plan preview shown at the confirmation gate. Layers, not a tree: the
  * question the user is answering is "what runs, and what waits for what",
  * and a layered view answers it at a glance.
+ *
+ * The provider column shows the *resolved* provider — after model-alias
+ * routing — so `model: "sonnet"` reads as `claude sonnet`, not `default`. A
+ * pinned model is always shown: it is the thing most likely to be wrong, and
+ * the gate is the last place to catch it before a request is spent.
  */
-export function renderDag(manifest: Manifest, theme: Theme): string {
+export function renderDag(
+  manifest: Manifest,
+  theme: Theme,
+  defaultProvider?: ProviderId,
+): string {
   const layers = topoLayers(
     manifest.tasks.map((task) => ({ id: task.id, depends_on: task.depends_on })),
   );
@@ -22,9 +31,13 @@ export function renderDag(manifest: Manifest, theme: Theme): string {
       const deps =
         task.depends_on.length > 0 ? theme.note(` ← ${task.depends_on.join(", ")}`) : "";
       const writes = task.writes ? theme.warn(" writes") : "";
-      const provider = task.provider ?? "default";
+      const provider =
+        task.provider ??
+        (defaultProvider ? routeProvider(task, defaultProvider) : null) ??
+        "default";
+      const label = task.model ? `${provider} ${task.model}` : provider;
       lines.push(
-        `    ${theme.status("pending")} ${theme.taskId(id.padEnd(16))} ${theme.provider(provider.padEnd(9))} ${task.title}${writes}${deps}`,
+        `    ${theme.status("pending")} ${theme.taskId(id.padEnd(16))} ${theme.provider(label.padEnd(18))} ${task.title}${writes}${deps}`,
       );
     }
   });

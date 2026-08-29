@@ -19,7 +19,13 @@ import {
   readSource,
   runPlannerProvider,
 } from "../planner/index.js";
-import type { Registry } from "../providers/index.js";
+import {
+  BUILTIN_CATALOG,
+  enumerateModels,
+  mergeCatalog,
+  opencodeCatalog,
+  type Registry,
+} from "../providers/index.js";
 import {
   StateStore,
   emptyTaskEntry,
@@ -37,6 +43,7 @@ import {
   exitCodeFor,
   renderDag,
   renderReport,
+  runModelGate,
   type Progress,
 } from "../ui/index.js";
 import { createTheme } from "../ui/theme.js";
@@ -129,7 +136,20 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
 
     if (decision.run) {
       progress.stop();
-      const result = await runWizard({ statuses, configPath: loaded.userPath });
+      // Build the catalog once: hardcoded lists + whatever `opencode models`
+      // returns. The wizard shows it and caches it into the user config so
+      // later runs resolve model names without any probe.
+      const opencodeBin = statuses.find((s) => s.id === "opencode")?.resolved?.bin;
+      const opencodeIds = opencodeBin ? await enumerateModels(opencodeBin) : [];
+      const wizardCatalog = mergeCatalog(
+        BUILTIN_CATALOG,
+        opencodeIds.length > 0 ? { opencode: opencodeCatalog(opencodeIds) } : undefined,
+      );
+      const result = await runWizard({
+        statuses,
+        configPath: loaded.userPath,
+        catalog: wizardCatalog,
+      });
       defaultProvider = result.provider;
       defaultModel = result.model;
       plannerProvider = result.provider;
@@ -322,6 +342,31 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       planOrigin = planned.origin;
     }
 
+    // ---- model gate: resolve every task-named model against the catalog
+    //      before anything is written or run. A named model is never silently
+    //      swapped for the default (M3.6).
+    const catalog = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
+    const modelGate = await runModelGate({
+      manifest,
+      catalog,
+      userAliases: loaded.config.modelAliases,
+      defaultProvider: defaultProvider as ProviderId,
+      yes: flags.yes,
+      stdinIsTty: io.stdinIsTty,
+      theme,
+      beforePrompt: () => progress.stop(),
+    });
+    if (modelGate.decision === "aborted") {
+      progress.stop();
+      logger.warn("plan.model.unresolved", { message: modelGate.message });
+      io.stderr.write(`${theme.status("fail")} ${theme.fail(modelGate.message)}\n`);
+      return 2;
+    }
+    manifest = modelGate.manifest;
+    for (const note of modelGate.notes) {
+      logger.info("plan.model.resolved", { detail: note });
+    }
+
     writeFileSync(paths.manifest, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
     if (flags.planOut) {
@@ -336,7 +381,12 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     io.stderr.write(
       `\n  ${theme.taskId("baya")} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ""}${planOrigin === "fallback" ? theme.warn(" · linear fallback") : ""}\n\n`,
     );
-    io.stderr.write(`${renderDag(manifest, theme)}\n\n`);
+    io.stderr.write(`${renderDag(manifest, theme, defaultProvider as ProviderId)}\n\n`);
+
+    for (const note of modelGate.notes) {
+      io.stderr.write(`  ${theme.note("resolved")} ${note}\n`);
+    }
+    if (modelGate.notes.length > 0) io.stderr.write("\n");
 
     if (flags.dryRun) {
       logger.info("run.completed", { dry_run: true, tasks: manifest.tasks.length });

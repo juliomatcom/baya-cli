@@ -40,6 +40,13 @@ export {
   type ValidationError,
 } from "./validate.js";
 export {
+  checkModelRouting,
+  isDeferredModel,
+  providerForModel,
+  routeProvider,
+  type ModelRoutingIssue,
+} from "./aliases.js";
+export {
   PLAN_DRAFT_SCHEMA_FILENAME,
   TASK_RESULT_SCHEMA_FILENAME,
   planDraftJsonSchema,

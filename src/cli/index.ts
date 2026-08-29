@@ -5,11 +5,20 @@ import {
   ConfigError,
   binOverrides,
   loadConfig,
+  readUserConfig,
   setConfigValue,
   userConfigPath,
+  writeConfigFile,
 } from "../config/index.js";
 import type { ProviderId } from "../manifest/index.js";
-import { createDefaultRegistry, type Registry } from "../providers/index.js";
+import {
+  BUILTIN_CATALOG,
+  createDefaultRegistry,
+  enumerateModels,
+  mergeCatalog,
+  opencodeCatalog,
+  type Registry,
+} from "../providers/index.js";
 import { createTheme } from "../ui/theme.js";
 import { UNIMPLEMENTED_COMMANDS, parseArgs } from "./args.js";
 import { doctor } from "./doctor.js";
@@ -106,7 +115,7 @@ export async function main(options: MainOptions = {}): Promise<number> {
       }
 
       case "config":
-        return configCommand(args, { env, cwd, io, theme });
+        return await configCommand(args, { env, cwd, io, theme, registry });
 
       case "resume":
       case "runs":
@@ -129,15 +138,16 @@ export async function main(options: MainOptions = {}): Promise<number> {
   }
 }
 
-function configCommand(
+async function configCommand(
   args: ReturnType<typeof parseArgs>,
   ctx: {
     env: NodeJS.ProcessEnv;
     cwd: string;
     io: CliIo;
     theme: ReturnType<typeof createTheme>;
+    registry: Registry;
   },
-): number {
+): Promise<number> {
   const { io, theme } = ctx;
 
   if (args.configAction === "path") {
@@ -152,6 +162,29 @@ function configCommand(
       ctx.env,
     );
     io.stderr.write(`  set ${args.configKey} = ${args.configValue} in ${path}\n`);
+    return 0;
+  }
+
+  if (args.configAction === "refresh-models") {
+    const loaded = loadConfig({ cwd: ctx.cwd, env: ctx.env });
+    const oc = await ctx.registry.resolve("opencode", {
+      binOverrides: binOverrides(loaded.config),
+      env: ctx.env,
+      probe: false,
+    });
+    const ids = oc ? await enumerateModels(oc.bin) : [];
+    const catalog = mergeCatalog(
+      BUILTIN_CATALOG,
+      ids.length > 0 ? { opencode: opencodeCatalog(ids) } : undefined,
+    );
+    const path = userConfigPath(ctx.env);
+    writeConfigFile(path, { ...readUserConfig(ctx.env), modelCatalog: catalog });
+    const counts = Object.entries(catalog)
+      .map(([id, models]) => `${id} ${models.length}`)
+      .join(" · ");
+    io.stderr.write(
+      `  refreshed model catalog in ${path}\n  ${theme.note(counts)}${oc ? "" : theme.warn("  (opencode not found — built-in lists only)")}\n`,
+    );
     return 0;
   }
 
@@ -178,6 +211,20 @@ function configCommand(
         `    ${dotted.padEnd(18)} ${String(value).padEnd(12)} ${theme.note(`from ${loaded.sources[dotted] ?? "built-in"}`)}`,
       );
     }
+  }
+  for (const [name, target] of Object.entries(loaded.config.modelAliases)) {
+    const dotted = `modelAliases.${name}`;
+    lines.push(
+      `    ${dotted.padEnd(18)} ${target.padEnd(12)} ${theme.note(`from ${loaded.sources[dotted] ?? "built-in"}`)}`,
+    );
+  }
+  const catalogCounts = Object.entries(loaded.config.modelCatalog)
+    .map(([id, models]) => `${id}:${models.length}`)
+    .join(" ");
+  if (catalogCounts) {
+    lines.push(
+      `    ${"modelCatalog".padEnd(18)} ${theme.note(`${catalogCounts} — \`baya config refresh-models\` to update`)}`,
+    );
   }
   lines.push("", `  ${theme.note("user config")}    ${loaded.userPath}`, "");
   io.stdout.write(`${lines.join("\n")}\n`);

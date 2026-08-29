@@ -74,6 +74,33 @@ export function resolveBinary(
 }
 
 /**
+ * `<bin> models` — the live model list for providers that enumerate one
+ * (`opencode`, ~190 ids in the compound `provider/model` form the wizard needs).
+ * Returns `[]` on any failure: the wizard then falls back to the curated list
+ * and the run still works. Never throws.
+ */
+export function enumerateModels(bin: string, timeoutMs = 10_000): Promise<string[]> {
+  return new Promise((resolve) => {
+    execFile(
+      bin,
+      ["models"],
+      { timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout) => {
+        if (error && !stdout) {
+          resolve([]);
+          return;
+        }
+        const ids = stripAnsi(String(stdout))
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line !== "" && !/\s/.test(line) && line.includes("/"));
+        resolve([...new Set(ids)]);
+      },
+    );
+  });
+}
+
+/**
  * `<bin> --version`, with a hard timeout. Providers occasionally hang on a
  * missing auth token, and `doctor` must never be the command that wedges.
  */
