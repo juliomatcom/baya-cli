@@ -22,6 +22,6 @@ Baya is a local multi-provider CLI orchestrator: freeform Markdown → LLM-plann
 
 **M1 walking skeleton landed** on top of the M0 foundation. `baya ./tasks.md` now plans with `codex`, renders the DAG, confirms, runs the tasks sequentially, streams provider output live, writes every artifact, and prints a report with an aggregated **Flagged** section. Also in: the zod protocol schemas, manifest validation with cycle paths, the pure graph layer, provider resolution + `baya doctor`, the codex adapter, the context bus (`link-only`/`truncate`), `state.json` checkpointing, the directory lock, layered config + first-run wizard, and `ora` progress. Sequential by design — parallelism, retries, and resume are M2. Refinement record: [../specs/001/](../specs/001/) — `00-validation.md` (what was wrong with the original spec), `01-spec.md` (refined spec v2), `02-plan.md` (phased task plan).
 
-## Known documentation gaps
+## Authoring
 
-- `.agents/skills/token-optimize/SKILL.md` is referenced by `AGENTS.md` §0 but **does not exist**. Pages here follow its style by convention; author the skill or drop the reference.
+Every page here is authored and compressed with the `token-optimize` skill (`.agents/skills/token-optimize/SKILL.md`, `/token-optimize`), mandated by `AGENTS.md` §0. Run it on any new or edited page before the commit that ships it. Keep the Maintenance Invariant header and the `> **Answers:**` routing line.

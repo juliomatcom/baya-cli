@@ -19,11 +19,10 @@
   - **Strict Scope Separation:** Store ONLY non-obvious workspace quirks, third-party API oddities, or recurring tool failures. Prohibit logging task status, implementation plans, or code summaries (these belong in `tasks/` or git history).
   - **Cache & Token Invariant:** Updates MUST use single-line imperative syntax. Maintain a strict max length of 100 lines; prune resolved or obsolete entries in the same edit turn.
 
-## 0. Documentation Routing (optional)
-Enable once a `wiki-llm/` directory exists:
+## 0. Documentation Routing
 - **Route First:** Read `wiki-llm/index.md` BEFORE open-ended grep to answer an operational, architectural, or CLI question. Open ONLY the page the index names.
-- **Update-On-Change:** Update the affected `wiki-llm/` page in the SAME commit as any change to dev commands, service topology, runbooks, or stack. New page -> add its `index.md` row. Prohibit orphan pages.
-- **Authoring Standard:** Author and compress every `wiki-llm/` page via the `token-optimize` skill (`.agents/skills/token-optimize/SKILL.md`). Preserve each page's Maintenance Invariant header and its `> **Answers:**` routing line.
+- **Update-On-Change:** Update the affected `wiki-llm/` page in the SAME commit as any change to dev commands, service topology, runbooks, stack, protocol, provider surfaces, or config schema. New page -> add its `index.md` row. Prohibit orphan pages.
+- **Token-Optimize Gate (MANDATORY):** Run the `token-optimize` skill (`.agents/skills/token-optimize/SKILL.md`) on every new or edited `wiki-llm/` page before the commit that ships it. No `wiki-llm/` page reaches a commit un-optimized. Preserve each page's Maintenance Invariant header and its `> **Answers:**` routing line; never alter meaning, invariants, IDs, or commands.
 - **README Scope:** `README.md` carries ONLY what the project is, quickstart, repo layout, and the wiki pointer. Prohibit runbooks, CLI reference, or design prose in `README.md`.
 
 ---
