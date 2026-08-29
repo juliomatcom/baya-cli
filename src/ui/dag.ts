@@ -3,9 +3,14 @@ import { topoLayers } from "../graph/index.js";
 import type { Theme } from "./theme.js";
 
 /**
- * The plan preview shown at the confirmation gate. Layers, not a tree: the
+ * The plan preview shown at the confirmation gate. Stages, not a tree: the
  * question the user is answering is "what runs, and what waits for what",
- * and a layered view answers it at a glance.
+ * and a staged view answers it at a glance.
+ *
+ * "Stage" is the user-facing word for what `topoLayers` calls a layer, borrowed
+ * from CI (GitLab, Jenkins, Azure) where it already means exactly this — a group
+ * that runs together while the next one waits. The graph module keeps saying
+ * "layer": there it names the algorithm, not the thing a person reads.
  *
  * The provider column shows the *resolved* provider — after model-alias
  * routing — so `model: "sonnet"` reads as `claude sonnet`, not `default`. A
@@ -23,8 +28,20 @@ export function renderDag(
   const byId = new Map(manifest.tasks.map((task) => [task.id, task]));
   const lines: string[] = [];
 
+  // The explainer earns its line only when some stage actually holds more than
+  // one task; with one task per stage there is no independence to explain.
+  const hasParallel = layers.some((layer) => layer.length > 1);
+  lines.push(
+    `  ${theme.taskId("Run order")} ${theme.note(
+      `· ${layers.length} ${layers.length === 1 ? "stage" : "stages"}${
+        hasParallel ? " · tasks in a stage don't wait on each other" : ""
+      }`,
+    )}`,
+    "",
+  );
+
   layers.forEach((layer, index) => {
-    lines.push(`  ${theme.note(`layer ${index + 1}`)}`);
+    lines.push(`  ${theme.note(`stage ${index + 1}`)}`);
     for (const id of layer) {
       const task = byId.get(id);
       if (!task) continue;
