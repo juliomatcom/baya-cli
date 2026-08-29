@@ -44,7 +44,11 @@ baya config                        # change your default provider
 
 On first run baya asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
 
-The task list is just text — any UTF-8 file. Markdown:
+### The task list
+
+Any UTF-8 text file. Baya's planner reads it for intent — the format is yours to pick.
+
+**Markdown** — a heading for the goal, a bullet per task:
 
 ```markdown
 # Ship the orders endpoint
@@ -55,7 +59,7 @@ The task list is just text — any UTF-8 file. Markdown:
 - Once the schema and UI are done, write integration tests.
 ```
 
-…or a bare `TODO.txt`, one task per line:
+**A bare `TODO.txt`** — one task per line, numbered or not:
 
 ```text
 1 Design the REST API for orders. Use Sonnet.
@@ -64,7 +68,23 @@ The task list is just text — any UTF-8 file. Markdown:
 4 Once the schema and UI are done, write integration tests.
 ```
 
-Baya's planner reads whichever you give it for intent. Empty or binary files are rejected before planning; if the planner can't produce a graph, a deterministic splitter falls back to a linear chain in the order you wrote the tasks.
+**YAML** — the same intent, laid out if you think better that way:
+
+```yaml
+- id: design-api
+  task: Design the REST API for orders. Use Sonnet.
+- id: gen-schema
+  task: Generate the DB schema from that design.
+  depends_on: [design-api]
+- id: build-ui
+  task: Build the React table that consumes the schema. Run with codex.
+  depends_on: [gen-schema]
+- id: tests
+  task: Write integration tests for the endpoint.
+  depends_on: [gen-schema, build-ui]
+```
+
+Baya never parses these structurally — the planner reads every format for intent, so `depends_on:` and plain prose like "once the schema and UI are done" get you the same graph. Empty or binary files are rejected before planning; if the planner can't produce a graph, a deterministic splitter falls back to a linear chain in the order you wrote the tasks.
 
 ### Example — a task per model, resolved automatically
 
@@ -100,15 +120,15 @@ $ baya ./tasks.md --yes
 ## Features
 
 - ✅ **Works out of the box** — zero config. One prompt on first run for your default provider, then never again.
+- ✅ **Multi-provider** — routes each task to `codex`, `claude`, `copilot`, or `opencode`, the CLIs you already have installed and logged in.
 - ✅ **Plain-text task lists** — Markdown, `TODO.txt`, YAML, whatever you already write. No config format, no DSL.
 - ✅ **LLM-planned dependency graph** — a model turns your list into a DAG; a deterministic splitter falls back to a linear chain if it can't.
-- ✅ **Multi-provider** — routes each task to `codex`, `claude`, `copilot`, or `opencode`, the CLIs you already have installed and logged in.
 - ✅ **No API keys** — drives your existing CLI subscriptions; nothing new to pay for.
 - ✅ **Model-per-task** — name `luna`, `sonnet`, etc. in the task text; Baya resolves it to the real id and the provider that serves it.
 - ✅ **Parallel execution** — independent tasks run concurrently (`--max-parallel`); `read-write` tasks are serialized by a write-lock.
+- ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files touched) carries to later tasks, and chains on one model stay in a single warm provider session instead of spawning cold. `--no-memory`, `--no-session-reuse` to disable.
 - ✅ **Preview gate** — see the full plan before anything runs; `--dry-run` shows it and runs nothing.
 - ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider.
-- ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files touched) carries to later tasks, and chains on one model stay in a single warm provider session instead of spawning cold. `--no-memory`, `--no-session-reuse` to disable.
 
 ## How it works
 
