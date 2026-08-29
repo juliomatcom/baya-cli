@@ -97,6 +97,19 @@ $ baya ./tasks.md --yes
 
 `luna`, `terra`, and `sonnet` are short names — Baya resolves each against its model catalog to the real id and the provider that serves it (`luna`/`terra` → `codex`, `sonnet` → `claude`), then runs all three independently. A name it can't resolve stops at the plan gate instead of failing mid-run; it is never silently swapped for the default. See [`wiki-llm/config.md`](wiki-llm/config.md#model-resolution).
 
+## Features
+
+- ✅ **Works out of the box** — zero config. One prompt on first run for your default provider, then never again.
+- ✅ **Plain-text task lists** — Markdown, `TODO.txt`, YAML, whatever you already write. No config format, no DSL.
+- ✅ **LLM-planned dependency graph** — a model turns your list into a DAG; a deterministic splitter falls back to a linear chain if it can't.
+- ✅ **Multi-provider** — routes each task to `codex`, `claude`, `copilot`, or `opencode`, the CLIs you already have installed and logged in.
+- ✅ **No API keys** — drives your existing CLI subscriptions; nothing new to pay for.
+- ✅ **Model-per-task** — name `luna`, `sonnet`, etc. in the task text; Baya resolves it to the real id and the provider that serves it.
+- ✅ **Parallel execution** — independent tasks run concurrently (`--max-parallel`); `read-write` tasks are serialized by a write-lock.
+- ✅ **Preview gate** — see the full plan before anything runs; `--dry-run` shows it and runs nothing.
+- ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider.
+- ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files touched) carries to later tasks, and chains on one model stay in a single warm provider session instead of spawning cold. `--no-memory`, `--no-session-reuse` to disable.
+
 ## How it works
 
 ```mermaid

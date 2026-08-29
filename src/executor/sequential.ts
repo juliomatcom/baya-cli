@@ -136,7 +136,17 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
   const observed: TaskObservations[] = [];
   /** Task id -> the session it left open and continuable. */
   const sessions = new Map<string, SessionInfo>();
-  /** Sessions already claimed. One continuation per session — two would fork it. */
+  /**
+   * Tasks whose open session has already been taken over by a dependent.
+   *
+   * Keyed by the **parent task**, not by the session id. Keying it by session
+   * id capped every chain at two turns: `codex exec resume` keeps the same
+   * thread id, so turn 2's session id equals turn 1's, and turn 3 saw an id
+   * that was already claimed. Measured — a six-task chain collapsed 1→2 and
+   * then stopped. What actually needs guarding is two *siblings* both
+   * continuing one parent, which forks the conversation; extending a chain
+   * one turn at a time never does.
+   */
   const claimed = new Set<string>();
 
   logger.info("run.started", { tasks: tasks.length });
@@ -236,7 +246,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       started_at: new Date().toISOString(),
       continued_from: continuation?.parentId ?? null,
     });
-    if (continuation) claimed.add(continuation.sessionId);
+    if (continuation) claimed.add(continuation.parentId);
 
     const spawn = async (
       continueFrom: Continuation | null,
@@ -426,7 +436,8 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
    *   turn onto a read-write session would silently widen its permissions, and
    *   the reverse would deny it tools it was granted;
    * - warm, because past the cache window a resume costs more than a cold start;
-   * - unclaimed, because two tasks continuing one session would fork it.
+   * - unclaimed, because two *siblings* continuing one parent would fork the
+   *   conversation. Extending a chain turn by turn is not a fork.
    */
   function continuationFor(id: string): Continuation | null {
     if (!sessionReuse) return null;
@@ -435,7 +446,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     const parentId = candidate.depends_on[0] as string;
     const info = sessions.get(parentId);
     if (!info) return null;
-    if (claimed.has(info.sessionId)) return null;
+    if (claimed.has(parentId)) return null;
     if (info.turns >= MAX_CHAIN_TURNS) return null;
     if (Date.now() - info.endedAtMs > SESSION_WARM_MS) return null;
     const provider = routeProvider(candidate, options.defaultProvider);

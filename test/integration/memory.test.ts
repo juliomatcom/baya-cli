@@ -205,3 +205,76 @@ describe("a continuation the CLI refuses", () => {
     expect(events).toContain("task.continue.failed");
   });
 });
+
+/**
+ * Chain depth. `codex exec resume` keeps the same thread id, so a guard keyed
+ * on the session id treated turn 3 as a second claim on turn 1's session and
+ * capped every chain at two turns. Measured on a real six-task run before it
+ * was keyed on the parent task instead.
+ */
+describe("a chain longer than two", () => {
+  const ids = ["step-one", "step-two", "step-three", "step-four"];
+  const LINEAR = {
+    tasks: ids.map((id, index) => ({
+      id,
+      title: id,
+      instruction: `Do ${id}.`,
+      provider: "codex",
+      model: null,
+      depends_on: index === 0 ? [] : [ids[index - 1]],
+      access: "read-only",
+      cwd: null,
+    })),
+  };
+
+  const linear = {
+    __planner__: { final: LINEAR },
+    ...Object.fromEntries(
+      ids.map((id) => [
+        id,
+        {
+          // Every turn reports the same thread id, exactly as codex does.
+          emit: [{ line: '{"type":"thread.started","thread_id":"t-1"}' }],
+          final: taskResult("ok", { task_id: id, summary: `${id} done.` }),
+        },
+      ]),
+    ),
+  };
+
+  it("keeps collapsing past turn two", async () => {
+    const result = await runCli(["./tasks.md", "--yes"], { scenario: linear });
+    expect(result.code).toBe(0);
+    const state = result.readJson(result.paths!.state) as {
+      tasks: Record<string, { continued_from: string | null }>;
+    };
+    expect(state.tasks["step-one"]?.continued_from).toBeNull();
+    expect(state.tasks["step-two"]?.continued_from).toBe("step-one");
+    expect(state.tasks["step-three"]?.continued_from).toBe("step-two");
+    expect(state.tasks["step-four"]?.continued_from).toBe("step-three");
+  });
+
+  it("still refuses to let two siblings fork one parent's session", async () => {
+    // Spread first, then override: the other way round the linear planner
+    // silently won and this asserted nothing.
+    const forked = {
+      ...linear,
+      __planner__: {
+        final: {
+          tasks: [
+            { ...LINEAR.tasks[0] },
+            { ...LINEAR.tasks[1], depends_on: ["step-one"] },
+            { ...LINEAR.tasks[2], depends_on: ["step-one"] },
+          ],
+        },
+      },
+    };
+    const result = await runCli(["./tasks.md", "--yes"], { scenario: forked });
+    const state = result.readJson(result.paths!.state) as {
+      tasks: Record<string, { continued_from: string | null }>;
+    };
+    const continued = ["step-two", "step-three"].filter(
+      (id) => state.tasks[id]?.continued_from === "step-one",
+    );
+    expect(continued).toHaveLength(1);
+  });
+});
