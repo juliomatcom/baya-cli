@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "description": "Local multi-provider CLI orchestrator: Markdown to LLM-planned JSON DAG to parallel dispatch across local agent CLIs.",
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "author": "Julio Cesar Martin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juliomatcom/baya-cli.git"
+  },
   "engines": {
     "node": ">=24"
   },

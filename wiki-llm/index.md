@@ -16,7 +16,7 @@ Baya is a local multi-provider CLI orchestrator: freeform Markdown → LLM-plann
 | [logging.md](logging.md)           | What does Baya record about its own behavior, where does it go, and what is the full event vocabulary?                       |
 | [cli.md](cli.md)                   | What commands and flags does `baya` expose, and what are the exit codes?                                                     |
 | [testing.md](testing.md)           | How is any of this tested without spending money? Fake-provider harness, test tiers, commands.                               |
-| [conventions.md](conventions.md)   | Repo layout, TS/ESM/Jest setup, hard rules, definition of done.                                                              |
+| [conventions.md](conventions.md)   | Repo layout, TS/ESM/Jest setup, hard rules, definition of done, license (MIT).                                               |
 
 ## Status
 
@@ -30,4 +30,4 @@ Sequential still — parallelism, retries, resume, signal teardown are M2. Plan 
 
 ## Authoring
 
-Every page: authored/compressed via the `token-optimize` skill (`/token-optimize`), mandated by `AGENTS.md` §0. Run it on any new/edited page before commit. Keep the Maintenance Invariant header and `> **Answers:**` line.
+Write every page to the `token-optimize` skill's rules as you edit (telegraphic, imperative, one fact per line, no prose, no mock blocks), mandated by `AGENTS.md` §0. Run the full `/token-optimize` skill only for a new page or large rewrite. Keep the Maintenance Invariant header and `> **Answers:**` line.
