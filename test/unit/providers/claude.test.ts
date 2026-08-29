@@ -74,11 +74,35 @@ describe("claudeAdapter.buildRun argv", () => {
     expect(claudeAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
-  it("uses acceptEdits when the task writes, plan when it does not", () => {
+  // The two regressions this pins: `acceptEdits` pre-approves edits only and
+  // `plan` refuses every non-readonly tool, so under `-p` — with nobody to
+  // answer a prompt — both had Bash denied outright.
+  it("uses auto whether or not the task writes", () => {
     const ro = claudeAdapter.buildRun(input()).argv;
-    expect(ro[ro.indexOf("--permission-mode") + 1]).toBe("plan");
+    expect(ro[ro.indexOf("--permission-mode") + 1]).toBe("auto");
     const rw = claudeAdapter.buildRun(input({ task: task({ writes: true }) })).argv;
-    expect(rw[rw.indexOf("--permission-mode") + 1]).toBe("acceptEdits");
+    expect(rw[rw.indexOf("--permission-mode") + 1]).toBe("auto");
+    expect([...ro, ...rw]).not.toContain("acceptEdits");
+    expect([...ro, ...rw]).not.toContain("plan");
+  });
+
+  // `writes:false` bounds what a task may mutate, not whether it may act: a
+  // task that runs the suite and reports back needs Bash and writes nothing.
+  it("withholds the editing tools from a read-only task, but never Bash", () => {
+    const argv = claudeAdapter.buildRun(input()).argv;
+    const denied = argv[argv.indexOf("--disallowed-tools") + 1] as string;
+    expect(denied.split(",")).toEqual(["Write", "Edit", "NotebookEdit"]);
+    expect(denied).not.toContain("Bash");
+  });
+
+  it("withholds nothing from a writing task", () => {
+    const argv = claudeAdapter.buildRun(input({ task: task({ writes: true }) })).argv;
+    expect(argv).not.toContain("--disallowed-tools");
+  });
+
+  it("withholds nothing under --dangerously-allow-all, even read-only", () => {
+    const argv = claudeAdapter.buildRun(input({ dangerouslyAllowAll: true })).argv;
+    expect(argv).not.toContain("--disallowed-tools");
   });
 
   it("escalates to bypassPermissions under --dangerously-allow-all", () => {
@@ -197,6 +221,34 @@ describe("claudeAdapter.extractResult", () => {
       ctx(claudeBlob({ structured_output: wrong })),
     );
     expect(result.task_id).toBe("gen-schema");
+  });
+
+  it("warns on a result that parsed despite denials, without failing it", () => {
+    const result = claudeAdapter.extractResult(
+      ctx(
+        claudeBlob({
+          structured_output: JSON.parse(conformingResult),
+          permission_denials: [
+            { tool_name: "Bash" },
+            { tool_name: "Bash" },
+            { tool_name: "Write" },
+          ],
+        }),
+      ),
+    );
+    // The work landed, so the task is not a failure — but the denial has to
+    // reach the report rather than only the prose summary.
+    expect(result.status).toBe("ok");
+    const warning = result.notes.find((note) => note.severity === "warn");
+    expect(warning?.message).toContain("Bash \u00d72");
+    expect(warning?.message).toContain("Write");
+  });
+
+  it("leaves a clean result's notes untouched", () => {
+    const result = claudeAdapter.extractResult(
+      ctx(claudeBlob({ structured_output: JSON.parse(conformingResult) })),
+    );
+    expect(result.notes).toEqual([]);
   });
 
   it("reports permission denials as a non-retryable failure", () => {

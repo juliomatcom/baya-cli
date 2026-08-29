@@ -86,6 +86,8 @@ Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-fil
 
 Adapter `src/providers/codex.ts`, snapshot `test/unit/providers/codex.test.ts`. argv: `codex exec --json --color never --skip-git-repo-check -C <cwd> -s <sandbox> --output-schema <file> -o <file> [-m <model>] -`, prompt on stdin behind `-`. Sandbox from task: `writes:false`⇒`read-only`, `writes:true`⇒`workspace-write`, `--dangerously-allow-all`⇒`danger-full-access`.
 
+⚠️ `read-only` blocks **every** write, `$TMPDIR` and `/tmp` included — there is no writable-root escape (`sandbox_workspace_write.writable_roots` applies to `workspace-write` only). So a `read-only` task cannot run a test runner, a build, or anything that touches a cache: measured 2026-08-29, jest died on `EPERM` writing its haste-map before a single assertion. That is why `writes` means _needs a writable workspace_, not _modifies source_ — see protocol.md. `read-only` is for pure reading: reviewing, summarizing, answering.
+
 ⚠️ **UNVERIFIED:** whether `thread_id` is what `exec resume` accepts. `buildResume` assumes it; contract tier (M3.7) settles it. Not needed until M4.
 
 ## claude — ✅ verified 2026-08-28 (live, v2.1.251); adapter M3.3 landed
@@ -102,9 +104,15 @@ Flags: `--model` (aliases `opus`/`sonnet`/`haiku`, or full id) · `--output-form
 
 Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-inline'` · `sessionId 'preassign'` · `resume 'session'` · `cwdFlag false` · `maxConcurrency 1` (subscription-throttled until measured).
 
-Adapter `src/providers/claude.ts`, snapshot `test/unit/providers/claude.test.ts`. argv: `claude -p --output-format json --json-schema <inline JSON, $schema stripped> --permission-mode <mode> [--model <m>] [--session-id <uuid>]`, prompt on stdin, `cwd` on spawn. `--output-format json` (not `stream-json`): one object parsed once. `.structured_output`=rung 1; `.result`=rungs 2–3; `permission_denials[]`⇒non-retryable `permission` failure; `is_error`⇒failure classified by message. Usage: `total_cost_usd`⇒`cost_usd`; `usage.{input,output}_tokens` + both cache token fields folded into `input_tokens`.
+Adapter `src/providers/claude.ts`, snapshot `test/unit/providers/claude.test.ts`. argv: `claude -p --output-format json --json-schema <inline JSON, $schema stripped> --permission-mode <mode> [--model <m>] [--session-id <uuid>]`, prompt on stdin, `cwd` on spawn. `--output-format json` (not `stream-json`): one object parsed once. `.structured_output`=rung 1; `.result`=rungs 2–3; `permission_denials[]`⇒non-retryable `permission` failure **when no rung parsed**, else a `warn` note on the succeeding result (a denied run must not report clean); `is_error`⇒failure classified by message. Usage: `total_cost_usd`⇒`cost_usd`; `usage.{input,output}_tokens` + both cache token fields folded into `input_tokens`.
 
-⚠️ **`--permission-mode` map UNVERIFIED** (contract tier): `writes:false`⇒`plan` (only mode that blocks writes), `writes:true`⇒`acceptEdits`, `--dangerously-allow-all`⇒`bypassPermissions`. `plan` may alter output style for read-only tasks.
+`--permission-mode` map: `auto` for every task, `--dangerously-allow-all`⇒`bypassPermissions`. `writes:false` additionally passes `--disallowed-tools Write,Edit,NotebookEdit` (comma-joined — the flag is variadic and would swallow the next flag if spread).
+
+⚠️ **Never `acceptEdits`, never `plan`.** `writes` bounds whether a task may **act on** the workspace, not merely whether it edits source — a task that runs the suite needs Bash, and (on codex) a writable `$TMPDIR` besides. `acceptEdits` pre-approves edits only, so `-p`, with nobody to answer a Bash prompt, denies every command: measured 2026-08-29, a 12-task run logged 54 `Bash` denials (`npm test`, `tsc`, bare `grep`) and shipped unverified work. `plan` is worse — it refuses every non-readonly tool and bends the output into a plan proposal.
+
+⚠️ The `writes:false` guard is **narrower than codex's**: a tool withdrawal, not an OS sandbox, so a read-only task can still mutate the tree through a shell redirect. A task that must not touch the tree belongs on codex.
+
+⚠️ copilot has the same shape of bug unfixed: `needsAllTools` gates `--allow-all-tools` on `writes`, so a read-only task there is likely denied its tools too. Unverified — copilot was not installed when this was found.
 
 ## copilot — ⚠️ partially verified 2026-08-28 (v1.0.81, quota exhausted); adapter M3.5 landed
 
