@@ -1,4 +1,4 @@
-import { planModelGate, runModelGate } from "../../../src/ui/index.js";
+import { buildModelAsk, planModelGate, runModelGate } from "../../../src/ui/index.js";
 import { BUILTIN_CATALOG } from "../../../src/providers/index.js";
 import { createTheme } from "../../../src/ui/theme.js";
 import {
@@ -58,6 +58,53 @@ describe("planModelGate", () => {
     });
     expect(plan.asks[0]).toMatchObject({ taskId: "x", requested: "quantum-9000" });
     expect(plan.asks[0]?.fallbackProvider).toBe("codex");
+  });
+
+  it("falls back to the run default provider, not a weak fuzzy catalog match", () => {
+    const plan = planModelGate(manifest([task({ id: "x", model: "invaidModel" })]), {
+      catalog: BUILTIN_CATALOG,
+      userAliases: {},
+      defaultProvider: "claude",
+    });
+    expect(plan.asks[0]?.requested).toBe("invaidModel");
+    expect(plan.asks[0]?.fallbackProvider).toBe("claude");
+  });
+
+  it("still pattern-routes the fallback when the model name is recognisable", () => {
+    const plan = planModelGate(manifest([task({ id: "x", model: "gpt-9-imaginary" })]), {
+      catalog: BUILTIN_CATALOG,
+      userAliases: {},
+      defaultProvider: "claude",
+    });
+    expect(plan.asks[0]?.fallbackProvider).toBe("codex");
+  });
+});
+
+describe("buildModelAsk", () => {
+  it("starts the cursor on the default-provider fallback when no candidate is strong", () => {
+    const [ask] = planModelGate(manifest([task({ id: "x", model: "invaidModel" })]), {
+      catalog: BUILTIN_CATALOG,
+      userAliases: {},
+      defaultProvider: "codex",
+    }).asks;
+    const prompt = buildModelAsk(ask!, theme);
+    expect(prompt.default).toBe(JSON.stringify({ provider: "codex", model: null }));
+    // the weak candidate is still offered, just not pre-selected
+    expect(prompt.choices[0]?.name).not.toContain("Run codex");
+  });
+
+  it("leaves the cursor on a strong typo candidate", () => {
+    const [ask] = planModelGate(
+      manifest([task({ id: "x", model: "claude-sonnet-5x" })]),
+      {
+        catalog: BUILTIN_CATALOG,
+        userAliases: {},
+        defaultProvider: "codex",
+      },
+    ).asks;
+    const prompt = buildModelAsk(ask!, theme);
+    expect(prompt.default).toBeUndefined();
+    expect(prompt.choices[0]?.name).toContain("claude");
   });
 });
 
