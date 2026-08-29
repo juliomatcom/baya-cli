@@ -47,14 +47,46 @@ describe("renderDag", () => {
     expect(out).toContain("default");
   });
 
-  it("groups tasks into dependency layers", () => {
+  it("groups tasks into dependency stages", () => {
     const out = renderDag(
       manifest([task({ id: "a" }), task({ id: "b", depends_on: ["a"] })]),
       theme,
       "codex",
     );
-    expect(out).toContain("layer 1");
-    expect(out).toContain("layer 2");
+    expect(out).toContain("stage 1");
+    expect(out).toContain("stage 2");
     expect(out).toContain("← a");
+  });
+
+  it("heads the preview with the stage count", () => {
+    const out = renderDag(
+      manifest([task({ id: "a" }), task({ id: "b", depends_on: ["a"] })]),
+      theme,
+      "codex",
+    );
+    expect(out).toContain("Run order · 2 stages");
+  });
+
+  it("explains stage independence only when a stage holds more than one task", () => {
+    const parallel = renderDag(
+      manifest([task({ id: "a" }), task({ id: "b" })]),
+      theme,
+      "codex",
+    );
+    expect(parallel).toContain("don't wait on each other");
+
+    // A pure chain has one task per stage — there is no independence to explain.
+    const chain = renderDag(
+      manifest([task({ id: "a" }), task({ id: "b", depends_on: ["a"] })]),
+      theme,
+      "codex",
+    );
+    expect(chain).not.toContain("don't wait on each other");
+  });
+
+  it("says 'stage', singular, for a one-stage plan", () => {
+    const out = renderDag(manifest([task({ id: "a" })]), theme, "codex");
+    expect(out).toContain("Run order · 1 stage");
+    expect(out).not.toContain("1 stages");
   });
 });
