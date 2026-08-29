@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
 
 # testing.md: unit + integration tiers are offline by design (fake-provider
 # only). The contract tier needs real provider binaries and never runs here.
@@ -12,7 +13,7 @@ env:
 
 jobs:
   verify:
-    name: typecheck, lint, test
+    name: format, lint, typecheck, build, test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,11 +26,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Format check
+        run: npm run format:check
 
       - name: Lint
         run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
 
       - name: Test
         run: npm test
