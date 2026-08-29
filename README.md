@@ -3,6 +3,7 @@
 **Orchestrate local AI coding CLIs from a plain-text task list.**
 
 [![CI](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/baya-cli)](https://www.npmjs.com/package/baya-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Write what you want done in an ordinary text file — Markdown, a bare to-do list, YAML, whatever you already keep tasks in. Baya asks a model to turn it into a dependency graph, then routes each task to the AI coding CLI you already have installed and logged in — `codex`, `claude`, `copilot`, `opencode` — running independent work in parallel and piping each task's output into the ones that depend on it.
@@ -10,13 +11,11 @@ Write what you want done in an ordinary text file — Markdown, a bare to-do lis
 No config format to learn. No DSL. No API keys for every provider — it drives the CLIs you already pay for.
 
 > [!WARNING]
-> **Status: early.** The walking skeleton (M1) and provider breadth (M3) have landed — `codex`, `claude`, `opencode`, and `copilot` adapters, model-catalog resolution, and a sequential executor. Concurrency, resume, and packaging are still in progress; not yet published to npm. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
+> **Status: early.** The walking skeleton (M1) and provider breadth (M3) have landed — `codex`, `claude`, `opencode`, and `copilot` adapters, model-catalog resolution, and a sequential executor. Published to npm as [`baya-cli`](https://www.npmjs.com/package/baya-cli); concurrency and resume are still in progress. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
 
 ---
 
 ## Install
-
-> Not yet published.
 
 ```bash
 npm install -g baya-cli   # binary: baya
