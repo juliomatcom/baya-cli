@@ -59,14 +59,14 @@ Every line carries `run_id` — concurrent Baya processes stay distinguishable.
 
 Everything a provider CLI emits reaches the main process, surfaced at `info` — the child's work is never a black box between spawn and result.
 
-| Normalized event         | Log event                                    | Level          | Terminal rendering                                                          |
-| :----------------------- | :------------------------------------------- | :------------- | :-------------------------------------------------------------------------- |
-| `text` (assistant prose) | `provider.text`                              | **`info`**     | Wrapped, task-prefixed                                                      |
-| `tool` (tool invocation) | `provider.tool`                              | **`info`**     | `⚒ Read(src/db.ts)`; input whitespace-flattened, wrapped, never ellipsis-cut |
-| child **stderr** lines   | `provider.stderr`                            | **`info`**     | Task-prefixed, ANSI-stripped — this is where CLIs put their own diagnostics |
-| `error` (provider diagnostic) | `provider.error`                        | `warn`         | Task-prefixed, wrapped, **full** — never abbreviated, and shown under `--quiet` |
-| `error` → run outcome    | `task.failed` / `task.retried`               | `warn`/`error` | Full                                                                        |
-| `session`, `unknown`     | `provider.session`, `provider.event.unknown` | `debug`        | Hidden by default — pure noise                                              |
+| Normalized event              | Log event                                    | Level          | Terminal rendering                                                              |
+| :---------------------------- | :------------------------------------------- | :------------- | :------------------------------------------------------------------------------ |
+| `text` (assistant prose)      | `provider.text`                              | **`info`**     | Wrapped, task-prefixed                                                          |
+| `tool` (tool invocation)      | `provider.tool`                              | **`info`**     | `⚒ Read(src/db.ts)`; input whitespace-flattened, wrapped, never ellipsis-cut    |
+| child **stderr** lines        | `provider.stderr`                            | **`info`**     | Task-prefixed, ANSI-stripped — this is where CLIs put their own diagnostics     |
+| `error` (provider diagnostic) | `provider.error`                             | `warn`         | Task-prefixed, wrapped, **full** — never abbreviated, and shown under `--quiet` |
+| `error` → run outcome         | `task.failed` / `task.retried`               | `warn`/`error` | Full                                                                            |
+| `session`, `unknown`          | `provider.session`, `provider.event.unknown` | `debug`        | Hidden by default — pure noise                                                  |
 
 ### Rules
 
