@@ -58,6 +58,18 @@ describe("classifyFailure", () => {
     expect(f).toMatchObject({ kind: "permission", retry: "never" });
   });
 
+  // codex's `read-only` sandbox refuses `$TMPDIR` too, so a test runner dies on
+  // its own cache file. No retry can widen a sandbox.
+  it("an OS sandbox refusal is a permission failure, never retried", () => {
+    for (const message of [
+      "Error: EPERM: operation not permitted, open '/var/folders/x/haste-map-jest'",
+      "EROFS: read-only file system, mkdir '/tmp/build'",
+    ]) {
+      const f = classifyFailure({ ...base, errorMessage: message }, at);
+      expect(f).toMatchObject({ kind: "permission", retry: "never" });
+    }
+  });
+
   it("an unparseable result is a schema failure, retryable now", () => {
     const f = classifyFailure(
       {

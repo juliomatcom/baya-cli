@@ -28,8 +28,12 @@ const AUTH =
   /\b(401|403|unauthor|forbidden|authentication|api key|not logged in|login)\b/i;
 const SCHEMA =
   /(does not match task_result|unparseable result|no parseable result|invalid json|schema)/i;
+// `EPERM`/`EROFS` are how an OS-level sandbox refusal surfaces: codex's
+// `read-only` mode blocks every write, `$TMPDIR` included, so a test runner
+// dies on its own cache file long before a single assertion. Retrying cannot
+// widen a sandbox, so this is `never` like any other permission refusal.
 const PERMISSION =
-  /(denied permission|permission.?mode|not allowed to|--allow|--dangerously)/i;
+  /(denied permission|permission.?mode|not allowed to|--allow|--dangerously|\bEPERM\b|\bEROFS\b|operation not permitted|read-only file system|sandbox denied)/i;
 const NETWORK =
   /\b(ECONNRESET|ETIMEDOUT|ENOTFOUND|socket hang up|network|fetch failed)\b/i;
 // A wrong model name (config/plan error) — a blind retry never fixes it.

@@ -26,14 +26,14 @@
 }
 ```
 
-| Field         | Rule                                                                                                                                                                                 |
-| :------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | kebab-case, unique, `^[a-z0-9][a-z0-9-]{0,63}$`.                                                                                                                                     |
-| `instruction` | Non-empty. Self-contained; upstream context arrives via `context[]`.                                                                                                                 |
-| `provider`    | Closed enum ∩ configured allowlist. Unknown ⇒ validation error. `null` ⇒ run default (or model-alias routing).                                                                       |
-| `model`       | Free string or `null`. `null` ⇒ provider's own default. **Never hard-code model ids.** A named model is resolved against the catalog before the run (`config.md` §Model resolution). |
-| `depends_on`  | Every entry must resolve. Graph must be acyclic.                                                                                                                                     |
-| `writes`      | `true` ⇒ workspace-write permission + writer lock. Default `false`.                                                                                                                  |
+| Field         | Rule                                                                                                                                                                                                                                                                                                 |
+| :------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | kebab-case, unique, `^[a-z0-9][a-z0-9-]{0,63}$`.                                                                                                                                                                                                                                                     |
+| `instruction` | Non-empty. Self-contained; upstream context arrives via `context[]`.                                                                                                                                                                                                                                 |
+| `provider`    | Closed enum ∩ configured allowlist. Unknown ⇒ validation error. `null` ⇒ run default (or model-alias routing).                                                                                                                                                                                       |
+| `model`       | Free string or `null`. `null` ⇒ provider's own default. **Never hard-code model ids.** A named model is resolved against the catalog before the run (`config.md` §Model resolution).                                                                                                                 |
+| `depends_on`  | Every entry must resolve. Graph must be acyclic.                                                                                                                                                                                                                                                     |
+| `writes`      | **Needs a writable workspace** — modifies files, _or_ runs anything that writes as a side effect (test suite, build, linter, install: all drop caches/temp). `false` only for pure reading. Drives the per-provider sandbox/permission mode and one prompt line; **gates no lock**. Default `false`. |
 
 **Privilege boundary:** the manifest may never contain argv, shell strings, env vars, or executable paths. The planner selects _which_ provider; the adapter alone decides _how_.
 

@@ -86,6 +86,8 @@ Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-fil
 
 Adapter `src/providers/codex.ts`, snapshot `test/unit/providers/codex.test.ts`. argv: `codex exec --json --color never --skip-git-repo-check -C <cwd> -s <sandbox> --output-schema <file> -o <file> [-m <model>] -`, prompt on stdin behind `-`. Sandbox from task: `writes:false`⇒`read-only`, `writes:true`⇒`workspace-write`, `--dangerously-allow-all`⇒`danger-full-access`.
 
+⚠️ `read-only` blocks **every** write, `$TMPDIR` and `/tmp` included — there is no writable-root escape (`sandbox_workspace_write.writable_roots` applies to `workspace-write` only). So a `read-only` task cannot run a test runner, a build, or anything that touches a cache: measured 2026-08-29, jest died on `EPERM` writing its haste-map before a single assertion. That is why `writes` means _needs a writable workspace_, not _modifies source_ — see protocol.md. `read-only` is for pure reading: reviewing, summarizing, answering.
+
 ⚠️ **UNVERIFIED:** whether `thread_id` is what `exec resume` accepts. `buildResume` assumes it; contract tier (M3.7) settles it. Not needed until M4.
 
 ## claude — ✅ verified 2026-08-28 (live, v2.1.251); adapter M3.3 landed
@@ -106,7 +108,7 @@ Adapter `src/providers/claude.ts`, snapshot `test/unit/providers/claude.test.ts`
 
 `--permission-mode` map: `auto` for every task, `--dangerously-allow-all`⇒`bypassPermissions`. `writes:false` additionally passes `--disallowed-tools Write,Edit,NotebookEdit` (comma-joined — the flag is variadic and would swallow the next flag if spread).
 
-⚠️ **Never `acceptEdits`, never `plan`.** `writes` bounds what a task may **mutate**, not whether it may **act** — a task that runs the suite and reports back writes nothing and still needs Bash, which is how codex has always read the bit (`read-only` executes commands, blocks mutation at the OS level). `acceptEdits` pre-approves edits only, so `-p`, with nobody to answer a Bash prompt, denies every command: measured 2026-08-29, a 12-task run logged 54 `Bash` denials (`npm test`, `tsc`, bare `grep`) and shipped unverified work. `plan` is worse — it refuses every non-readonly tool and bends the output into a plan proposal.
+⚠️ **Never `acceptEdits`, never `plan`.** `writes` bounds whether a task may **act on** the workspace, not merely whether it edits source — a task that runs the suite needs Bash, and (on codex) a writable `$TMPDIR` besides. `acceptEdits` pre-approves edits only, so `-p`, with nobody to answer a Bash prompt, denies every command: measured 2026-08-29, a 12-task run logged 54 `Bash` denials (`npm test`, `tsc`, bare `grep`) and shipped unverified work. `plan` is worse — it refuses every non-readonly tool and bends the output into a plan proposal.
 
 ⚠️ The `writes:false` guard is **narrower than codex's**: a tool withdrawal, not an OS sandbox, so a read-only task can still mutate the tree through a shell redirect. A task that must not touch the tree belongs on codex.
 
