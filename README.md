@@ -30,10 +30,14 @@ npm install -g baya-cli   # binary: baya
 Requires **Node 24+** and at least one supported CLI on your machine. Run `baya doctor` to see what it found.
 
 ## Usage
+```txt
+1 which model are you? - luna
+2 which model are you? - sonnet
+2 which model are you? - terra
+```
+![Basic example](https://github.com/user-attachments/assets/47541304-b19f-4044-9382-4da8f86ed170)
 
-<img width="800" height="527" alt="usage" src="https://github.com/user-attachments/assets/cbaca22f-8991-4a26-978e-dadebd882d8e" />
-
-On first run baya asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
+📝 On first run `baya` asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
 
 ### The task list
 
@@ -76,37 +80,6 @@ Any UTF-8 text file. Baya's planner reads it for intent — the format is yours 
 ```
 
 Baya never parses these structurally — the planner reads every format for intent, so `depends_on:` and plain prose like "once the schema and UI are done" get you the same graph. Empty or binary files are rejected before planning; if the planner can't produce a graph, a deterministic splitter falls back to a linear chain in the order you wrote the tasks.
-
-### Example — a task per model, resolved automatically
-
-```markdown
-1 which model are you? - luna
-2 which model are you? - terra
-3 which model are you? - sonnet
-```
-
-```console
-$ baya ./tasks.md --yes
-
-  baya · ./tasks.md · 3 tasks · claude
-
-  layer 1
-    · which-model-luna    codex  gpt-5.6-luna     Which model are you? (luna)
-    · which-model-terra   codex  gpt-5.6-terra    Which model are you? (terra)
-    · which-model-sonnet  claude claude-sonnet-5  Which model are you? (sonnet)
-
-  resolved which-model-luna:   "luna"   → codex gpt-5.6-luna     (alias)
-  resolved which-model-terra:  "terra"  → codex gpt-5.6-terra    (alias)
-  resolved which-model-sonnet: "sonnet" → claude claude-sonnet-5 (alias)
-
-  ✓ which-model-luna    codex   17.0s · 56k tok  I am OpenAI Codex, based on the GPT-5 model family.
-  ✓ which-model-terra   codex    4.2s · 18k tok  I am GPT-5.6 Terra, provided by OpenAI.
-  ✓ which-model-sonnet  claude  13.4s · 28k tok  I am Claude Sonnet 5 (model ID claude-sonnet-5).
-
-  Run complete · 3 succeeded · 34.6s · 102k tokens · $0.05
-```
-
-`luna`, `terra`, and `sonnet` are short names — Baya resolves each against its model catalog to the real id and the provider that serves it (`luna`/`terra` → `codex`, `sonnet` → `claude`), then runs all three independently. A name it can't resolve stops at the plan gate instead of failing mid-run; it is never silently swapped for the default. See [`wiki-llm/config.md`](wiki-llm/config.md#model-resolution).
 
 ## Features
 
