@@ -59,6 +59,7 @@ export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
     "  --quiet                    alias for --log-level warn",
     "  --no-progress              disable the spinner",
     "  --no-color                 disable ANSI",
+    "  -v, --version              print the release version and exit",
     "",
     theme.taskId("EXAMPLES"),
     "  baya ./tasks.md",

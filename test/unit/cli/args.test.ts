@@ -51,6 +51,12 @@ describe("subcommand vs path resolution", () => {
   it("routes -h to help regardless of the subcommand", () => {
     expect(parseArgs(["run", "tasks.md", "--help"]).command).toBe("help");
   });
+
+  it("sets showVersion for -v, -V, and --version alike", () => {
+    expect(parseArgs(["-v"]).showVersion).toBe(true);
+    expect(parseArgs(["-V"]).showVersion).toBe(true);
+    expect(parseArgs(["--version"]).showVersion).toBe(true);
+  });
 });
 
 describe("flags", () => {

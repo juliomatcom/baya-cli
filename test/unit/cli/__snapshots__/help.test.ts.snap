@@ -35,6 +35,7 @@ OPTIONS
   --quiet                    alias for --log-level warn
   --no-progress              disable the spinner
   --no-color                 disable ANSI
+  -v, --version              print the release version and exit
 
 EXAMPLES
   baya ./tasks.md
