@@ -143,20 +143,20 @@ flowchart TB
     G --> GATE{"Preview<br/>& confirm"}
     GATE -->|approved| S["Scheduler<br/><i>budgets · write-lock</i>"]
 
-    S --> T1["task: design-api"]
-    S --> T2["task: gen-schema"]
-    S --> T3["task: build-ui"]
+    S --> GRP{"Group<br/><i>same provider · model<br/>access · cwd</i>"}
 
-    T1 --> AD["Provider adapters<br/><i>argv · prompt delivery · event parsing</i>"]
-    T2 --> AD
-    T3 --> AD
+    GRP --> P1["one process<br/><i>several tasks, in order,<br/>in one conversation</i>"]
+    GRP --> P2["one process<br/><i>another model, so<br/>a group of its own</i>"]
+
+    P1 --> AD["Provider adapters<br/><i>argv · prompt delivery · event parsing</i>"]
+    P2 --> AD
 
     AD --> C1["codex"]
     AD --> C2["claude"]
     AD --> C3["copilot"]
     AD --> C4["opencode"]
 
-    C1 --> RES["task_result JSON<br/><i>status · summary · notes</i>"]
+    C1 --> RES["task_result JSON<br/><i>one per task in the process</i>"]
     C2 --> RES
     C3 --> RES
     C4 --> RES
@@ -165,6 +165,7 @@ flowchart TB
     RES -->|needs_input| ASK["Bubble question<br/>→ resume session"]
     RES -->|failed| REC["Classify failure<br/>→ resumable state"]
 
+    RES -.->|derived facts| S
     BUS --> S
     ASK --> S
     REC --> OUT["Report<br/><i>summaries · flagged notes</i>"]
@@ -175,6 +176,7 @@ Five ideas do most of the work:
 
 - **JSON on the wire, both directions.** Every exchange with a provider is a validated envelope, never prose. `codex` and `claude` enforce the result schema natively. A question from an agent is a `status: "needs_input"` field — not a question mark spotted in a stream.
 - **The planner picks a provider, never a command.** Manifests carry a provider name from a closed enum; adapters alone build `argv`. `shell: true` is banned repo-wide.
+- **A process is the unit, not a task.** Tasks that share a provider, model, permission level and directory go into one agent process and are worked through in order — a whole layer of independent tasks, or a chain where each step builds on the last. That process orients itself once instead of once per task. This is decided separately from the DAG's shape, so the two do not line up: a six-stage chain is still one process, while one stage holding six tasks on six models is six.
 - **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume <runId> --provider claude` picks up exactly where it stopped. Within a run, no task rediscovers what another already found: commands that worked, commands that failed, and files already touched are derived from the providers' own logs — costing nothing to produce — and handed to every later task.
 - **Providers are watched, not trusted.** Their flag surfaces are live-probed and contract-tested, their output is ANSI-stripped and schema-validated.
 
@@ -197,8 +199,8 @@ Full flag surfaces, event shapes, and capability matrix: [`wiki-llm/providers.md
 ```
 wiki-llm/     documentation — the source of truth
 specs/001/    design record: what the original spec got wrong, and the plan
-src/          (not yet)
-test/         (not yet)
+src/          the CLI, planner, providers, executor, memory
+test/         unit · integration (fake provider) · contract (live CLIs)
 ```
 
 ## Documentation
