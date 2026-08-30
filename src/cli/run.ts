@@ -3,6 +3,7 @@ import { resolve as resolvePath } from "node:path";
 import {
   validateManifest,
   writePlanDraftSchema,
+  writeTaskResultBatchSchema,
   writeTaskResultSchema,
   type Manifest,
   type ProviderId,
@@ -29,6 +30,7 @@ import {
   type Registry,
 } from "../providers/index.js";
 import {
+  DEFAULT_GROUP_SIZE,
   StateStore,
   emptyTaskEntry,
   killGroup,
@@ -45,6 +47,8 @@ import {
   exitCodeFor,
   renderDag,
   renderReport,
+  formatElapsed,
+  resolveRunModel,
   runModelGate,
   type Progress,
 } from "../ui/index.js";
@@ -95,6 +99,17 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     json: flags.json,
     env,
   });
+  // Repaints the elapsed count on the spinner line. Declared out here, beside
+  // the progress instance it drives, so the `finally` can always clear it —
+  // an interval left running past a thrown error keeps repainting a line for
+  // a run that is over.
+  let ticker: NodeJS.Timeout | null = null;
+  const stopTicker = (): void => {
+    if (ticker === null) return;
+    clearInterval(ticker);
+    ticker = null;
+  };
+
   // Every persistent write funnels through progress so the spinner line is
   // cleared and repainted around it (conventions.md #16b).
   const stderrSink = {
@@ -170,6 +185,42 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   }
   plannerProvider ??= defaultProvider;
 
+  // Resolve the run-level models before anything spawns. `--default-model` and
+  // `--planner-model` used to reach the provider verbatim, so a catalog alias
+  // like `luna` was handed to codex as `-m luna` and the planner failed on a
+  // name `baya models` lists (model-gate.ts §resolveRunModel). The catalog is
+  // built here rather than at the task gate because the planner needs it first.
+  const catalog = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
+  const modelNotes: string[] = [];
+  for (const [label, provider, current, apply] of [
+    [
+      "--default-model",
+      defaultProvider,
+      defaultModel,
+      (m: string | null) => {
+        defaultModel = m;
+      },
+    ],
+    [
+      "--planner-model",
+      plannerProvider,
+      plannerModel,
+      (m: string | null) => {
+        plannerModel = m;
+      },
+    ],
+  ] as const) {
+    if (provider === null) continue;
+    const resolved = resolveRunModel(current, {
+      catalog,
+      userAliases: loaded.config.modelAliases,
+      provider,
+      label,
+    });
+    apply(resolved.model);
+    if (resolved.note !== null) modelNotes.push(resolved.note);
+  }
+
   // ---- run identity and the directory lock
   const runId = makeRunId();
   const paths = runPaths(cwd, runId);
@@ -203,6 +254,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     sources: loaded.sources,
     user_config: loaded.userPath,
   });
+  for (const note of modelNotes) logger.info("run.model.resolved", { detail: note });
   for (const warning of startupWarnings)
     logger.warn("config.default.inferred", { message: warning });
   for (const status of statuses) {
@@ -257,6 +309,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
 
   try {
     const schemaPath = writeTaskResultSchema(paths.schemaDir);
+    const batchSchemaPath = writeTaskResultBatchSchema(paths.schemaDir);
     const planSchemaPath = writePlanDraftSchema(paths.schemaDir);
 
     // ---- plan
@@ -341,6 +394,11 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
           env,
         }),
         logger,
+        // Inlined only for a planner that enforces nothing. Naming a schema by
+        // path sends the agent to read it, which costs a whole context re-send.
+        ...(plannerAdapter.capabilities.structuredOutput === "none"
+          ? { schema: readFileSync(planSchemaPath, "utf8") }
+          : {}),
         providers: registry.ids,
         defaultProvider: defaultProvider as ProviderId,
         schemaPath: planSchemaPath,
@@ -354,7 +412,6 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- model gate: resolve every task-named model against the catalog
     //      before anything is written or run. A named model is never silently
     //      swapped for the default (M3.6).
-    const catalog = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
     const modelGate = await runModelGate({
       manifest,
       catalog,
@@ -436,7 +493,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         context_budget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
         memory: !flags.noMemory,
         memory_budget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
-        session_reuse: !flags.noSessionReuse,
+        group_size: flags.groupSize ?? DEFAULT_GROUP_SIZE,
       },
       totals: {
         succeeded: 0,
@@ -466,6 +523,34 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     const summaries = new Map<string, string>();
     const singleTask = manifest.tasks.length === 1;
 
+    // A live line for the whole time a process is out. `claude
+    // --output-format json` returns one object at the very end, so between the
+    // spawn and the result there is structurally nothing to print and a slow
+    // task is indistinguishable from a hung one. The elapsed count is the
+    // point — a spinner alone still leaves "how long has this been?"
+    // unanswered.
+    const spinGroup = (info: {
+      taskIds: string[];
+      provider: string;
+      model: string | null;
+    }): void => {
+      const lead = info.taskIds[0] ?? "";
+      const more =
+        info.taskIds.length > 1 ? theme.note(` +${info.taskIds.length - 1}`) : "";
+      const who = `${theme.provider(info.provider)}${info.model ? theme.note(` ${info.model}`) : ""}`;
+      const label = `${theme.taskId(lead)}${more} ${who}`;
+      const startedAt = Date.now();
+      const paint = (): void =>
+        progress.update(
+          `${label} ${theme.note(`· ${formatElapsed(Date.now() - startedAt)}`)}`,
+        );
+      stopTicker();
+      progress.start(`${label} ${theme.note("· 0s")}`);
+      ticker = setInterval(paint, 1000);
+      // Never hold the event loop open on account of a cosmetic line.
+      ticker.unref();
+    };
+
     await runSequential({
       manifest,
       cwd,
@@ -474,6 +559,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       logger,
       store,
       schemaPath,
+      batchSchemaPath,
       defaultProvider: defaultProvider as ProviderId,
       defaultModel,
       binOverrides,
@@ -481,9 +567,10 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       contextBudget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
       memory: !flags.noMemory,
       memoryBudget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
-      sessionReuse: !flags.noSessionReuse,
+      groupSize: flags.groupSize ?? DEFAULT_GROUP_SIZE,
       env,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
+      onGroupStarted: spinGroup,
       onTaskSettled: (taskId, _state, result) => {
         summaries.set(taskId, result.summary);
         // Full output would bury everything in a multi-task run; it is printed
@@ -506,6 +593,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     });
     writeFileSync(paths.report, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
+    stopTicker();
+
     logger.info(state.totals.failed > 0 ? "run.failed" : "run.completed", {
       succeeded: state.totals.succeeded,
       failed: state.totals.failed,
@@ -525,6 +614,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     return interrupted ? 130 : exitCodeFor(state);
   } finally {
     process.removeListener("SIGINT", onSigint);
+    stopTicker();
     progress.dispose();
     lock.release();
   }

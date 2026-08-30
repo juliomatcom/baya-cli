@@ -41,6 +41,12 @@ export interface RunReport {
   ended_at: string;
   duration_ms: number;
   totals: RunState["totals"];
+  /**
+   * Provider processes actually spawned (execution.md §Grouping). Distinct
+   * from the task count, and the number that tracks what a run cost to start:
+   * grouping is only doing its job when this is below it.
+   */
+  processes: number;
   tasks: ReportTask[];
   /** Every note across every task, `action_required` first. */
   flagged: FlaggedNote[];
@@ -84,6 +90,15 @@ export function buildReport(
     .flatMap((task) => task.notes.map((note) => ({ ...note, task_id: task.id })))
     .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 
+  // A task only spawned if it reached `running`, which is what stamps
+  // `started_at`. `skipped` tasks, and tasks whose provider could not be
+  // resolved, never started a process and must not be counted as one.
+  const processes = new Set(
+    Object.entries(state.tasks)
+      .filter(([, entry]) => entry.started_at !== null)
+      .map(([id, entry]) => entry.group_id ?? id),
+  ).size;
+
   const startedAt = Date.parse(state.started_at);
   const endedAt = Date.parse(state.updated_at);
 
@@ -98,6 +113,7 @@ export function buildReport(
         ? Math.max(0, endedAt - startedAt)
         : 0,
     totals: state.totals,
+    processes,
     tasks: tasks.map((task) => ({ ...task, title: titles.get(task.id) ?? task.title })),
     flagged,
     outputs_path: options.outputsPath,
@@ -118,23 +134,54 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   const lines: string[] = [""];
   const { totals } = report;
 
-  const parts = [`${totals.succeeded} succeeded`];
+  // The outcome counts carry their own color; `succeeded` was the only one
+  // left plain, so the line used to color bad news and nothing else.
+  const parts = [
+    totals.succeeded > 0
+      ? theme.ok(`${totals.succeeded} succeeded`)
+      : theme.note(`${totals.succeeded} succeeded`),
+  ];
   if (totals.failed > 0) parts.push(theme.fail(`${totals.failed} failed`));
   if (totals.skipped > 0) parts.push(theme.skip(`${totals.skipped} skipped`));
   if (totals.parked > 0) parts.push(theme.park(`${totals.parked} parked`));
 
-  const headline = report.totals.failed > 0 ? "Run finished" : "Run complete";
+  // Graded on how much of the run actually landed, not on whether anything
+  // threw: a run with nothing `failed` but half its tasks `skipped` or `parked`
+  // did not complete, and a green badge over it would be the report lying about
+  // the one thing a glance is for.
+  const total = report.tasks.length;
+  const outcome: "ok" | "warn" | "fail" =
+    total === 0 || totals.succeeded === total
+      ? "ok"
+      : totals.succeeded === 0
+        ? "fail"
+        : "warn";
+  const headline =
+    outcome === "ok"
+      ? "Run complete"
+      : outcome === "fail"
+        ? "Run failed"
+        : "Run finished";
+  const glyph = theme.glyphs[outcome];
   // codex and claude report tokens, not dollars — show what we actually have.
   // The `$` figure stays only when a provider gave us one (cli.md: no fabricated
   // cost). See spec §Non-goals — cost accounting is v1.1.
   const tokens = (totals.input_tokens ?? 0) + (totals.output_tokens ?? 0);
   const meter: string[] = [];
+  // Sits with the cost meters, not the task counts, because that is what it
+  // is: every process re-pays a CLI's startup. Suppressed for a single task,
+  // where "1 process" only restates the line already above it.
+  if (report.tasks.length > 1 && report.processes > 0) {
+    meter.push(`${report.processes} ${report.processes === 1 ? "process" : "processes"}`);
+  }
   if (tokens > 0) meter.push(`${formatTokens(tokens)} tokens`);
   if (totals.cost_usd > 0) meter.push(formatCost(totals.cost_usd));
-  const meterTail = meter.length > 0 ? ` · ${meter.join(" · ")}` : "";
-  lines.push(
-    `  ${theme.taskId(headline)} · ${parts.join(" · ")} · ${formatDuration(report.duration_ms)}${meterTail}`,
-  );
+  // Hierarchy, loudest first: a filled badge for the outcome, colored counts
+  // for what happened, and the meters dimmed — they are reference numbers, not
+  // the news. Without the dimming the badge competes with a row of equals.
+  const badge = theme.badge(outcome, ` ${glyph} ${headline} `);
+  const meters = [formatDuration(report.duration_ms), ...meter];
+  lines.push(`  ${badge} ${parts.join(" · ")} ${theme.note(`· ${meters.join(" · ")}`)}`);
 
   if (report.flagged.length > 0) {
     lines.push("", `  ${theme.taskId("Flagged")}`);

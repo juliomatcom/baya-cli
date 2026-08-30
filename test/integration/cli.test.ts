@@ -33,10 +33,7 @@ describe("baya doctor", () => {
     const { copyFileSync, chmodSync } = await import("node:fs");
     copyFileSync(FAKE_PROVIDER, join(localBin, "codex"));
     chmodSync(join(localBin, "codex"), 0o755);
-    writeFileSync(
-      join(workspace.cwd, ".baya", "config.json"),
-      JSON.stringify({ version: 1 }),
-    );
+    writeFileSync(userConfigPath(workspace.env), JSON.stringify({ version: 1 }));
 
     const result = await runCli(["doctor"], { workspace });
     expect(result.stdout).toContain(join(localBin, "codex"));
@@ -46,7 +43,7 @@ describe("baya doctor", () => {
   it("exits 2 with install hints when no provider resolves", async () => {
     const workspace = makeWorkspace({});
     writeFileSync(
-      join(workspace.cwd, ".baya", "config.json"),
+      userConfigPath(workspace.env),
       JSON.stringify({ version: 1, providers: { codex: { bin: "/nonexistent/codex" } } }),
     );
     const result = await runCli(["doctor"], { workspace });
@@ -77,16 +74,13 @@ describe("baya config", () => {
   it("--show names the source layer of every value", async () => {
     const result = await runCli(["config", "--show"]);
     expect(result.stdout).toContain("defaults.provider");
-    expect(result.stdout).toContain("from project");
+    expect(result.stdout).toContain("from user");
     expect(result.stdout).toContain("providers.codex.bin");
   });
 
   it("set writes the user layer, and --show then attributes it there", async () => {
     const workspace = makeWorkspace({});
-    writeFileSync(
-      join(workspace.cwd, ".baya", "config.json"),
-      JSON.stringify({ version: 1 }),
-    );
+    writeFileSync(userConfigPath(workspace.env), JSON.stringify({ version: 1 }));
 
     const set = await runCli(["config", "set", "defaults.provider", "codex"], {
       workspace,
@@ -105,7 +99,7 @@ describe("baya config", () => {
 
   it("reports a malformed config clearly, naming the file", async () => {
     const workspace = makeWorkspace({});
-    writeFileSync(join(workspace.cwd, ".baya", "config.json"), "{oops");
+    writeFileSync(userConfigPath(workspace.env), "{oops");
     const result = await runCli(["config", "--show"], { workspace });
     expect(result.code).toBe(2);
     expect(result.stderr).toContain("not valid JSON");
@@ -123,18 +117,21 @@ describe("baya config refresh-models", () => {
     return path;
   }
 
-  /** `opencode` reachable only through the project layer's `bin` override. */
+  /** `opencode` reachable only through the config's `bin` override. */
   function setup(ids: string[] | null, userConfig: object): Workspace {
     const workspace = makeWorkspace({});
     const bin =
       ids === null ? "/nonexistent/opencode" : fakeOpencode(workspace.home, ids);
-    writeFileSync(
-      join(workspace.cwd, ".baya", "config.json"),
-      JSON.stringify({ version: 1, providers: { opencode: { bin } } }),
-    );
     const userPath = userConfigPath(workspace.env);
     mkdirSync(dirname(userPath), { recursive: true });
-    writeFileSync(userPath, JSON.stringify({ version: 1, ...userConfig }));
+    writeFileSync(
+      userPath,
+      JSON.stringify({
+        version: 1,
+        providers: { opencode: { bin } },
+        ...userConfig,
+      }),
+    );
     return workspace;
   }
 
@@ -332,7 +329,7 @@ describe("baya --help", () => {
 
   it("still prints when the config is unreadable — help must survive a broken setup", async () => {
     const workspace = makeWorkspace({});
-    writeFileSync(join(workspace.cwd, ".baya", "config.json"), "{oops");
+    writeFileSync(userConfigPath(workspace.env), "{oops");
     const result = await runCli(["--help"], { workspace });
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("USAGE");
@@ -397,7 +394,7 @@ describe("non-TTY provider selection", () => {
         },
       },
     });
-    writeFileSync(join(workspace.cwd, ".baya", "config.json"), JSON.stringify(noDefault));
+    writeFileSync(userConfigPath(workspace.env), JSON.stringify(noDefault));
 
     const result = await runCli(["./tasks.md", "--yes"], { workspace });
     expect(result.code).toBe(0);
@@ -407,7 +404,7 @@ describe("non-TTY provider selection", () => {
   it("exits 2 with install hints when zero providers resolve", async () => {
     const workspace = makeWorkspace({});
     writeFileSync(
-      join(workspace.cwd, ".baya", "config.json"),
+      userConfigPath(workspace.env),
       JSON.stringify({ version: 1, providers: { codex: { bin: "/nonexistent/codex" } } }),
     );
     const result = await runCli(["./tasks.md", "--yes"], { workspace });
@@ -419,7 +416,7 @@ describe("non-TTY provider selection", () => {
   it("never prompts under BAYA_NO_INPUT, even on a TTY", async () => {
     const workspace = makeWorkspace({});
     writeFileSync(
-      join(workspace.cwd, ".baya", "config.json"),
+      userConfigPath(workspace.env),
       JSON.stringify({ version: 1, providers: { codex: { bin: "/nonexistent/codex" } } }),
     );
     const result = await runCli(["./tasks.md"], {

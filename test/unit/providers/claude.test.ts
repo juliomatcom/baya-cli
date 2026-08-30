@@ -3,7 +3,11 @@ import {
   PROTOCOL_VERSION,
   type Task,
   type TaskRequest,
+  type TaskResult,
 } from "../../../src/manifest/index.js";
+
+/** A process returns one result per task; these adapters are exercised with one. */
+const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
 
 const ESC = String.fromCharCode(27);
 
@@ -161,21 +165,8 @@ describe("claudeAdapter.buildRun argv", () => {
     expect(claudeAdapter.buildResume("sess-9", "answer", withId).argv).not.toContain(
       "--session-id",
     );
-    expect(claudeAdapter.buildContinue?.("sess-9", withId).argv).not.toContain(
-      "--session-id",
-    );
     // A cold run still pre-assigns it.
     expect(claudeAdapter.buildRun(withId).argv).toContain("--session-id");
-  });
-
-  it("continues a chain by sending the next task_request into --resume", () => {
-    const plan = claudeAdapter.buildContinue?.("sess-9", input());
-    expect(plan?.argv.slice(0, 3)).toEqual([
-      "/usr/local/bin/claude",
-      "--resume",
-      "sess-9",
-    ]);
-    expect(plan?.stdinData).toBe(input().prompt);
   });
 });
 
@@ -217,7 +208,7 @@ describe("claudeAdapter.parseEvents", () => {
 
 describe("claudeAdapter.extractResult", () => {
   const ctx = (raw: string, over: Partial<Record<string, unknown>> = {}) => ({
-    taskId: "gen-schema",
+    taskIds: ["gen-schema"],
     events: claudeAdapter.parseEvents(raw),
     resultFileContents: null,
     exitCode: 0,
@@ -226,16 +217,18 @@ describe("claudeAdapter.extractResult", () => {
   });
 
   it("rung 1: reads .structured_output when the schema was enforced", () => {
-    const result = claudeAdapter.extractResult(
-      ctx(claudeBlob({ structured_output: JSON.parse(conformingResult) })),
+    const result = one(
+      claudeAdapter.extractResults(
+        ctx(claudeBlob({ structured_output: JSON.parse(conformingResult) })),
+      ),
     );
     expect(result.status).toBe("ok");
     expect(result.summary).toBe("created 4 tables");
   });
 
   it("rungs 2–3: parses a conforming .result string when there is no structured_output", () => {
-    const result = claudeAdapter.extractResult(
-      ctx(claudeBlob({ result: conformingResult })),
+    const result = one(
+      claudeAdapter.extractResults(ctx(claudeBlob({ result: conformingResult }))),
     );
     expect(result.status).toBe("ok");
     expect(result.summary).toBe("created 4 tables");
@@ -243,23 +236,25 @@ describe("claudeAdapter.extractResult", () => {
 
   it("normalizes the task id from structured_output so a result cannot be misrouted", () => {
     const wrong = { ...JSON.parse(conformingResult), task_id: "other" };
-    const result = claudeAdapter.extractResult(
-      ctx(claudeBlob({ structured_output: wrong })),
+    const result = one(
+      claudeAdapter.extractResults(ctx(claudeBlob({ structured_output: wrong }))),
     );
     expect(result.task_id).toBe("gen-schema");
   });
 
   it("warns on a result that parsed despite denials, without failing it", () => {
-    const result = claudeAdapter.extractResult(
-      ctx(
-        claudeBlob({
-          structured_output: JSON.parse(conformingResult),
-          permission_denials: [
-            { tool_name: "Bash" },
-            { tool_name: "Bash" },
-            { tool_name: "Write" },
-          ],
-        }),
+    const result = one(
+      claudeAdapter.extractResults(
+        ctx(
+          claudeBlob({
+            structured_output: JSON.parse(conformingResult),
+            permission_denials: [
+              { tool_name: "Bash" },
+              { tool_name: "Bash" },
+              { tool_name: "Write" },
+            ],
+          }),
+        ),
       ),
     );
     // The work landed, so the task is not a failure — but the denial has to
@@ -271,19 +266,23 @@ describe("claudeAdapter.extractResult", () => {
   });
 
   it("leaves a clean result's notes untouched", () => {
-    const result = claudeAdapter.extractResult(
-      ctx(claudeBlob({ structured_output: JSON.parse(conformingResult) })),
+    const result = one(
+      claudeAdapter.extractResults(
+        ctx(claudeBlob({ structured_output: JSON.parse(conformingResult) })),
+      ),
     );
     expect(result.notes).toEqual([]);
   });
 
   it("reports permission denials as a non-retryable failure", () => {
-    const result = claudeAdapter.extractResult(
-      ctx(
-        claudeBlob({
-          result: "blocked",
-          permission_denials: [{ tool_name: "Bash" }, { tool_name: "Write" }],
-        }),
+    const result = one(
+      claudeAdapter.extractResults(
+        ctx(
+          claudeBlob({
+            result: "blocked",
+            permission_denials: [{ tool_name: "Bash" }, { tool_name: "Write" }],
+          }),
+        ),
       ),
     );
     expect(result.status).toBe("failed");
@@ -292,21 +291,25 @@ describe("claudeAdapter.extractResult", () => {
   });
 
   it("turns an is_error blob into a failure, non-retryable on auth", () => {
-    const result = claudeAdapter.extractResult(
-      ctx(claudeBlob({ is_error: true, result: "invalid api key" })),
+    const result = one(
+      claudeAdapter.extractResults(
+        ctx(claudeBlob({ is_error: true, result: "invalid api key" })),
+      ),
     );
     expect(result.status).toBe("failed");
     expect(result.error?.retryable).toBe(false);
   });
 
   it("synthesizes a failure when claude wrote nothing parseable", () => {
-    const result = claudeAdapter.extractResult({
-      taskId: "gen-schema",
-      events: [],
-      resultFileContents: null,
-      exitCode: 1,
-      stderr: "segfault",
-    });
+    const result = one(
+      claudeAdapter.extractResults({
+        taskIds: ["gen-schema"],
+        events: [],
+        resultFileContents: null,
+        exitCode: 1,
+        stderr: "segfault",
+      }),
+    );
     expect(result.status).toBe("failed");
     expect(result.error?.message).toContain("no parseable result");
   });
@@ -367,120 +370,8 @@ describe("claude usage accounting", () => {
 });
 
 describe("claude observations", () => {
-  const ctx = (transcript: string | null) => ({
-    taskId: "t1",
-    events: [],
-    resultFileContents: null,
-    exitCode: 0,
-    stderr: "",
-    transcript,
-  });
-
-  it("declares the transcript as its source, because its events cannot carry tools", () => {
-    expect(claudeAdapter.capabilities.observations).toBe("transcript");
+  it("reports no commands: its single JSON object cannot carry tool calls", () => {
+    expect(claudeAdapter.capabilities.observations).toBe("none");
     expect(claudeAdapter.capabilities.events).toBe("json");
-    expect(typeof claudeAdapter.transcriptPath).toBe("function");
-  });
-
-  it("reads observations out of the transcript it is handed", () => {
-    const transcript = [
-      JSON.stringify({
-        type: "assistant",
-        message: {
-          content: [
-            {
-              type: "tool_use",
-              id: "u1",
-              name: "Read",
-              input: { file_path: "/repo/a.ts" },
-            },
-          ],
-        },
-      }),
-    ].join("\n");
-    expect(claudeAdapter.extractObservations?.(ctx(transcript))).toEqual([
-      { kind: "read", path: "/repo/a.ts" },
-    ]);
-  });
-
-  it("contributes nothing, and fails nothing, when no transcript was found", () => {
-    expect(claudeAdapter.extractObservations?.(ctx(null))).toEqual([]);
-  });
-
-  /**
-   * The poisoning case, measured on a real run: `auto` denied `npm test`, it
-   * was recorded as a dead end, and the next task refused to try it. A denied
-   * command never ran, so it can never be a dead end.
-   */
-  it("drops failed commands from a task whose tools were denied", () => {
-    const transcript = [
-      JSON.stringify({
-        type: "assistant",
-        message: {
-          content: [
-            { type: "tool_use", id: "a", name: "Bash", input: { command: "npm test" } },
-            { type: "tool_use", id: "b", name: "Bash", input: { command: "ls" } },
-            { type: "tool_use", id: "c", name: "Read", input: { file_path: "/r/a.ts" } },
-          ],
-        },
-      }),
-      JSON.stringify({
-        type: "user",
-        message: {
-          content: [
-            { type: "tool_result", tool_use_id: "a", is_error: true },
-            { type: "tool_result", tool_use_id: "b", is_error: false },
-          ],
-        },
-      }),
-    ].join("\n");
-
-    const denied = {
-      ...ctx(transcript),
-      events: claudeAdapter.parseEvents(
-        JSON.stringify({
-          session_id: "s",
-          result: "done",
-          permission_denials: [{ tool_name: "Bash" }],
-        }),
-      ),
-    };
-
-    const observations = claudeAdapter.extractObservations?.(denied) ?? [];
-    // The denied one is gone; what actually ran, and what was read, survive.
-    expect(observations).not.toContainEqual(
-      expect.objectContaining({ command: "npm test" }),
-    );
-    expect(observations).toContainEqual({ kind: "command", command: "ls", ok: true });
-    expect(observations).toContainEqual({ kind: "read", path: "/r/a.ts" });
-  });
-
-  it("keeps failed commands when nothing was denied — a real failure is a fact", () => {
-    const transcript = [
-      JSON.stringify({
-        type: "assistant",
-        message: {
-          content: [
-            { type: "tool_use", id: "a", name: "Bash", input: { command: "npm test" } },
-          ],
-        },
-      }),
-      JSON.stringify({
-        type: "user",
-        message: { content: [{ type: "tool_result", tool_use_id: "a", is_error: true }] },
-      }),
-    ].join("\n");
-
-    const clean = {
-      ...ctx(transcript),
-      events: claudeAdapter.parseEvents(
-        JSON.stringify({ session_id: "s", result: "done", permission_denials: [] }),
-      ),
-    };
-    expect(claudeAdapter.extractObservations?.(clean)).toContainEqual({
-      kind: "command",
-      command: "npm test",
-      ok: false,
-    });
   });
 });

@@ -9,6 +9,7 @@ import {
   type ProviderId,
   type Task,
   type TaskRequest,
+  type TaskResult,
 } from "../../src/manifest/index.js";
 import {
   claudeAdapter,
@@ -19,6 +20,9 @@ import {
   type ProviderAdapter,
 } from "../../src/providers/index.js";
 import { runProcess } from "../../src/executor/spawn.js";
+
+/** A process returns one result per task; these adapters are exercised with one. */
+const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
 
 /**
  * Contract tier — real binaries, real calls. `npm run test:contract`.
@@ -112,7 +116,7 @@ describeContract("provider contract", () => {
           writeFileSync(file.path, file.contents, "utf8");
         }
 
-        const events: Parameters<typeof adapter.extractResult>[0]["events"] = [];
+        const events: Parameters<typeof adapter.extractResults>[0]["events"] = [];
         const outcome = await runProcess({
           plan,
           timeoutMs: 150_000,
@@ -126,13 +130,15 @@ describeContract("provider contract", () => {
           resultFileContents = null;
         }
 
-        const result = adapter.extractResult({
-          taskId: task.id,
-          events,
-          resultFileContents,
-          exitCode: outcome.code,
-          stderr: outcome.stderr,
-        });
+        const result = one(
+          adapter.extractResults({
+            taskIds: [task.id],
+            events,
+            resultFileContents,
+            exitCode: outcome.code,
+            stderr: outcome.stderr,
+          }),
+        );
 
         // The contract is structural: whatever the provider did, the adapter
         // must hand back something that parses as a task_result for this id.

@@ -12,6 +12,8 @@ Every internal move is logged: source read, planner call, CLI spawn, each normal
 | `.baya/runs/<runId>/baya.jsonl` | **`trace` — everything**                                          | JSONL                          | Forensics. Nothing is filtered out here.                                 |
 | stderr                          | `info` (`--log-level`; `--verbose` ⇒ `debug`, `--quiet` ⇒ `warn`) | rendered via `src/ui/theme.ts` | A readable narrative while it works, **including live provider output**. |
 
+**Verbosity filters chatter, never outcomes.** `task.succeeded`, `task.failed`, `task.parked` and `task.skipped` reach the terminal at **any** level. The last three already did on level alone (`error`/`warn`), so gating only `task.succeeded` — which is `info` — left a `--quiet` run showing every bad outcome and no good one. Enforced in two places, because there are two gates: `ALWAYS_DISPLAYED` in `src/log/logger.ts` bypasses the level filter, and `src/ui/render.ts` no longer drops the success line under `--quiet`. `task.note` is **not** in the set: a note belongs to an outcome, and the end-of-run **Flagged** section reprints every one at any level. For genuinely no stderr, use `--json` (which nulls it) or a shell redirect.
+
 File always gets the full stream; terminal gets a filtered view. **Never stdout** — stdout carries only the `--json` report (`baya … --json | jq` stays valid). Distinct from per-task `events.jsonl` (provider transport events); `baya.jsonl` is the orchestrator's own trace.
 
 ## Line shape
@@ -53,7 +55,7 @@ Every line carries `run_id` — concurrent Baya processes stay distinguishable.
 
 ### Execution
 
-`task.request.written` (path, bytes) · `task.spawned` (provider, argv, pid, pgid, delivery) · **`provider.text`** · **`provider.tool`** · **`provider.stderr`** · `provider.error` (`warn`; a classified transport error) · `provider.session` (`debug`) · `provider.event.unknown` (`debug`) · `task.result.parsed` (**which rung of the degradation ladder was used**) · `task.transcript` (`debug`; path, found) · `task.observations` (`debug`; provider, count) · `task.continue.failed` (`warn`; a session continuation the CLI rejected — retried cold) · `task.note` (severity, message — one per `notes[]` entry) · `task.succeeded` (duration, cost, files_changed, note_count, continued_from) · `task.failed` (kind, retry class, exit code) · `task.parked` (question) · `task.skipped` (blocking ancestor) · `task.retried` (attempt, backoff_ms) · `task.timeout`
+`group.ready` (`debug`; group_id, member task ids) · `group.request.written` (`debug`; group_id, tasks, bytes) · `task.spawned` (provider, argv, pid, pgid, delivery, group) · **`provider.text`** · **`provider.tool`** · **`provider.stderr`** · `provider.error` (`warn`; a classified transport error) · `provider.session` (`debug`) · `provider.event.unknown` (`debug`) · `task.result.parsed` (**which rung of the degradation ladder was used**) · `group.observations` (`debug`; provider, count) · `group.memory.rendered` (`debug`; chars) · `task.note` (severity, message — one per `notes[]` entry) · `task.succeeded` (duration, cost, files_changed, note_count, group_id) · `task.failed` (kind, retry class, exit code) · `task.parked` (question) · `task.skipped` (blocking ancestor) · `task.retried` (attempt, backoff_ms) · `task.timeout`
 
 ## Provider output bubbles up as `info`
 

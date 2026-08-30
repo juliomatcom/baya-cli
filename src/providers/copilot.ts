@@ -244,17 +244,24 @@ export const copilotAdapter: ProviderAdapter = {
     return out;
   },
 
-  extractResult(ctx: ExtractContext): TaskResult {
+  extractResults(ctx: ExtractContext): TaskResult[] {
     const resultLine = lastResultLine(ctx.events);
     const changed = resultLine ? filesModified(resultLine) : [];
 
-    const fromText = extractResultFromText(ctx.taskId, collectText(ctx.events));
+    const fromText = extractResultFromText(ctx.taskIds, collectText(ctx.events));
     if (fromText) {
-      const result = fromText.result;
-      // The `result` line is the authority on what actually changed on disk.
-      return result.files_changed.length === 0 && changed.length > 0
-        ? { ...result, files_changed: changed }
-        : result;
+      const results = fromText.results;
+      // The `result` line is the authority on what actually changed on disk —
+      // but it reports the whole **process**, so it can only be attributed
+      // when the process ran one task. Splitting a process-wide file list
+      // across a group would credit every task with every other task's edits.
+      const only = results[0];
+      return results.length === 1 &&
+        only !== undefined &&
+        only.files_changed.length === 0 &&
+        changed.length > 0
+        ? [{ ...only, files_changed: changed }]
+        : results;
     }
 
     for (let i = ctx.events.length - 1; i >= 0; i -= 1) {
@@ -262,7 +269,7 @@ export const copilotAdapter: ProviderAdapter = {
       if (!event || event.t !== "unknown") continue;
       const error = readError(parseLine(event.raw) ?? {});
       if (error) {
-        return synthesizeFailure(ctx.taskId, error.message, {
+        return synthesizeFailure(ctx.taskIds, error.message, {
           retryable: error.retryable,
         });
       }
@@ -270,7 +277,7 @@ export const copilotAdapter: ProviderAdapter = {
 
     const errorEvent = ctx.events.find((event) => event.t === "error");
     if (errorEvent && errorEvent.t === "error") {
-      return synthesizeFailure(ctx.taskId, errorEvent.message, {
+      return synthesizeFailure(ctx.taskIds, errorEvent.message, {
         retryable: errorEvent.kind === "rate_limit",
       });
     }
@@ -278,7 +285,7 @@ export const copilotAdapter: ProviderAdapter = {
     const exit = resultLine?.exitCode;
     const detail = stripAnsi(ctx.stderr).trim().split("\n").slice(-3).join(" ").trim();
     return synthesizeFailure(
-      ctx.taskId,
+      ctx.taskIds,
       `copilot produced no parseable result (exit ${String(exit ?? ctx.exitCode)})${detail ? `: ${detail}` : ""}`,
     );
   },

@@ -30,11 +30,19 @@ export function renderDag(
 
   // The explainer earns its line only when some stage actually holds more than
   // one task; with one task per stage there is no independence to explain.
-  const hasParallel = layers.some((layer) => layer.length > 1);
+  //
+  // It states a property of the **graph**, not a promise about execution. It
+  // used to read "tasks in a stage don't wait on each other", which was false
+  // twice over: the executor is sequential until M2.1, and grouping
+  // deliberately puts a stage's tasks in one process to be worked through in
+  // order (execution.md §Grouping). What is true, and is the useful half, is
+  // that nothing here depends on anything else here — which is why they may
+  // share a process, and why one failing does not skip the others.
+  const hasIndependent = layers.some((layer) => layer.length > 1);
   lines.push(
     `  ${theme.taskId("Run order")} ${theme.note(
       `· ${layers.length} ${layers.length === 1 ? "stage" : "stages"}${
-        hasParallel ? " · tasks in a stage don't wait on each other" : ""
+        hasIndependent ? " · no dependencies within a stage" : ""
       }`,
     )}`,
     "",

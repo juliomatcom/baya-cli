@@ -16,13 +16,18 @@ export interface ProviderCapabilities {
   sessionId: "preassign" | "capture";
   resume: "session" | "none";
   /**
-   * Where this provider's record of what its agent *did* can be read from
-   * (execution.md §Memory). `events` means Baya's own `events.jsonl` already
-   * holds it; `transcript` means the provider keeps its own log and
-   * `transcriptPath` names it; `none` means the provider contributes no
-   * observations and only consumes memory.
+   * Whether this provider's own event stream records what its agent *did*
+   * (execution.md §Memory). `events` means Baya's `events.jsonl` already holds
+   * it, from a documented `--json`-style stream. `none` means the provider
+   * contributes no command observations and only consumes memory.
+   *
+   * Deliberately the only source. Reading a provider's private session log
+   * off disk was tried and removed: the path was undocumented, it worked for
+   * exactly one provider, and it made memory's quality depend on a file
+   * nobody promises to keep. `files_changed` in the protocol result carries
+   * the cross-provider half instead.
    */
-  observations: "events" | "transcript" | "none";
+  observations: "events" | "none";
   cwdFlag: boolean;
   modelFlag: boolean;
   /** Conservative by default — these run on consumer subscriptions that throttle. */
@@ -77,18 +82,18 @@ export interface SpawnPlan {
 }
 
 export interface ExtractContext {
-  taskId: string;
+  /**
+   * Every task this process was given, in order (execution.md §Grouping).
+   * Length 1 unless the scheduler grouped it, and the whole ladder in
+   * `result.ts` keys off that length — one task keeps the single-object wire
+   * format exactly as it was.
+   */
+  taskIds: readonly string[];
   events: ProviderEvent[];
   /** Contents of `resultFile` when the provider wrote one, else null. */
   resultFileContents: string | null;
   exitCode: number | null;
   stderr: string;
-  /**
-   * Contents of the provider's own session log for `observations: 'transcript'`
-   * adapters. Absent or null is normal, never an error — a missing transcript
-   * thins memory and nothing more, so no adapter may depend on it.
-   */
-  transcript?: string | null;
 }
 
 /**
@@ -119,19 +124,6 @@ export interface ProviderAdapter {
   buildRun(input: BuildRunInput): SpawnPlan;
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan;
   /**
-   * Run the **next task** as another turn in an existing session
-   * (execution.md §Session reuse). Distinct from `buildResume`, which answers
-   * an escalation: this one carries a whole new `task_request`, so the prompt
-   * has to re-state the response contract.
-   *
-   * Absent => this provider never joins a chain, and its tasks always start
-   * cold. That is the honest default for an adapter whose resume path has not
-   * been exercised.
-   */
-  buildContinue?(sessionId: string, input: BuildRunInput): SpawnPlan;
-  /** Absolute path to the provider's own session log, for `observations: 'transcript'`. */
-  transcriptPath?(sessionId: string): string | null;
-  /**
    * What the agent did, normalized. Never self-reported by the model — every
    * observation is read back out of a record the provider already wrote, so
    * this costs no tokens and cannot be hallucinated.
@@ -139,7 +131,12 @@ export interface ProviderAdapter {
   extractObservations?(ctx: ExtractContext): Observation[];
   /** Fed complete lines by the executor; partial-line buffering is not the adapter's job. */
   parseEvents(chunk: string): ProviderEvent[];
-  extractResult(ctx: ExtractContext): TaskResult;
+  /**
+   * One result per entry in `ctx.taskIds`, in that order. An adapter says
+   * where this provider put the answer; `result.ts` settles whether that
+   * answer is one `task_result` or a `task_result_batch`.
+   */
+  extractResults(ctx: ExtractContext): TaskResult[];
   extractUsage?(events: ProviderEvent[]): ProviderUsage;
 }
 

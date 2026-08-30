@@ -1,4 +1,4 @@
-import { formatCommand } from "../../../src/ui/text.js";
+import { formatCommand, formatElapsed } from "../../../src/ui/text.js";
 
 describe("formatCommand", () => {
   it("quotes only the tokens that need it", () => {
@@ -31,5 +31,21 @@ describe("formatCommand", () => {
   it("leaves a long but whitespace-free path readable", () => {
     const path = `/tmp/${"nested/".repeat(30)}result.json`;
     expect(formatCommand(["codex", "-o", path])).toBe(`codex -o ${path}`);
+  });
+});
+
+/** Drives a line that repaints once a second, so it never shows tenths. */
+describe("formatElapsed", () => {
+  it("counts whole seconds, then minutes and seconds", () => {
+    expect(formatElapsed(0)).toBe("0s");
+    expect(formatElapsed(9_400)).toBe("9s");
+    expect(formatElapsed(59_999)).toBe("59s");
+    expect(formatElapsed(60_000)).toBe("1m00s");
+    expect(formatElapsed(63_000)).toBe("1m03s");
+    expect(formatElapsed(605_000)).toBe("10m05s");
+  });
+
+  it("never renders a negative, whatever the clock did", () => {
+    expect(formatElapsed(-5_000)).toBe("0s");
   });
 });

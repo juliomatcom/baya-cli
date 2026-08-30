@@ -5,19 +5,19 @@
 
 ## Layers
 
-| #   | Layer        | Module            | Responsibility                                                                                                       | Purity                   |
-| :-- | :----------- | :---------------- | :------------------------------------------------------------------------------------------------------------------- | :----------------------- |
-| 1   | Ingestion    | `src/planner/`    | Task text (any UTF-8: md/txt/yaml/…) → planner provider → Manifest JSON. Repair loop, cache, deterministic fallback. | I/O                      |
-| 2   | Validation   | `src/manifest/`   | Zod parse, id uniqueness, dep resolution, cycle detection, provider allowlist.                                       | **Pure**                 |
-| 3   | Graph        | `src/graph/`      | Topological layering, ready-set computation, descendant marking.                                                     | **Pure**                 |
-| 4   | Providers    | `src/providers/`  | One adapter per CLI. argv construction, prompt delivery, event parsing, result extraction, resume.                   | Pure build + I/O resolve |
-| 5   | Execution    | `src/executor/`   | Scheduler, concurrency budgets, writer semaphore, subprocess lifecycle, signals.                                     | I/O                      |
-| 6   | Context      | `src/context/`    | Result persistence, context assembly, budgeting strategies.                                                          | Mostly pure              |
-| 6b  | Memory       | `src/memory/`     | Provider records → observations → keyed facts → the prompt block. Derived only, never self-reported.                 | **Pure** + one file read |
-| 7   | Escalation   | `src/escalation/` | Park queue, stdin ownership, question rendering, session resume dispatch.                                            | I/O                      |
-| 8   | Presentation | `src/ui/`         | DAG preview, live status, run report, `--json` output. `theme.ts` is the sole chalk importer.                        | I/O                      |
-| 9   | Entry        | `src/cli/`        | Arg parsing, config load, command routing, exit codes.                                                               | I/O                      |
-| 10  | Logging      | `src/log/`        | JSONL trace sink + filtered stderr renderer, redaction. See [logging.md](logging.md).                                | I/O                      |
+| #   | Layer        | Module            | Responsibility                                                                                                         | Purity                   |
+| :-- | :----------- | :---------------- | :--------------------------------------------------------------------------------------------------------------------- | :----------------------- |
+| 1   | Ingestion    | `src/planner/`    | Task text (any UTF-8: md/txt/yaml/…) → planner provider → Manifest JSON. Repair loop, cache, deterministic fallback.   | I/O                      |
+| 2   | Validation   | `src/manifest/`   | Zod parse, id uniqueness, dep resolution, cycle detection, provider allowlist.                                         | **Pure**                 |
+| 3   | Graph        | `src/graph/`      | Topological layering, ready-set computation, descendant marking.                                                       | **Pure**                 |
+| 4   | Providers    | `src/providers/`  | One adapter per CLI. argv construction, prompt delivery, event parsing, result extraction, resume.                     | Pure build + I/O resolve |
+| 5   | Execution    | `src/executor/`   | Scheduler, **task grouping** (`group.ts`, pure), concurrency budgets, writer semaphore, subprocess lifecycle, signals. | Pure group + I/O run     |
+| 6   | Context      | `src/context/`    | Result persistence, context assembly, budgeting strategies.                                                            | Mostly pure              |
+| 6b  | Memory       | `src/memory/`     | Provider records → observations → keyed facts → the prompt block. Derived only, never self-reported.                   | **Pure** + one file read |
+| 7   | Escalation   | `src/escalation/` | Park queue, stdin ownership, question rendering, session resume dispatch.                                              | I/O                      |
+| 8   | Presentation | `src/ui/`         | DAG preview, live status, run report, `--json` output. `theme.ts` is the sole chalk importer.                          | I/O                      |
+| 9   | Entry        | `src/cli/`        | Arg parsing, config load, command routing, exit codes.                                                                 | I/O                      |
+| 10  | Logging      | `src/log/`        | JSONL trace sink + filtered stderr renderer, redaction. See [logging.md](logging.md).                                  | I/O                      |
 
 **Rule:** layers 2, 3, and the `buildRun`/`extractResult` halves of layer 4 are pure and carry the bulk of test coverage. Push logic down into them.
 
@@ -83,6 +83,7 @@ pending ──deps met──► ready ──budget+lock──► running
 ├─ config.json                # optional: provider paths, concurrency caps
 ├─ schema/
 │  ├─ task_result.schema.json # emitted at runtime for codex --output-schema
+│  ├─ task_result_batch.schema.json # the same, for a grouped process (execution.md §Grouping)
 │  └─ plan_draft.schema.json  # what the planner is held to
 ├─ plans/<sha256>.json        # plan cache, keyed on task text + planner flags + schema version
 ├─ wt/<taskId>/               # git worktrees, --isolation worktree only
@@ -97,7 +98,8 @@ pending ──deps met──► ready ──budget+lock──► running
       ├─ request.json         # what we sent
       ├─ result.json          # what came back, validated
       ├─ output.md            # result.output, for cheap context linking
-      ├─ events.jsonl         # normalized ProviderEvent stream
+      ├─ batch.json           # a group's task_result_batch, before the split (group leader only)
+      ├─ events.jsonl         # normalized ProviderEvent stream — per PROCESS, in the group leader's dir
       ├─ stdout.log
       └─ stderr.log
 ```

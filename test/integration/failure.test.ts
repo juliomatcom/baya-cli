@@ -84,8 +84,13 @@ describe("failure semantics", () => {
     });
   });
 
+  // `--group-size 1`: "the provider wrote no result at all" is a property of a
+  // process, and only a process running one task can be in that state. In a
+  // group the other members still answer, so the document exists.
   it("synthesizes a task_result even when the provider wrote none", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario: failing });
+    const result = await runCli(["./tasks.md", "--yes", "--group-size", "1"], {
+      scenario: failing,
+    });
     const failed = result.readJson(result.paths!.result("build-ui")) as {
       status: string;
       error: { message: string };

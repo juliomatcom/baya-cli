@@ -18,7 +18,7 @@ export {
   lastJsonFence,
   parseResultJson,
   synthesizeFailure,
-  type ParsedResult,
+  type ParsedResults,
   type ResultRung,
 } from "./result.js";
 export {

@@ -28,11 +28,6 @@ function writeUser(env: NodeJS.ProcessEnv, values: unknown): void {
   writeFileSync(path, JSON.stringify(values));
 }
 
-function writeProject(cwd: string, values: unknown): void {
-  mkdirSync(join(cwd, ".baya"), { recursive: true });
-  writeFileSync(join(cwd, ".baya", "config.json"), JSON.stringify(values));
-}
-
 describe("loadConfig precedence", () => {
   it("falls back to built-in defaults with no config anywhere", () => {
     const { cwd, env } = workspace();
@@ -51,18 +46,9 @@ describe("loadConfig precedence", () => {
     expect(loaded.userConfigExists).toBe(true);
   });
 
-  it("lets the project layer override the user layer", () => {
+  it("lets env override the user layer", () => {
     const { cwd, env } = workspace();
-    writeUser(env, { defaults: { provider: "codex" } });
-    writeProject(cwd, { defaults: { provider: "claude" } });
-    const loaded = loadConfig({ cwd, env });
-    expect(loaded.config.defaults.provider).toBe("claude");
-    expect(loaded.sources["defaults.provider"]).toBe("project");
-  });
-
-  it("lets env override the project layer", () => {
-    const { cwd, env } = workspace();
-    writeProject(cwd, { defaults: { provider: "claude" } });
+    writeUser(env, { defaults: { provider: "claude" } });
     const loaded = loadConfig({
       cwd,
       env: { ...env, BAYA_DEFAULT_PROVIDER: "opencode" },
@@ -73,7 +59,7 @@ describe("loadConfig precedence", () => {
 
   it("lets flags override everything", () => {
     const { cwd, env } = workspace();
-    writeProject(cwd, { defaults: { provider: "claude" } });
+    writeUser(env, { defaults: { provider: "claude" } });
     const loaded = loadConfig({
       cwd,
       env: { ...env, BAYA_DEFAULT_PROVIDER: "opencode" },
@@ -85,15 +71,20 @@ describe("loadConfig precedence", () => {
 
   it("merges provider settings across layers and tracks each key's source", () => {
     const { cwd, env } = workspace();
-    writeUser(env, { providers: { codex: { maxConcurrency: 4 } } });
-    writeProject(cwd, { providers: { codex: { bin: "/custom/codex" } } });
-    const loaded = loadConfig({ cwd, env });
+    writeUser(env, {
+      providers: { codex: { maxConcurrency: 4, bin: "/custom/codex" } },
+    });
+    const loaded = loadConfig({
+      cwd,
+      env,
+      flags: { defaultProvider: "claude" },
+    });
     expect(loaded.config.providers.codex).toEqual({
       maxConcurrency: 4,
       bin: "/custom/codex",
     });
-    expect(loaded.sources["providers.codex.bin"]).toBe("project");
-    expect(loaded.sources["providers.codex.maxConcurrency"]).toBe("user");
+    expect(loaded.sources["providers.codex.bin"]).toBe("user");
+    expect(loaded.sources["defaults.provider"]).toBe("flags");
   });
 
   it("defaults the planner to the task provider so one answer settles both", () => {

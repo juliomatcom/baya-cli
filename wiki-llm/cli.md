@@ -36,9 +36,9 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | Flag                      | Default       | Meaning                                                                                                                    |
 | :------------------------ | :------------ | :------------------------------------------------------------------------------------------------------------------------- |
 | `--planner-provider <id>` | _from config_ | Provider that parses the task list into a manifest.                                                                        |
-| `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                                                            |
+| `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default. Resolved against the catalog like a task's, so an alias works.                             |
 | `--default-provider <id>` | _from config_ | Fallback for tasks with no stated provider. **Bypasses the first-run wizard.**                                             |
-| `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                                                            |
+| `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default. Resolved against the catalog like a task's, so an alias works.                             |
 | `--dry-run`               | off           | Render the DAG (with resolved models) and exit `0`.                                                                        |
 | `--yes`                   | off           | Auto-confirm the plan gate; at the model gate takes a best match ≥ 0.85 else exits `2`. **Never answers a task question.** |
 | `--plan-out <f>`          | —             | Write the manifest (models resolved) and exit.                                                                             |
@@ -51,7 +51,7 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                                                         |
 | `--no-memory`             | off           | Do not pass what earlier tasks learned. Every task starts blind. The A/B control for measuring memory.                     |
 | `--memory-budget <n>`     | `1200`        | Chars of the `# Known about this workspace` block (~300 tokens).                                                           |
-| `--no-session-reuse`      | off           | Never continue a chain in one provider session; every task spawns cold.                                                    |
+| `--group-size <n>`        | `6`           | Max tasks per provider process (execution.md §Grouping). `1` gives every task its own process.                             |
 | `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                    |
 | `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                    |
 | `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from the task list.                                                                 |
@@ -148,10 +148,18 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
 
 `baya.jsonl` + `events.jsonl` always hold the full stream — verbosity filters display, never the record.
 
+### While a run is working
+
+One spinner line, owned by `src/ui/progress.ts`, held for as long as a provider process is out: `⠋ node-version +4 · claude claude-sonnet-5 · 1m03s` — group leader, `+n` for the rest of the group, provider and model, and **elapsed whole seconds**.
+
+The elapsed count is the point, not decoration. `claude --output-format json` returns a single object at the very end (`events: "json"`), so between the spawn and the result there is structurally nothing to print — no `provider.tool`, no `provider.text` — and a slow task is indistinguishable from a hung one. `codex` streams JSONL and fills the gap on its own; `claude` cannot.
+
+Started from `onGroupStarted`, cleared when the run settles and in the `finally`, so a thrown error cannot leave an interval repainting a line for a run that is over. Ticks once a second — hence `formatElapsed`, not `formatDuration`, whose tenths would flicker without telling anyone anything. Auto-off for non-TTY / `--json` / `NO_COLOR` / `--no-progress`.
+
 ### End-of-run report
 
 ```
-  Run complete · 5 succeeded · 0 failed · 47s · $0.42
+   ✓ Run complete  5 succeeded · 47s · 2 processes · 114k tokens
 
   Flagged
     ! gen-schema   migration locks `users` for ~30s on tables over 1M rows
@@ -159,6 +167,18 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
 
   Outputs   .baya/runs/20260828T2152Z-a1f4c9-3182/tasks/<id>/output.md
 ```
+
+The headline is a filled badge, graded on **how much of the run landed** — not on whether anything threw:
+
+| Badge                   | Reads    | When                                                                                                     |
+| :---------------------- | :------- | :------------------------------------------------------------------------------------------------------- |
+| green `✓ Run complete`  | complete | every task `succeeded`                                                                                   |
+| yellow `! Run finished` | partial  | some succeeded, some did not — **including a run with nothing `failed` but tasks `skipped` or `parked`** |
+| red `✗ Run failed`      | failed   | nothing succeeded                                                                                        |
+
+`badge` is `theme`'s loudest token and this is its only caller; a second one costs this one its emphasis. Foreground is always set with the background — a background over the terminal's default foreground is how output becomes unreadable on someone else's scheme. Every badge pairs with a glyph, so `--no-color` loses nothing.
+
+`processes` counts provider processes actually spawned (execution.md §Grouping), not tasks — the number that says whether grouping is earning its place. Omitted for a single-task run. Also on the `--json` report as `processes`.
 
 **Flagged** aggregates every `notes[]` entry across all tasks, `action_required` first, printed last. No notes ⇒ section omitted. `--json` carries per-task `notes` + an aggregated `flagged` array — nothing terminal-only is lost to a pipe.
 

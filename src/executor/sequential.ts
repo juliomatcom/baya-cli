@@ -8,7 +8,7 @@ import {
   type TaskRequest,
   type TaskResult,
 } from "../manifest/index.js";
-import { descendantsOf, readySet, type ReadyState } from "../graph/index.js";
+import { descendantsOf, readySet, topoOrder, type ReadyState } from "../graph/index.js";
 import type { Logger } from "../log/index.js";
 import type { Registry } from "../providers/index.js";
 import {
@@ -21,23 +21,31 @@ import {
   DEFAULT_MEMORY_BUDGET,
   deriveMemory,
   renderMemory,
+  type Observation,
   type TaskObservations,
 } from "../memory/index.js";
 import { classifyFailure } from "./classify.js";
+import { DEFAULT_GROUP_SIZE, formGroup, groupKey, type GroupCandidate } from "./group.js";
 import type { RunPaths } from "./paths.js";
 import { StateStore, relativeArtifacts, type TaskState } from "./state.js";
-import { executeTask } from "./task.js";
+import { executeGroup } from "./task.js";
 
 /**
- * The M1 scheduler: one task at a time, in topological order.
+ * The M1 scheduler: one provider process at a time, in topological order.
  *
  * Sequential deliberately. The parallel scheduler, its per-provider budgets,
  * and the writer semaphore are M2 — building them before a single task runs
  * end to end would be tuning a machine nobody has started.
  *
- * The shape here is already the parallel one, though: a ready-set loop rather
- * than a fixed order, so M2 changes how many tasks are admitted per pass, not
- * how admission is decided.
+ * The unit admitted is a **group**, not a task (`group.ts`): several tasks that
+ * share a provider, model, access level and working directory go into one
+ * process and are worked through in order. That is the project's main cost
+ * lever, and it composes with M2 rather than fighting it — grouping decides
+ * what goes in a process, parallelism decides how many processes run at once.
+ *
+ * The shape here is already the parallel one: a ready-set loop rather than a
+ * fixed order, so M2 changes how many groups are admitted per pass, not how
+ * admission is decided.
  */
 export interface RunSequentialOptions {
   manifest: Manifest;
@@ -46,7 +54,10 @@ export interface RunSequentialOptions {
   registry: Registry;
   logger: Logger;
   store: StateStore;
+  /** The `task_result` schema, for a process running one task. */
   schemaPath: string;
+  /** The `task_result_batch` schema, for a process running a group. */
+  batchSchemaPath: string;
   /** Provider for tasks the manifest left unset. */
   defaultProvider: ProviderId;
   defaultModel: string | null;
@@ -58,11 +69,25 @@ export interface RunSequentialOptions {
   /** Cross-task memory. Default on. */
   memory?: boolean;
   memoryBudget?: number;
-  /** Chain-collapse into one provider session. Default on. */
-  sessionReuse?: boolean;
+  /** Max tasks per provider process. `1` restores one process per task. */
+  groupSize?: number;
   env?: NodeJS.ProcessEnv;
   /** Fires the moment a task settles, so `warn`/`action_required` notes print immediately. */
   onTaskSettled?: (taskId: string, state: TaskState, result: TaskResult) => void;
+  /**
+   * Fires just before a group's process is spawned.
+   *
+   * The terminal's only other signal is the provider's own event stream, and
+   * `claude --output-format json` emits a single object at the very end — so
+   * between the spawn and the result there is, structurally, nothing to print.
+   * A long task on that adapter is indistinguishable from a hung one without
+   * this.
+   */
+  onGroupStarted?: (info: {
+    taskIds: string[];
+    provider: ProviderId;
+    model: string | null;
+  }) => void;
 }
 
 export interface RunOutcome {
@@ -76,38 +101,19 @@ export interface RunOutcome {
 const DEFAULT_MAX_RUNTIME_S = 900;
 
 /**
- * How long a provider session stays worth continuing (execution.md §Session
- * reuse). Anthropic's prompt cache expires 5 minutes after its last hit, and
- * the session file outliving the cache is exactly the trap: past this window a
- * resume re-reads the whole accumulated transcript at full price, which costs
- * **more** than the cold start it replaced.
+ * A group's deadline is its members' budgets summed, then capped. Summed
+ * because the tasks run one after another inside the process and each deserves
+ * its own allowance; capped because a runaway group must not be able to hold
+ * the whole run hostage.
+ *
+ * Derived from the default group size rather than written as its own number,
+ * because the two are not independent: a cap below `size × budget` silently
+ * gives every task **less** time than it was budgeted. The cap must never bite
+ * at the default size. Above it, the squeeze is the point — `--group-size 12`
+ * is a request to pack more into one process, not a request for a three-hour
+ * process with no checkpoint granularity inside it.
  */
-export const SESSION_WARM_MS = 300_000;
-
-/**
- * Turns per chain. The transcript only grows, and every turn pays ~10% of all
- * of it; past a handful the dilution stops being worth the warmth.
- */
-export const MAX_CHAIN_TURNS = 5;
-
-/** A live session an eligible task may continue. */
-interface SessionInfo {
-  sessionId: string;
-  provider: ProviderId;
-  model: string | null;
-  /** The access level the session was opened with. codex cannot change it later. */
-  access: Task["access"];
-  endedAtMs: number;
-  turns: number;
-  /** Task ids whose work is already visible in this session's transcript. */
-  chain: string[];
-}
-
-interface Continuation {
-  sessionId: string;
-  parentId: string;
-  chain: string[];
-}
+export const MAX_GROUP_RUNTIME_S = DEFAULT_GROUP_SIZE * DEFAULT_MAX_RUNTIME_S;
 
 function toReadyStates(store: StateStore, tasks: Task[]): Map<string, ReadyState> {
   const states = new Map<string, ReadyState>();
@@ -123,6 +129,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
   const { manifest, store, logger, paths, registry } = options;
   const tasks = manifest.tasks;
   const nodes = tasks.map((task) => ({ id: task.id, depends_on: task.depends_on }));
+  const order = topoOrder(nodes);
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const results = new Map<string, TaskResult>();
   const strategy = options.contextStrategy ?? "link-only";
@@ -130,50 +137,60 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
   const maxRuntimeS = options.maxRuntimeS ?? DEFAULT_MAX_RUNTIME_S;
   const memoryEnabled = options.memory ?? true;
   const memoryBudget = options.memoryBudget ?? DEFAULT_MEMORY_BUDGET;
-  const sessionReuse = options.sessionReuse ?? true;
+  const groupCap = Math.max(1, options.groupSize ?? DEFAULT_GROUP_SIZE);
 
   /** Observations from every finished task, in completion order. */
   const observed: TaskObservations[] = [];
-  /** Task id -> the session it left open and continuable. */
-  const sessions = new Map<string, SessionInfo>();
-  /**
-   * Tasks whose open session has already been taken over by a dependent.
-   *
-   * Keyed by the **parent task**, not by the session id. Keying it by session
-   * id capped every chain at two turns: `codex exec resume` keeps the same
-   * thread id, so turn 2's session id equals turn 1's, and turn 3 saw an id
-   * that was already claimed. Measured — a six-task chain collapsed 1→2 and
-   * then stopped. What actually needs guarding is two *siblings* both
-   * continuing one parent, which forks the conversation; extending a chain
-   * one turn at a time never does.
-   */
-  const claimed = new Set<string>();
+
+  // Routing is static — provider, model, access and cwd all come from the
+  // manifest — so the grouping keys are computed once rather than per pass.
+  const candidates = new Map<string, GroupCandidate>(
+    tasks.map((task) => [
+      task.id,
+      {
+        id: task.id,
+        depends_on: task.depends_on,
+        key: groupKey({
+          provider: routeProvider(task, options.defaultProvider),
+          model: task.model ?? options.defaultModel,
+          access: task.access,
+          cwd: task.cwd ?? options.cwd,
+        }),
+      },
+    ]),
+  );
 
   logger.info("run.started", { tasks: tasks.length });
 
   for (;;) {
-    const ready = readySet(nodes, toReadyStates(store, tasks));
+    const states = toReadyStates(store, tasks);
+    const ready = readySet(nodes, states);
     if (ready.length === 0) break;
 
-    // Cache-aware ordering: among tasks that are ALREADY admissible, prefer one
-    // that can continue a warm session. This never widens the ready set, so
-    // dependency order is untouched — `readySet` has already established that
-    // every candidate here may run in any order.
-    const picked = selectNext(ready);
-    const taskId = picked.taskId;
-    const continuation = picked.continuation;
-    const task = byId.get(taskId) as Task;
-    logger.debug("task.ready", {
-      task_id: taskId,
-      deps: task.depends_on,
+    const seedId = ready[0] as string;
+    const memberIds = formGroup({
+      seedId,
+      order,
+      candidates,
+      pending: setOf(states, "pending"),
+      succeeded: setOf(states, "succeeded"),
+      cap: groupCap,
+    });
+    const members = memberIds.map((id) => byId.get(id) as Task);
+    const leader = members[0] as Task;
+    const leaderId = leader.id;
+    const grouped = members.length > 1;
+    logger.debug("group.ready", {
+      group_id: leaderId,
+      tasks: memberIds,
       ready: ready.length,
-      continues: continuation?.parentId ?? null,
     });
 
-    // Explicit provider wins, then the model alias (`sonnet` -> claude), then
-    // the run default. Validation has already rejected a provider/model clash.
-    const provider = routeProvider(task, options.defaultProvider);
-    const model = task.model ?? options.defaultModel;
+    // Every member shares these by construction — that is what the grouping
+    // key is for — so they are read off the leader.
+    const provider = routeProvider(leader, options.defaultProvider);
+    const model = leader.model ?? options.defaultModel;
+    const cwd = leader.cwd ?? options.cwd;
     const adapter = registry.get(provider);
     const resolved = adapter
       ? await registry.resolve(provider, {
@@ -184,236 +201,207 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       : null;
 
     if (!adapter || !resolved) {
-      // A provider that cannot be resolved is this task's failure, not the
+      // A provider that cannot be resolved is this group's failure, not the
       // run's: independent branches on a working provider still finish.
       const message = `provider "${provider}" is not available — run \`baya doctor\``;
-      logger.error("provider.missing", { task_id: taskId, provider });
-      settleFailure(taskId, provider, model, message);
+      logger.error("provider.missing", { task_id: leaderId, provider });
+      for (const id of memberIds) settleFailure(id, provider, model, message);
       continue;
     }
 
-    const inSession = new Set(continuation?.chain ?? []);
-    const upstreams = collectUpstreams(task, byId, paths, results);
-    // An upstream the agent produced itself, earlier in this same session, is
-    // already in its transcript. Re-inlining it is the one cost a continuation
-    // would otherwise add.
-    const context = assembleContext(upstreams, { strategy, budget }).map((entry) =>
-      inSession.has(entry.task_id) ? { ...entry, inline: null } : entry,
+    const inGroup = new Set(memberIds);
+    const groupRuntimeS = Math.min(maxRuntimeS * members.length, MAX_GROUP_RUNTIME_S);
+    const requests = members.map((task) =>
+      buildRequest(task, inGroup, grouped, groupRuntimeS),
     );
-    logger.debug("task.context.assembled", {
-      task_id: taskId,
-      upstream: upstreams.map((entry) => entry.taskId),
-      strategy,
-      inlined: context.filter((entry) => entry.inline !== null).length,
-      bytes: context.reduce((sum, entry) => sum + (entry.inline?.length ?? 0), 0),
-    });
-
-    const request: TaskRequest = {
-      baya: PROTOCOL_VERSION,
-      kind: "task_request",
-      run_id: store.get().run_id,
-      task: { id: task.id, title: task.title, instruction: task.instruction },
-      workspace: {
-        cwd: task.cwd ?? options.cwd,
-        access: task.access,
-        isolation: "shared",
-      },
-      context,
-      response_contract: { schema_path: options.schemaPath },
-      constraints: { max_runtime_s: maxRuntimeS },
-    };
 
     const memoryBlock = memoryEnabled
       ? renderMemory(deriveMemory(observed, { cwd: options.cwd }), {
           budget: memoryBudget,
-          ...(inSession.size > 0 ? { alreadyInSession: inSession } : {}),
         })
       : "";
     if (memoryBlock !== "") {
-      logger.debug("task.memory.rendered", {
-        task_id: taskId,
+      logger.debug("group.memory.rendered", {
+        group_id: leaderId,
         chars: memoryBlock.length,
       });
     }
 
     // Checkpoint before acting (conventions.md #14): a crash between here and
-    // the spawn must still show that this task was started.
-    store.transition(taskId, {
-      state: "running",
-      provider,
-      model,
-      attempts: (store.task(taskId)?.attempts ?? 0) + 1,
-      started_at: new Date().toISOString(),
-      continued_from: continuation?.parentId ?? null,
-    });
-    if (continuation) claimed.add(continuation.parentId);
-
-    const spawn = async (
-      continueFrom: Continuation | null,
-    ): Promise<Awaited<ReturnType<typeof executeTask>>> =>
-      executeTask({
-        task,
-        request,
-        adapter,
-        bin: resolved.bin,
-        model,
-        cwd: task.cwd ?? options.cwd,
-        paths,
-        schemaPath: options.schemaPath,
-        logger,
-        timeoutMs: maxRuntimeS * 1000,
-        ...(memoryBlock !== "" ? { memory: memoryBlock } : {}),
-        ...(continueFrom
-          ? {
-              continueFrom: {
-                sessionId: continueFrom.sessionId,
-                inSession: continueFrom.chain,
-              },
-            }
-          : {}),
-        ...(options.env ? { env: options.env } : {}),
-        ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
-        onSpawn: (pid) => store.transition(taskId, { pid }),
-      });
-
-    let execution = await spawn(continuation);
-    let continued = continuation !== null && execution.continued;
-
-    // A resume that the CLI itself rejected exits non-zero with nothing
-    // parseable — structurally distinct from a task that ran and reported
-    // failure through the schema (exit 0). codex `exec resume` is UNVERIFIED,
-    // so that case buys a cold retry rather than losing the task.
-    if (
-      continued &&
-      execution.result.status === "failed" &&
-      execution.exitCode !== 0 &&
-      !execution.timedOut
-    ) {
-      logger.warn("task.continue.failed", {
-        task_id: taskId,
+    // the spawn must still show that every one of these tasks was started.
+    for (const id of memberIds) {
+      store.transition(id, {
+        state: "running",
         provider,
-        session_id: continuation?.sessionId ?? null,
-        exit_code: execution.exitCode,
-      });
-      store.transition(taskId, { continued_from: null });
-      execution = await spawn(null);
-      continued = false;
-    }
-
-    const result = execution.result;
-    results.set(taskId, result);
-    // Memory is derived from what a task DID, so a failed task contributes too
-    // — its dead ends are the single most valuable thing it leaves behind.
-    if (memoryEnabled && execution.observations.length > 0) {
-      observed.push({ taskId, observations: execution.observations });
-      writeMemorySnapshot();
-    }
-    logger.debug("task.result.parsed", {
-      task_id: taskId,
-      status: result.status,
-      notes: result.notes.length,
-    });
-    for (const note of result.notes) {
-      logger.info("task.note", {
-        task_id: taskId,
-        severity: note.severity,
-        message: note.message,
+        model,
+        attempts: (store.task(id)?.attempts ?? 0) + 1,
+        started_at: new Date().toISOString(),
+        group_id: grouped ? leaderId : null,
       });
     }
 
-    const artifacts = relativeArtifacts(paths.runDir, {
-      request: paths.request(taskId),
-      result: paths.result(taskId),
-      output: paths.output(taskId),
-      events: paths.events(taskId),
-      stdout: paths.stdout(taskId),
-      stderr: paths.stderr(taskId),
-    });
-    const common = {
-      provider,
+    options.onGroupStarted?.({ taskIds: [...memberIds], provider, model });
+
+    const execution = await executeGroup({
+      tasks: members,
+      requests,
+      adapter,
+      bin: resolved.bin,
       model,
-      session_id: execution.sessionId,
-      ended_at: new Date().toISOString(),
-      duration_ms: execution.durationMs,
-      exit_code: execution.exitCode,
-      artifacts,
-      notes: result.notes,
-      files_changed: result.files_changed,
-      cost_usd: execution.usage.cost_usd ?? 0,
-      input_tokens: execution.usage.input_tokens ?? 0,
-      output_tokens: execution.usage.output_tokens ?? 0,
-      cached_input_tokens: execution.usage.cached_input_tokens ?? 0,
-      cache_write_input_tokens: execution.usage.cache_write_input_tokens ?? 0,
+      cwd,
+      paths,
+      schemaPath: grouped ? options.batchSchemaPath : options.schemaPath,
+      logger,
+      timeoutMs: groupRuntimeS * 1000,
+      ...(memoryBlock !== "" ? { memory: memoryBlock } : {}),
+      ...(options.env ? { env: options.env } : {}),
+      ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
+      onSpawn: (pid) => {
+        for (const id of memberIds) store.transition(id, { pid });
+      },
+    });
+
+    // The process's own artifacts are shared: one spawn produced one event
+    // stream and one pair of stdio logs, and they live in the leader's
+    // directory. Only the request/result/output are genuinely per task.
+    const shared = {
+      events: paths.events(leaderId),
+      stdout: paths.stdout(leaderId),
+      stderr: paths.stderr(leaderId),
     };
 
-    if (result.status === "ok") {
-      // Only a succeeded task leaves a session worth continuing: a chain built
-      // on a failed turn inherits its confusion along with its cache.
-      if (execution.sessionId !== null && adapter.buildContinue !== undefined) {
-        const parent =
-          continued && continuation ? sessions.get(continuation.parentId) : null;
-        sessions.set(taskId, {
-          sessionId: execution.sessionId,
-          provider,
-          model,
-          access: task.access,
-          endedAtMs: Date.now(),
-          turns: (parent?.turns ?? 0) + 1,
-          chain: [...(parent?.chain ?? []), taskId],
+    // Non-zero exit or a timeout means the **process** died, not that a task
+    // reported failure through the schema (which exits 0). Everything after
+    // the first casualty in a dead process never ran, so it is `skipped` —
+    // the distinction architecture.md §Task state machine exists for, and
+    // what keeps a group of four from reporting four failures to triage.
+    const processFailed = execution.exitCode !== 0 || execution.timedOut;
+    let firstFailureId: string | null = null;
+
+    members.forEach((task, index) => {
+      const taskId = task.id;
+      // An earlier member of this same group failed and this task is
+      // downstream of it. Whatever the model reported for it, it was built on
+      // work that did not happen — the DAG, not the model's account of itself,
+      // decides that. Already settled as `skipped`; nothing more to do.
+      if (store.task(taskId)?.state === "skipped") return;
+
+      const result = execution.results[index] ?? missingResult(taskId);
+      results.set(taskId, result);
+      logger.debug("task.result.parsed", {
+        task_id: taskId,
+        status: result.status,
+        notes: result.notes.length,
+      });
+      for (const note of result.notes) {
+        logger.info("task.note", {
+          task_id: taskId,
+          severity: note.severity,
+          message: note.message,
         });
       }
-      store.transition(taskId, { ...common, state: "succeeded", failure: null });
-      logger.info("task.succeeded", {
-        task_id: taskId,
+
+      const artifacts = relativeArtifacts(paths.runDir, {
+        request: paths.request(taskId),
+        result: paths.result(taskId),
+        output: paths.output(taskId),
+        ...shared,
+      });
+      // Usage belongs to the process. Recording it on the leader and zero on
+      // the rest is what keeps the run total honest — a group shares one
+      // context window and one bill, and splitting that per task would be
+      // inventing numbers. `group_id` is how the report puts them back together.
+      const isLeader = index === 0;
+      const common = {
         provider,
         model,
-        continued_from: continued ? (continuation?.parentId ?? null) : null,
+        session_id: execution.sessionId,
+        ended_at: new Date().toISOString(),
         duration_ms: execution.durationMs,
-        summary: result.summary,
-        files_changed: result.files_changed.length,
-        note_count: result.notes.length,
-        input_tokens: execution.usage.input_tokens ?? 0,
-        output_tokens: execution.usage.output_tokens ?? 0,
-        cached_input_tokens: execution.usage.cached_input_tokens ?? 0,
-        cache_write_input_tokens: execution.usage.cache_write_input_tokens ?? 0,
-        cost_usd: execution.usage.cost_usd ?? 0,
-      });
-      options.onTaskSettled?.(taskId, "succeeded", result);
-      continue;
-    }
+        exit_code: execution.exitCode,
+        artifacts,
+        notes: result.notes,
+        files_changed: result.files_changed,
+        cost_usd: isLeader ? (execution.usage.cost_usd ?? 0) : 0,
+        input_tokens: isLeader ? (execution.usage.input_tokens ?? 0) : 0,
+        output_tokens: isLeader ? (execution.usage.output_tokens ?? 0) : 0,
+        cached_input_tokens: isLeader ? (execution.usage.cached_input_tokens ?? 0) : 0,
+        cache_write_input_tokens: isLeader
+          ? (execution.usage.cache_write_input_tokens ?? 0)
+          : 0,
+      };
 
-    if (result.status === "needs_input") {
-      // Escalation is M4. In M1 a question parks the task and stops its
-      // branch — the question is reported rather than silently guessed at.
-      store.transition(taskId, { ...common, state: "parked" });
-      logger.warn("task.parked", {
+      if (result.status === "ok") {
+        store.transition(taskId, { ...common, state: "succeeded", failure: null });
+        logger.info("task.succeeded", {
+          task_id: taskId,
+          provider,
+          model,
+          group_id: grouped ? leaderId : null,
+          duration_ms: execution.durationMs,
+          summary: result.summary,
+          files_changed: result.files_changed.length,
+          note_count: result.notes.length,
+          input_tokens: common.input_tokens,
+          output_tokens: common.output_tokens,
+          cached_input_tokens: common.cached_input_tokens,
+          cache_write_input_tokens: common.cache_write_input_tokens,
+          cost_usd: common.cost_usd,
+        });
+        options.onTaskSettled?.(taskId, "succeeded", result);
+        return;
+      }
+
+      if (result.status === "needs_input") {
+        // Escalation is M4. In M1 a question parks the task and stops its
+        // branch — the question is reported rather than silently guessed at.
+        store.transition(taskId, { ...common, state: "parked" });
+        logger.warn("task.parked", {
+          task_id: taskId,
+          provider,
+          question: result.question?.text ?? "",
+        });
+        options.onTaskSettled?.(taskId, "parked", result);
+        markDescendantsSkipped(taskId, inGroup);
+        return;
+      }
+
+      if (processFailed && firstFailureId !== null) {
+        store.transition(taskId, {
+          ...common,
+          state: "skipped",
+          blocked_by: firstFailureId,
+        });
+        logger.warn("task.skipped", { task_id: taskId, blocked_by: firstFailureId });
+        options.onTaskSettled?.(taskId, "skipped", result);
+        markDescendantsSkipped(taskId, inGroup);
+        return;
+      }
+      firstFailureId ??= taskId;
+
+      const failure = classifyFailure({
+        timedOut: execution.timedOut,
+        exitCode: execution.exitCode,
+        events: execution.events,
+        errorMessage: result.error?.message ?? "task failed",
+        retryable: result.error?.retryable ?? true,
+      });
+      store.transition(taskId, { ...common, state: "failed", failure });
+      logger.error("task.failed", {
         task_id: taskId,
         provider,
-        question: result.question?.text ?? "",
+        kind: failure.kind,
+        retry: failure.retry,
+        exit_code: execution.exitCode,
+        message: failure.message,
       });
-      options.onTaskSettled?.(taskId, "parked", result);
-      markDescendantsSkipped(taskId);
-      continue;
-    }
+      options.onTaskSettled?.(taskId, "failed", result);
+      markDescendantsSkipped(taskId, inGroup);
+    });
 
-    const failure = classifyFailure({
-      timedOut: execution.timedOut,
-      exitCode: execution.exitCode,
-      events: execution.events,
-      errorMessage: result.error?.message ?? "task failed",
-      retryable: result.error?.retryable ?? true,
-    });
-    store.transition(taskId, { ...common, state: "failed", failure });
-    logger.error("task.failed", {
-      task_id: taskId,
-      provider,
-      kind: failure.kind,
-      retry: failure.retry,
-      exit_code: execution.exitCode,
-      message: failure.message,
-    });
-    options.onTaskSettled?.(taskId, "failed", result);
-    markDescendantsSkipped(taskId);
+    // Memory is derived from what a task DID, so a failed task contributes too
+    // — its dead ends are the single most valuable thing it leaves behind.
+    if (memoryEnabled) recordObservations(memberIds, execution.observations);
   }
 
   const totals = store.get().totals;
@@ -425,55 +413,88 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     parked: totals.parked,
   };
 
-  /**
-   * The session `taskId` may continue, or `null`.
-   *
-   * Deliberately narrow. Only a task whose **single** dependency left a warm
-   * session on the **same provider and model** qualifies:
-   *
-   * - one dependency, because a fan-in has no single conversation to rejoin;
-   * - same provider and model, because a session belongs to one model — this
-   *   is where per-task model routing and session reuse genuinely conflict,
-   *   and routing wins by construction;
-   * - same `access`, because `codex exec resume` takes no `-s`: a resumed turn
-   *   inherits the sandbox its session was opened with. Collapsing a read-only
-   *   turn onto a read-write session would silently widen its permissions, and
-   *   the reverse would deny it tools it was granted;
-   * - warm, because past the cache window a resume costs more than a cold start;
-   * - unclaimed, because two *siblings* continuing one parent would fork the
-   *   conversation. Extending a chain turn by turn is not a fork.
-   */
-  function continuationFor(id: string): Continuation | null {
-    if (!sessionReuse) return null;
-    const candidate = byId.get(id);
-    if (!candidate || candidate.depends_on.length !== 1) return null;
-    const parentId = candidate.depends_on[0] as string;
-    const info = sessions.get(parentId);
-    if (!info) return null;
-    if (claimed.has(parentId)) return null;
-    if (info.turns >= MAX_CHAIN_TURNS) return null;
-    if (Date.now() - info.endedAtMs > SESSION_WARM_MS) return null;
-    const provider = routeProvider(candidate, options.defaultProvider);
-    if (provider !== info.provider) return null;
-    if ((candidate.model ?? options.defaultModel) !== info.model) return null;
-    if (candidate.access !== info.access) return null;
-    if (registry.get(provider)?.buildContinue === undefined) return null;
-    return { sessionId: info.sessionId, parentId, chain: info.chain };
+  function setOf(
+    states: ReadonlyMap<string, ReadyState>,
+    state: ReadyState,
+  ): Set<string> {
+    const out = new Set<string>();
+    for (const [id, value] of states) if (value === state) out.add(id);
+    return out;
+  }
+
+  function buildRequest(
+    task: Task,
+    inGroup: ReadonlySet<string>,
+    grouped: boolean,
+    runtimeS: number,
+  ): TaskRequest {
+    const upstreams = collectUpstreams(task, byId, paths, results, inGroup);
+    // An upstream produced earlier in this same process is already in the
+    // conversation. Re-inlining it is the one cost grouping would add back.
+    const context = assembleContext(upstreams, { strategy, budget }).map((entry) =>
+      inGroup.has(entry.task_id) ? { ...entry, inline: null } : entry,
+    );
+    logger.debug("task.context.assembled", {
+      task_id: task.id,
+      upstream: upstreams.map((entry) => entry.taskId),
+      strategy,
+      inlined: context.filter((entry) => entry.inline !== null).length,
+      bytes: context.reduce((sum, entry) => sum + (entry.inline?.length ?? 0), 0),
+    });
+    return {
+      baya: PROTOCOL_VERSION,
+      kind: "task_request",
+      run_id: store.get().run_id,
+      task: { id: task.id, title: task.title, instruction: task.instruction },
+      workspace: {
+        cwd: task.cwd ?? options.cwd,
+        access: task.access,
+        isolation: "shared",
+      },
+      context,
+      response_contract: {
+        schema_path: grouped ? options.batchSchemaPath : options.schemaPath,
+      },
+      constraints: { max_runtime_s: runtimeS },
+    };
   }
 
   /**
-   * Manifest order, except that a warm continuation jumps the queue. Both
-   * halves are safe by construction: every id here came from `readySet`.
+   * Fold a finished group into memory.
+   *
+   * Two sources, both of them records a provider already produced:
+   *
+   * - the adapter's own event stream, for providers whose documented `--json`
+   *   output names the commands it ran. That is process-wide, so it is filed
+   *   under the group leader;
+   * - `files_changed` from each task's `task_result`, which is protocol-level
+   *   and therefore works on **every** provider, including the two that report
+   *   no commands at all.
+   *
+   * Nothing here is self-reported prose and nothing is scraped out of a file
+   * the provider does not document, so a fact costs no output tokens and
+   * cannot be hallucinated into existence.
    */
-  function selectNext(ready: readonly string[]): {
-    taskId: string;
-    continuation: Continuation | null;
-  } {
-    for (const id of ready) {
-      const continuation = continuationFor(id);
-      if (continuation) return { taskId: id, continuation };
+  function recordObservations(
+    memberIds: readonly string[],
+    processObservations: readonly Observation[],
+  ): void {
+    let added = false;
+    const leaderId = memberIds[0] as string;
+    if (processObservations.length > 0) {
+      observed.push({ taskId: leaderId, observations: [...processObservations] });
+      added = true;
     }
-    return { taskId: ready[0] as string, continuation: null };
+    for (const id of memberIds) {
+      const changed = results.get(id)?.files_changed ?? [];
+      if (changed.length === 0) continue;
+      observed.push({
+        taskId: id,
+        observations: changed.map((path) => ({ kind: "write" as const, path })),
+      });
+      added = true;
+    }
+    if (added) writeMemorySnapshot();
   }
 
   /** Memory as it stands, for debugging a run and for measuring the feature. */
@@ -484,6 +505,25 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     } catch {
       // A snapshot is a convenience. Never fail a run over one.
     }
+  }
+
+  function missingResult(taskId: string): TaskResult {
+    return {
+      baya: PROTOCOL_VERSION,
+      kind: "task_result",
+      task_id: taskId,
+      status: "failed",
+      summary: "",
+      output: "",
+      notes: [],
+      question: null,
+      error: {
+        message: "the provider returned no result for this task",
+        retryable: true,
+      },
+      artifacts: [],
+      files_changed: [],
+    };
   }
 
   function settleFailure(
@@ -513,27 +553,61 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
    * Descendants become `skipped`, never `failed` (architecture.md §Task state
    * machine). The distinction is what lets the report say "2 failed, 5 skipped"
    * instead of reporting seven failures the user has to triage one by one.
+   *
+   * `inGroup` is what makes this work inside a group. A member of the failed
+   * task's own process is already `running`, so the `pending`-only guard would
+   * pass over it — and it would then be settled from whatever the model said
+   * about it, which is how a task downstream of a failure got to report
+   * success. Dependency order is the orchestrator's to enforce, not the
+   * model's to respect.
    */
-  function markDescendantsSkipped(failedId: string): void {
+  function markDescendantsSkipped(
+    failedId: string,
+    inGroup: ReadonlySet<string> = new Set(),
+  ): void {
     for (const descendant of descendantsOf(nodes, failedId)) {
       const entry = store.task(descendant);
-      if (entry && entry.state !== "pending") continue;
+      const settleable =
+        !entry ||
+        entry.state === "pending" ||
+        (entry.state === "running" && inGroup.has(descendant));
+      if (!settleable) continue;
       store.transition(descendant, { state: "skipped", blocked_by: failedId });
       logger.warn("task.skipped", { task_id: descendant, blocked_by: failedId });
     }
   }
 }
 
+/**
+ * A dependency inside the same group has not run yet, so there is no result to
+ * summarize — but it still belongs in the context, because the prompt has to
+ * tell the agent that the upstream work is its own, a few sections above.
+ */
 function collectUpstreams(
   task: Task,
   byId: ReadonlyMap<string, Task>,
   paths: RunPaths,
   results: ReadonlyMap<string, TaskResult>,
+  inGroup: ReadonlySet<string>,
 ): Upstream[] {
   return task.depends_on.flatMap((depId) => {
     const dep = byId.get(depId);
+    if (!dep) return [];
     const result = results.get(depId);
-    if (!dep || !result) return [];
+    if (!result) {
+      if (!inGroup.has(depId)) return [];
+      return [
+        {
+          taskId: depId,
+          title: dep.title,
+          status: "ok",
+          summary: "Done earlier in this same conversation.",
+          resultPath: paths.result(depId),
+          outputPath: paths.output(depId),
+          output: "",
+        },
+      ];
+    }
     let output = result.output;
     if (output === "") {
       try {

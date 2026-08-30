@@ -28,6 +28,13 @@
  * `codex exec --output-schema … -o …` behaves. The task id is read back from
  * that path (`tasks/<id>/result.json`), which is what lets one scenario file
  * script a whole multi-task run without any stdin coordination.
+ *
+ * When the scheduler groups tasks (execution.md §Grouping) the output path is
+ * `tasks/<leader>/batch.json` instead, and the group's ids are read off the
+ * prompt — the same place a real provider reads them. Each member's own
+ * `final` becomes its entry in the `task_result_batch`; process-level fields
+ * (`emit`, `stderr`, `hang_ms`, …) come from the leader, because there is only
+ * one process. `exit_code` is the first non-zero among the members.
  */
 import {
   appendFileSync,
@@ -62,6 +69,11 @@ function taskIdFromOutputFile(outputFile) {
   return basename(dirname(outputFile));
 }
 
+/** The group prompt names every member: `Task id: <id>`, in execution order. */
+function taskIdsFromPrompt(prompt) {
+  return [...prompt.matchAll(/^Task id: (\S+)$/gm)].map((match) => match[1]);
+}
+
 function loadScenario(taskId) {
   const scenarioPath = process.env.BAYA_FAKE_SCRIPT;
   if (!scenarioPath) {
@@ -90,11 +102,14 @@ function checkExpectFile(expectFile) {
   if (!ok) fail(`expect_file failed: ${expectFile} missing or empty`);
 }
 
-async function checkExpectStdin(expectStdin) {
-  if (!expectStdin) return;
+async function readStdin() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
-  const received = Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function checkExpectStdin(expectStdin, received) {
+  if (!expectStdin) return;
   const ok =
     typeof expectStdin === "string"
       ? received.includes(expectStdin)
@@ -107,11 +122,9 @@ async function checkExpectStdin(expectStdin) {
  * identifier: non-zero exit, nothing parseable, no result file. Consumes stdin
  * first so the writer never sees EPIPE.
  */
-async function checkRejectStdin(rejectStdin) {
+function checkRejectStdin(rejectStdin, received) {
   if (typeof rejectStdin !== "string" || rejectStdin === "") return;
-  const chunks = [];
-  for await (const chunk of process.stdin) chunks.push(chunk);
-  if (Buffer.concat(chunks).toString("utf8").includes(rejectStdin)) {
+  if (received.includes(rejectStdin)) {
     process.stderr.write("fake-provider: refusing this invocation\n");
     process.exit(1);
   }
@@ -141,6 +154,25 @@ async function emitLines(emit) {
   }
 }
 
+/**
+ * The one document this process answers with. A group answers with a
+ * `task_result_batch`; a lone task answers exactly as it always did.
+ *
+ * Each member's `task_id` is stamped from the id it was asked about, so a
+ * shared `by_task.default` scenario still produces a well-formed batch.
+ */
+function finalFor(taskIds, scenarios, grouped) {
+  if (!grouped) return scenarios[0].final;
+  const results = [];
+  taskIds.forEach((id, index) => {
+    const final = scenarios[index].final;
+    if (final === undefined || final === null) return;
+    if (typeof final === "string") return;
+    results.push({ ...final, task_id: id });
+  });
+  return { baya: "1", kind: "task_result_batch", results };
+}
+
 function writeFinal(final, outputFile) {
   if (final === undefined || final === null) return;
   const line = typeof final === "string" ? final : JSON.stringify(final);
@@ -159,12 +191,22 @@ async function main() {
   }
 
   const outputFile = outputFileFromArgv();
-  const scenario = loadScenario(taskIdFromOutputFile(outputFile));
+  // `batch.json` lives in the leader's task directory, so the leader is known
+  // from the path either way; the rest of the group comes off the prompt.
+  const leaderId = taskIdFromOutputFile(outputFile);
+  const grouped = outputFile !== null && basename(outputFile) === "batch.json";
+  // Only drained when something actually needs it: a caller that leaves stdin
+  // open forever (the signal tests) must not block here.
+  const scenario = loadScenario(leaderId);
+  const prompt =
+    grouped || scenario.expect_stdin || scenario.reject_stdin ? await readStdin() : "";
+  const taskIds = grouped ? taskIdsFromPrompt(prompt) : [leaderId];
+  const scenarios = taskIds.map((id) => loadScenario(id));
 
   installSignalHandlers(scenario.on_signal ?? "exit");
   checkExpectFile(scenario.expect_file);
-  await checkRejectStdin(scenario.reject_stdin);
-  await checkExpectStdin(scenario.expect_stdin);
+  checkRejectStdin(scenario.reject_stdin, prompt);
+  checkExpectStdin(scenario.expect_stdin, prompt);
 
   writeFileMarker(scenario.writes_file, "start");
 
@@ -179,9 +221,10 @@ async function main() {
   if (scenario.hang_ms) await sleep(scenario.hang_ms);
 
   writeFileMarker(scenario.writes_file, "end");
-  writeFinal(scenario.final, outputFile);
+  writeFinal(finalFor(taskIds, scenarios, grouped), outputFile);
 
-  process.exit(scenario.exit_code ?? 0);
+  const failing = scenarios.find((entry) => (entry.exit_code ?? 0) !== 0);
+  process.exit(failing ? failing.exit_code : 0);
 }
 
 main();

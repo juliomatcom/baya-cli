@@ -66,6 +66,8 @@ export interface PlanOptions {
   providers: readonly ProviderId[];
   defaultProvider: ProviderId;
   schemaPath: string;
+  /** Schema document, only for a planner provider that enforces none. */
+  schema?: string;
   maxTasks?: number;
   /** Attempts after the first. architecture.md: repair Ã2, then fall back. */
   maxRepairs?: number;
@@ -131,6 +133,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     providers: options.providers,
     defaultProvider: options.defaultProvider,
     schemaPath: options.schemaPath,
+    ...(options.schema !== undefined ? { schema: options.schema } : {}),
   });
 
   let prompt = base;

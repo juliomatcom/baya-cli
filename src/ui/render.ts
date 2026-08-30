@@ -18,7 +18,13 @@ import {
  */
 export interface RendererOptions {
   theme: Theme;
-  /** `--quiet`: warnings, failures, notes, and the final report only. */
+  /**
+   * `--quiet`: drop the narration — spawn lines, provider prose, tool calls,
+   * child stderr. **Outcomes survive.** Quiet asks Baya to stop narrating the
+   * work, not to stop reporting it, and the other three outcomes were never
+   * suppressed here, so hiding only `task.succeeded` left a quiet run showing
+   * every bad result and no good one.
+   */
   quiet?: boolean;
   width?: number;
 }
@@ -138,7 +144,7 @@ export function createEventRenderer(
         );
 
       case "task.succeeded": {
-        if (quiet) return null;
+        // Not gated on `quiet`: this is the outcome, not narration about it.
         const summary = firstLine(str(line, "summary"));
         const tokens =
           (num(line, "input_tokens") ?? 0) + (num(line, "output_tokens") ?? 0);

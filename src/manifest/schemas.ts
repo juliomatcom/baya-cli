@@ -178,6 +178,24 @@ export const TaskResultSchema = z
   });
 export type TaskResult = z.infer<typeof TaskResultSchema>;
 
+/**
+ * A task group's response document (protocol.md §3b). One provider process
+ * serves several tasks (execution.md §Grouping) and a process returns exactly
+ * one document, so the document carries one `task_result` per task.
+ *
+ * Only ever asked for when a group holds two or more tasks. A process running
+ * one task answers with the plain `task_result` above — the single-task wire
+ * format is unchanged, which is what makes `--group-size 1` a true bypass.
+ */
+export const TaskResultBatchSchema = z
+  .object({
+    baya: z.literal(PROTOCOL_VERSION),
+    kind: z.literal("task_result_batch"),
+    results: z.array(TaskResultSchema).min(1),
+  })
+  .strict();
+export type TaskResultBatch = z.infer<typeof TaskResultBatchSchema>;
+
 // ---------------------------------------------------------- ProviderEvent
 
 export const ProviderEventSchema = z.discriminatedUnion("t", [

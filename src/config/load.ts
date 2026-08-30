@@ -8,7 +8,7 @@ import {
   type ConfigFile,
   type ResolvedConfig,
 } from "./schema.js";
-import { projectConfigPath, userConfigPath } from "./paths.js";
+import { userConfigPath } from "./paths.js";
 
 /**
  * Layered config (config.md §Precedence). Highest wins:
@@ -17,7 +17,7 @@ import { projectConfigPath, userConfigPath } from "./paths.js";
  * Every value records the layer it came from, so `baya config --show` can
  * explain itself instead of printing an unattributed blob.
  */
-export const LAYER_NAMES = ["flags", "env", "project", "user", "built-in"] as const;
+export const LAYER_NAMES = ["flags", "env", "user", "built-in"] as const;
 export type LayerName = (typeof LAYER_NAMES)[number];
 
 export interface ConfigLayer {
@@ -33,7 +33,6 @@ export interface LoadedConfig {
   sources: Record<string, LayerName>;
   layers: ConfigLayer[];
   userPath: string;
-  projectPath: string;
   /** True when no user config file exists — the first-run wizard's trigger. */
   userConfigExists: boolean;
 }
@@ -138,15 +137,12 @@ export interface LoadConfigOptions {
 export function loadConfig(options: LoadConfigOptions): LoadedConfig {
   const env = options.env ?? process.env;
   const userPath = userConfigPath(env);
-  const projectPath = projectConfigPath(options.cwd);
 
   const user = readConfigFile(userPath);
-  const project = readConfigFile(projectPath);
 
   const layers: ConfigLayer[] = [
     { name: "flags", origin: "command line", values: flagLayer(options.flags ?? {}) },
     { name: "env", origin: "BAYA_* environment", values: envLayer(env) },
-    { name: "project", origin: projectPath, values: project ?? {} },
     { name: "user", origin: userPath, values: user ?? {} },
     { name: "built-in", origin: "built-in defaults", values: {} },
   ];
@@ -213,7 +209,6 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
     sources,
     layers,
     userPath,
-    projectPath,
     userConfigExists: user !== null,
   };
 }

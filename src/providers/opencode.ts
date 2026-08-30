@@ -191,9 +191,9 @@ export const opencodeAdapter: ProviderAdapter = {
     return out;
   },
 
-  extractResult(ctx: ExtractContext): TaskResult {
-    const fromText = extractResultFromText(ctx.taskId, collectText(ctx.events));
-    if (fromText) return fromText.result;
+  extractResults(ctx: ExtractContext): TaskResult[] {
+    const fromText = extractResultFromText(ctx.taskIds, collectText(ctx.events));
+    if (fromText) return fromText.results;
 
     // Recover `isRetryable` from the raw error line kept as unknown.
     for (let i = ctx.events.length - 1; i >= 0; i -= 1) {
@@ -202,7 +202,7 @@ export const opencodeAdapter: ProviderAdapter = {
       const obj = parseLine(event.raw);
       const error = obj && obj.type === "error" ? readError(obj) : null;
       if (error) {
-        return synthesizeFailure(ctx.taskId, error.message, {
+        return synthesizeFailure(ctx.taskIds, error.message, {
           retryable: error.retryable,
         });
       }
@@ -210,14 +210,14 @@ export const opencodeAdapter: ProviderAdapter = {
 
     const errorEvent = ctx.events.find((event) => event.t === "error");
     if (errorEvent && errorEvent.t === "error") {
-      return synthesizeFailure(ctx.taskId, errorEvent.message, {
+      return synthesizeFailure(ctx.taskIds, errorEvent.message, {
         retryable: errorEvent.kind === "rate_limit",
       });
     }
 
     const detail = stripAnsi(ctx.stderr).trim().split("\n").slice(-3).join(" ").trim();
     return synthesizeFailure(
-      ctx.taskId,
+      ctx.taskIds,
       `opencode produced no parseable result (exit ${String(ctx.exitCode)})${detail ? `: ${detail}` : ""}`,
     );
   },

@@ -1,11 +1,9 @@
 import { type ProviderEvent, type TaskResult } from "../manifest/index.js";
 import { stripAnsi } from "../log/index.js";
-import { findClaudeTranscript, parseClaudeTranscript } from "../memory/index.js";
 import { extractResultFromText, parseResultJson, synthesizeFailure } from "./result.js";
 import type {
   BuildRunInput,
   ExtractContext,
-  Observation,
   ProviderAdapter,
   ProviderUsage,
   SpawnPlan,
@@ -166,23 +164,25 @@ function deniedTools(obj: ClaudeResult): string[] {
  * run reports a clean `succeeded` and the caveat lives in a summary nobody
  * greps. `warn` is precisely the "done, but you should know…" channel.
  */
-function withDenialNote(result: TaskResult, denied: string[]): TaskResult {
-  if (denied.length === 0) return result;
+function withDenialNote(results: TaskResult[], denied: string[]): TaskResult[] {
+  if (denied.length === 0) return results;
   const counts = new Map<string, number>();
   for (const name of denied) counts.set(name, (counts.get(name) ?? 0) + 1);
   const listed = [...counts.entries()]
     .map(([name, n]) => (n > 1 ? `${name} \u00d7${n}` : name))
     .join(", ");
-  return {
+  // Every task in the process shares its permission set, so every task in the
+  // process shares the caveat.
+  return results.map((result) => ({
     ...result,
     notes: [
       ...result.notes,
       {
-        severity: "warn",
+        severity: "warn" as const,
         message: `claude was denied permission for: ${listed}. Whatever the task could not run, it could not verify.`,
       },
     ],
-  };
+  }));
 }
 
 export const claudeAdapter: ProviderAdapter = {
@@ -194,10 +194,10 @@ export const claudeAdapter: ProviderAdapter = {
     events: "json",
     sessionId: "preassign",
     resume: "session",
-    // `--output-format json` is one object, so no `tool` events exist to read.
-    // Claude Code's own session transcript carries them instead, and carries
-    // them better: `Read` names a `file_path` outright.
-    observations: "transcript",
+    // `--output-format json` is one object, so no `tool` events exist to read
+    // and this adapter reports no commands. Its file changes still reach
+    // memory through the protocol's own `files_changed`.
+    observations: "none",
     cwdFlag: false,
     modelFlag: true,
     // Subscription-throttled until measured under load (risk register).
@@ -226,50 +226,6 @@ export const claudeAdapter: ProviderAdapter = {
       stdin: "pipe",
       stdinData: answer,
     };
-  },
-
-  /**
-   * The next task as another turn in the same session (execution.md §Session
-   * reuse). Turns 2+ of a chain **must** go through `--resume`: re-passing an
-   * existing `--session-id` on a fresh `-p` asks claude to create a session
-   * that already exists.
-   */
-  buildContinue(sessionId: string, input: BuildRunInput): SpawnPlan {
-    return {
-      argv: [input.bin, "--resume", sessionId, ...commonFlags(input, true)],
-      cwd: input.cwd,
-      stdin: "pipe",
-      stdinData: input.prompt,
-    };
-  },
-
-  transcriptPath(sessionId: string): string | null {
-    return findClaudeTranscript(sessionId);
-  },
-
-  /**
-   * ⚠️ A command that was **denied** never ran, so it is not a dead end.
-   *
-   * Measured 2026-08-29: `--permission-mode auto` denied `npm test`, memory
-   * recorded it under "Commands that FAILED (do not repeat them)", and the
-   * next task read that and refused to try — "the previous attempt to run this
-   * command already failed". By the fourth task the block was five dead ends,
-   * none of which had ever executed. A survivable permission warning became a
-   * cascading run failure, which is exactly the poisoning risk memory has to
-   * be built against.
-   *
-   * A denial cannot produce `ok: true`, so successful commands stay: only the
-   * failures, which are indistinguishable from denials once the transcript is
-   * flattened, are dropped from a task that reported any denial.
-   */
-  extractObservations(ctx: ExtractContext): Observation[] {
-    if (!ctx.transcript) return [];
-    const observations = parseClaudeTranscript(ctx.transcript);
-    const obj = lastFinalObject(ctx.events);
-    if (!obj || deniedTools(obj).length === 0) return observations;
-    return observations.filter(
-      (observation) => observation.kind !== "command" || observation.ok,
-    );
   },
 
   /**
@@ -304,7 +260,7 @@ export const claudeAdapter: ProviderAdapter = {
     return out;
   },
 
-  extractResult(ctx: ExtractContext): TaskResult {
+  extractResults(ctx: ExtractContext): TaskResult[] {
     const obj = lastFinalObject(ctx.events);
 
     if (obj) {
@@ -313,18 +269,21 @@ export const claudeAdapter: ProviderAdapter = {
       const denied = deniedTools(obj);
       // Rung 1: the schema-enforced object claude parsed for us.
       if (obj.structured_output !== null && typeof obj.structured_output === "object") {
-        const parsed = parseResultJson(ctx.taskId, JSON.stringify(obj.structured_output));
+        const parsed = parseResultJson(
+          ctx.taskIds,
+          JSON.stringify(obj.structured_output),
+        );
         if (parsed) return withDenialNote(parsed, denied);
       }
       // Rungs 2–3: `.result` is the same payload as a string — often clean
       // JSON, sometimes prose around a fenced block.
       if (typeof obj.result === "string") {
-        const fromText = extractResultFromText(ctx.taskId, obj.result);
-        if (fromText) return withDenialNote(fromText.result, denied);
+        const fromText = extractResultFromText(ctx.taskIds, obj.result);
+        if (fromText) return withDenialNote(fromText.results, denied);
       }
       if (denied.length > 0) {
         return synthesizeFailure(
-          ctx.taskId,
+          ctx.taskIds,
           `claude was denied permission for: ${denied.join(", ")}. Raise --permission-mode or pass --dangerously-allow-all.`,
           { retryable: false },
         );
@@ -334,7 +293,7 @@ export const claudeAdapter: ProviderAdapter = {
           typeof obj.result === "string" && obj.result.trim() !== ""
             ? obj.result
             : `claude error (${String(obj.subtype ?? "unknown")})`;
-        return synthesizeFailure(ctx.taskId, message, {
+        return synthesizeFailure(ctx.taskIds, message, {
           retryable: classify(message) !== "auth",
         });
       }
@@ -342,14 +301,14 @@ export const claudeAdapter: ProviderAdapter = {
 
     const errorEvent = ctx.events.find((event) => event.t === "error");
     if (errorEvent && errorEvent.t === "error") {
-      return synthesizeFailure(ctx.taskId, errorEvent.message, {
+      return synthesizeFailure(ctx.taskIds, errorEvent.message, {
         retryable: errorEvent.kind !== "auth",
       });
     }
 
     const detail = stripAnsi(ctx.stderr).trim().split("\n").slice(-3).join(" ").trim();
     return synthesizeFailure(
-      ctx.taskId,
+      ctx.taskIds,
       `claude produced no parseable result (exit ${String(ctx.exitCode)})${detail ? `: ${detail}` : ""}`,
     );
   },

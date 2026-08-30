@@ -126,7 +126,8 @@ $ baya ./tasks.md --yes
 - ✅ **No API keys** — drives your existing CLI subscriptions; nothing new to pay for.
 - ✅ **Model-per-task** — name `luna`, `sonnet`, etc. in the task text; Baya resolves it to the real id and the provider that serves it.
 - ✅ **Parallel execution** — independent tasks run concurrently (`--max-parallel`); `read-write` tasks are serialized by a write-lock.
-- ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files touched) carries to later tasks, and chains on one model stay in a single warm provider session instead of spawning cold. `--no-memory`, `--no-session-reuse` to disable.
+- ✅ **One process, many tasks** — tasks that share a provider, model and permission level are packed into a single agent process and worked through in order, so the repo is read once instead of once per task. `--group-size` (default 6), `--group-size 1` to opt out.
+- ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files changed) carries across to tasks that could not share a process. `--no-memory` to disable.
 - ✅ **Preview gate** — see the full plan before anything runs; `--dry-run` shows it and runs nothing.
 - ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider.
 
@@ -142,28 +143,29 @@ flowchart TB
     G --> GATE{"Preview<br/>& confirm"}
     GATE -->|approved| S["Scheduler<br/><i>budgets · write-lock</i>"]
 
-    S --> T1["task: design-api"]
-    S --> T2["task: gen-schema"]
-    S --> T3["task: build-ui"]
+    S --> GRP{"Group<br/><i>same provider · model<br/>access · cwd</i>"}
 
-    T1 --> AD["Provider adapters<br/><i>argv · prompt delivery · event parsing</i>"]
-    T2 --> AD
-    T3 --> AD
+    GRP --> P1["one process<br/><i>several tasks, in order,<br/>in one conversation</i>"]
+    GRP --> P2["one process<br/><i>another model, so<br/>a group of its own</i>"]
+
+    P1 --> AD["Provider adapters<br/><i>argv · prompt delivery · event parsing</i>"]
+    P2 --> AD
 
     AD --> C1["codex"]
     AD --> C2["claude"]
-    AD --> C3["copilot"]
-    AD --> C4["opencode"]
+    AD --> C3["opencode"]
+    AD --> CN["…<br/><i>grok, gemini</i>"]
 
-    C1 --> RES["task_result JSON<br/><i>status · summary · notes</i>"]
+    C1 --> RES["task_result JSON<br/><i>one per task in the process</i>"]
     C2 --> RES
     C3 --> RES
-    C4 --> RES
+    CN --> RES
 
     RES -->|ok| BUS["Context bus<br/><i>feeds dependents</i>"]
     RES -->|needs_input| ASK["Bubble question<br/>→ resume session"]
     RES -->|failed| REC["Classify failure<br/>→ resumable state"]
 
+    RES -.->|derived facts| S
     BUS --> S
     ASK --> S
     REC --> OUT["Report<br/><i>summaries · flagged notes</i>"]
@@ -174,6 +176,7 @@ Five ideas do most of the work:
 
 - **JSON on the wire, both directions.** Every exchange with a provider is a validated envelope, never prose. `codex` and `claude` enforce the result schema natively. A question from an agent is a `status: "needs_input"` field — not a question mark spotted in a stream.
 - **The planner picks a provider, never a command.** Manifests carry a provider name from a closed enum; adapters alone build `argv`. `shell: true` is banned repo-wide.
+- **A process is the unit, not a task.** Tasks that share a provider, model, permission level and directory go into one agent process and are worked through in order — a whole layer of independent tasks, or a chain where each step builds on the last. That process orients itself once instead of once per task. This is decided separately from the DAG's shape, so the two do not line up: a six-stage chain is still one process, while one stage holding six tasks on six models is six.
 - **Nothing paid-for is ever redone.** Progress is checkpointed before each transition. Run out of credits mid-graph and `baya resume <runId> --provider claude` picks up exactly where it stopped. Within a run, no task rediscovers what another already found: commands that worked, commands that failed, and files already touched are derived from the providers' own logs — costing nothing to produce — and handed to every later task.
 - **Providers are watched, not trusted.** Their flag surfaces are live-probed and contract-tested, their output is ANSI-stripped and schema-validated.
 
@@ -181,13 +184,14 @@ Five ideas do most of the work:
 
 Verified 2026-08-28 by live invocation, not from documentation.
 
-| Provider                                                | Non-interactive | Schema enforcement        | Status           |
-| :------------------------------------------------------ | :-------------- | :------------------------ | :--------------- |
-| [`codex`](https://github.com/openai/codex)              | `codex exec`    | ✅ file in / file out     | ✅ verified      |
-| [`claude`](https://claude.com/claude-code)              | `claude -p`     | ✅ inline `--json-schema` | ✅ verified      |
-| [`copilot`](https://github.com/github/copilot-cli)      | `copilot -p`    | ❌                        | ⚠️ partial       |
-| [`opencode`](https://github.com/sst/opencode)           | `opencode run`  | ❌                        | ⚠️ partial       |
-| [`gemini`](https://github.com/google-gemini/gemini-cli) | `gemini -p`     | ❌                        | deferred to v1.1 |
+| Provider                                                | Non-interactive | Schema enforcement        | Status            |
+| :------------------------------------------------------ | :-------------- | :------------------------ | :---------------- |
+| [`codex`](https://github.com/openai/codex)              | `codex exec`    | ✅ file in / file out     | ✅ verified       |
+| [`claude`](https://claude.com/claude-code)              | `claude -p`     | ✅ inline `--json-schema` | ✅ verified       |
+| [`copilot`](https://github.com/github/copilot-cli)      | `copilot -p`    | ❌                        | ⚠️ partial        |
+| [`opencode`](https://github.com/sst/opencode)           | `opencode run`  | ❌                        | ⚠️ partial        |
+| [`gemini`](https://github.com/google-gemini/gemini-cli) | `gemini -p`     | ❌                        | deferred to v1.1  |
+| `grok`                                                  | —               | —                         | planned, unprobed |
 
 Full flag surfaces, event shapes, and capability matrix: [`wiki-llm/providers.md`](wiki-llm/providers.md).
 
@@ -196,8 +200,8 @@ Full flag surfaces, event shapes, and capability matrix: [`wiki-llm/providers.md
 ```
 wiki-llm/     documentation — the source of truth
 specs/001/    design record: what the original spec got wrong, and the plan
-src/          (not yet)
-test/         (not yet)
+src/          the CLI, planner, providers, executor, memory
+test/         unit · integration (fake provider) · contract (live CLIs)
 ```
 
 ## Documentation
@@ -274,9 +278,17 @@ Contributing a corrected entry to `BUILTIN_CATALOG` in `src/providers/catalog.ts
 
 **Why not just use one CLI's built-in agent?** Because you probably pay for more than one, and they are good at different things. Baya lets a task list say "plan with one, build with another" and handles the plumbing.
 
-**Can this save me money?** Yes, three ways. A task list picks the model per task, so the light steps can run on a cheap model (`luna`, `terra`) while the expensive ones are reserved for the work that earns them. Beyond that, tasks stop starting blind: what earlier tasks in a run found — which commands work, which fail, which files were already changed — is derived from the providers' own logs and passed to later tasks, so nobody pays twice to discover the same thing. And a chain of tasks on the same model continues in one provider session instead of spawning cold each time, which keeps the prompt cache warm. You are still spending under subscriptions you already pay for — Baya just stops the top-tier model from doing work a cheaper one would have done fine, and stops every task from re-reading the repo from scratch.
+**Can this save me money?** Yes, three ways.
 
-Both are on by default and switchable off: `--no-memory`, `--no-session-reuse`.
+A task list picks the model per task, so the light steps run on a cheap model (`luna`, `terra`) while the expensive ones are reserved for work that earns them.
+
+Then Baya spawns as few agent processes as it can. Tasks that share a provider, model, permission level and directory go into **one** process and are worked through in order — a whole layer of independent tasks, or a chain where each step builds on the last. That process reads `package.json` once, orients itself once, and keeps its context across the tasks, instead of every task paying for that from scratch. It is one long conversation rather than N cold starts.
+
+What grouping can't cover — a task on a different model, or one that needs different permissions — is covered by memory: what earlier tasks found (which commands work, which fail, which files changed) is derived from the providers' own logs and handed to later tasks, so nobody pays twice to discover the same thing.
+
+You are still spending under subscriptions you already pay for. Baya just stops the top-tier model from doing work a cheaper one would have done fine, and stops every task from re-reading the repo from scratch.
+
+Both are on by default: `--group-size 1` gives every task its own process, `--no-memory` starts every task blind.
 
 **Does this need API keys?** No. It drives locally installed CLIs under whatever subscription you already have.
 

@@ -50,12 +50,6 @@ const HEADINGS: Record<MemoryKind, string> = {
 
 export interface RenderMemoryOptions {
   budget?: number;
-  /**
-   * Tasks whose work is already visible in the current provider session. An
-   * entry every one of whose sources sits in here is dropped: the agent can
-   * see the original, so restating it is pure cost.
-   */
-  alreadyInSession?: ReadonlySet<string>;
 }
 
 function isCommand(kind: MemoryKind): boolean {
@@ -92,17 +86,12 @@ export function renderMemory(
 ): string {
   const budget = options.budget ?? DEFAULT_MEMORY_BUDGET;
   if (budget <= 0) return "";
-  const inSession = options.alreadyInSession;
 
   const groups = new Map<MemoryKind, MemoryEntry[]>();
   for (const kind of ORDER) {
     const group = entries
       .filter((entry) => entry.kind === kind)
       .filter((entry) => !(isCommand(kind) && entry.value.length > MAX_COMMAND_CHARS))
-      .filter((entry) => {
-        if (!inSession || entry.sources.length === 0) return true;
-        return !entry.sources.every((source) => inSession.has(source));
-      })
       .sort(rank)
       .slice(0, MAX_ITEMS_PER_KIND);
     if (group.length > 0) groups.set(kind, group);

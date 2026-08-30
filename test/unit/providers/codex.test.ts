@@ -3,7 +3,11 @@ import {
   PROTOCOL_VERSION,
   type Task,
   type TaskRequest,
+  type TaskResult,
 } from "../../../src/manifest/index.js";
+
+/** A process returns one result per task; these adapters are exercised with one. */
+const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
 
 const ESC = String.fromCharCode(27);
 
@@ -166,62 +170,72 @@ describe("codexAdapter.extractResult", () => {
   });
 
   it("reads the schema-enforced file — rung 1, no parsing", () => {
-    const result = codexAdapter.extractResult({
-      taskId: "gen-schema",
-      events: [],
-      resultFileContents: ok,
-      exitCode: 0,
-      stderr: "",
-    });
+    const result = one(
+      codexAdapter.extractResults({
+        taskIds: ["gen-schema"],
+        events: [],
+        resultFileContents: ok,
+        exitCode: 0,
+        stderr: "",
+      }),
+    );
     expect(result.status).toBe("ok");
     expect(result.notes).toEqual([]);
   });
 
   it("overrides a mismatched task_id so a result cannot be misrouted", () => {
-    const result = codexAdapter.extractResult({
-      taskId: "gen-schema",
-      events: [],
-      resultFileContents: ok.replace("gen-schema", "some-other-task"),
-      exitCode: 0,
-      stderr: "",
-    });
+    const result = one(
+      codexAdapter.extractResults({
+        taskIds: ["gen-schema"],
+        events: [],
+        resultFileContents: ok.replace("gen-schema", "some-other-task"),
+        exitCode: 0,
+        stderr: "",
+      }),
+    );
     expect(result.task_id).toBe("gen-schema");
   });
 
   it("synthesizes a failure when no result file was written", () => {
-    const result = codexAdapter.extractResult({
-      taskId: "gen-schema",
-      events: [],
-      resultFileContents: null,
-      exitCode: 1,
-      stderr: "boom",
-    });
+    const result = one(
+      codexAdapter.extractResults({
+        taskIds: ["gen-schema"],
+        events: [],
+        resultFileContents: null,
+        exitCode: 1,
+        stderr: "boom",
+      }),
+    );
     expect(result.status).toBe("failed");
     expect(result.error?.message).toContain("no result file");
   });
 
   it("prefers a classified error event over the raw stderr tail", () => {
-    const result = codexAdapter.extractResult({
-      taskId: "gen-schema",
-      events: [{ t: "error", kind: "auth", message: "unauthorized" }],
-      resultFileContents: null,
-      exitCode: 1,
-      stderr: "noise",
-    });
+    const result = one(
+      codexAdapter.extractResults({
+        taskIds: ["gen-schema"],
+        events: [{ t: "error", kind: "auth", message: "unauthorized" }],
+        resultFileContents: null,
+        exitCode: 1,
+        stderr: "noise",
+      }),
+    );
     expect(result.error).toEqual({ message: "unauthorized", retryable: false });
   });
 
   it("reports the last error, past a non-fatal diagnostic that came first", () => {
-    const result = codexAdapter.extractResult({
-      taskId: "gen-schema",
-      events: [
-        { t: "error", kind: "other", message: "Model metadata for `x` not found." },
-        { t: "error", kind: "auth", message: "unauthorized" },
-      ],
-      resultFileContents: null,
-      exitCode: 1,
-      stderr: "noise",
-    });
+    const result = one(
+      codexAdapter.extractResults({
+        taskIds: ["gen-schema"],
+        events: [
+          { t: "error", kind: "other", message: "Model metadata for `x` not found." },
+          { t: "error", kind: "auth", message: "unauthorized" },
+        ],
+        resultFileContents: null,
+        exitCode: 1,
+        stderr: "noise",
+      }),
+    );
     expect(result.error).toEqual({ message: "unauthorized", retryable: false });
   });
 });
@@ -275,12 +289,11 @@ describe("codex usage accounting", () => {
 
 describe("codex observations", () => {
   const ctx = (events: ReturnType<typeof codexAdapter.parseEvents>) => ({
-    taskId: "t1",
+    taskIds: ["t1"],
     events,
     resultFileContents: null,
     exitCode: 0,
     stderr: "",
-    transcript: null,
   });
 
   it("reads commands and their exit status straight out of the event stream", () => {
@@ -306,45 +319,26 @@ describe("codex observations", () => {
     ]);
   });
 
-  it("reads its observations from its own events, needing no sidecar", () => {
+  it("reads its observations from its own documented event stream", () => {
     expect(codexAdapter.capabilities.observations).toBe("events");
-    expect(codexAdapter.transcriptPath).toBeUndefined();
   });
 });
 
-describe("codex session continuation", () => {
-  it("continues a thread with the next task_request on stdin", () => {
-    const plan = codexAdapter.buildContinue?.("thread-9", input());
-    expect(plan?.argv.slice(0, 4)).toEqual([
-      "/usr/local/bin/codex",
-      "exec",
-      "resume",
-      "thread-9",
-    ]);
-    expect(plan?.stdinData).toBe(input().prompt);
-  });
-
+describe("codex exec resume — the escalation path (M4)", () => {
   /**
-   * ⚠️ The regression that made every real continuation fail: `exec resume`
-   * does NOT take `exec`'s flags. Passing them exits 2 with
+   * ⚠️ `exec resume` does NOT take `exec`'s flags. Passing them exits 2 with
    * `error: unexpected argument '-C' found`, before the model is reached.
    * Verified live 2026-08-29 against codex-cli 0.150.1.
    */
-  it.each([
-    ["buildContinue", () => codexAdapter.buildContinue?.("t-9", input())?.argv ?? []],
-    ["buildResume", () => codexAdapter.buildResume("t-9", "answer", input()).argv],
-  ])("%s passes no flag `exec resume` rejects", (_name, argv) => {
-    for (const rejected of ["-C", "-s", "--color"]) {
-      expect(argv()).not.toContain(rejected);
-    }
+  it("passes no flag `exec resume` rejects", () => {
+    const argv = codexAdapter.buildResume("t-9", "answer", input()).argv;
+    for (const rejected of ["-C", "-s", "--color"]) expect(argv).not.toContain(rejected);
   });
 
-  it.each([
-    ["buildContinue", () => codexAdapter.buildContinue?.("t-9", input())?.argv ?? []],
-    ["buildResume", () => codexAdapter.buildResume("t-9", "answer", input()).argv],
-  ])("%s keeps the flags `exec resume` does accept", (_name, argv) => {
+  it("keeps the flags `exec resume` does accept", () => {
+    const argv = codexAdapter.buildResume("t-9", "answer", input()).argv;
     for (const kept of ["--json", "--skip-git-repo-check", "--output-schema", "-o"]) {
-      expect(argv()).toContain(kept);
+      expect(argv).toContain(kept);
     }
   });
 
@@ -354,6 +348,6 @@ describe("codex session continuation", () => {
   });
 
   it("relies on the spawn cwd once -C is gone", () => {
-    expect(codexAdapter.buildContinue?.("t-9", input())?.cwd).toBe("/work");
+    expect(codexAdapter.buildResume("t-9", "answer", input()).cwd).toBe("/work");
   });
 });

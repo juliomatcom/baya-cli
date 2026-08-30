@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readLog, runCli, taskResult } from "../helpers/runCli.js";
+import { runCli, taskResult } from "../helpers/runCli.js";
 
 /**
  * Cross-task memory, end to end (execution.md §Memory).
@@ -37,8 +37,8 @@ const PLAN = {
       instruction: "Change the code.",
       provider: "codex",
       model: null,
-      // A fan-in, so this task is never a session continuation and therefore
-      // always receives memory in its prompt rather than in its transcript.
+      // `read-write`, so it can never share a process with the read-only
+      // probes above: memory has to cross a group boundary to reach it.
       depends_on: ["probe-tests", "probe-docs"],
       access: "read-write",
       cwd: null,
@@ -130,90 +130,29 @@ describe("cross-task memory", () => {
     expect(existsSync(result.paths!.memory)).toBe(false);
   });
 
-  it("does not fold a fan-in into an upstream's session", async () => {
+  it("is what carries a fact across a group boundary", async () => {
     const result = await runCli(["./tasks.md", "--yes"], { scenario });
     const state = result.readJson(result.paths!.state) as {
-      tasks: Record<string, { continued_from: string | null }>;
+      tasks: Record<string, { group_id: string | null }>;
     };
-    expect(state.tasks["use-memory"]?.continued_from).toBeNull();
+    // The two read-only probes share one process; the read-write task cannot
+    // join them, so what it knows about `npm test` came through memory.
+    expect(state.tasks["probe-tests"]?.group_id).toBe("probe-tests");
+    expect(state.tasks["probe-docs"]?.group_id).toBe("probe-tests");
+    expect(state.tasks["use-memory"]?.group_id).toBeNull();
   });
 });
 
-/**
- * `codex exec resume <thread_id>` is still UNVERIFIED (M6.5). The cold retry is
- * what makes shipping session reuse safe before it is settled, so it gets its
- * own case: a CLI that refuses the resume must cost one wasted spawn, not the
- * task.
- */
-describe("a continuation the CLI refuses", () => {
-  const CHAIN = {
-    tasks: [
-      {
-        id: "first",
-        title: "First",
-        instruction: "Do the first thing.",
-        provider: "codex",
-        model: null,
-        depends_on: [],
-        access: "read-write",
-        cwd: null,
-      },
-      {
-        id: "second",
-        title: "Second",
-        instruction: "Do the second thing.",
-        provider: "codex",
-        model: null,
-        depends_on: ["first"],
-        access: "read-write",
-        cwd: null,
-      },
-    ],
-  };
-
-  const refusing = {
-    __planner__: { final: CHAIN },
-    first: {
-      emit: [{ line: '{"type":"thread.started","thread_id":"t-1"}' }],
-      final: taskResult("ok", { task_id: "first", summary: "First done." }),
-    },
-    second: {
-      // The prompt only says this on a continuation, so this rejects exactly
-      // the resumed invocation and accepts the cold retry.
-      reject_stdin: "continuing in the same session",
-      emit: [{ line: '{"type":"thread.started","thread_id":"t-2"}' }],
-      final: taskResult("ok", { task_id: "second", summary: "Second done." }),
-    },
-  };
-
-  it("falls back to a cold run and still completes the task", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario: refusing });
-    expect(result.code).toBe(0);
-
-    const state = result.readJson(result.paths!.state) as {
-      totals: Record<string, number>;
-      tasks: Record<string, { state: string; continued_from: string | null }>;
-    };
-    expect(state.totals).toMatchObject({ succeeded: 2, failed: 0 });
-    // The continuation was attempted and abandoned, so the record says cold.
-    expect(state.tasks["second"]?.continued_from).toBeNull();
-  });
-
-  it("says so in the log rather than silently absorbing it", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario: refusing });
-    const events = readLog(result.paths!).map((entry) => entry.event);
-    expect(events).toContain("task.continue.failed");
-  });
-});
-
-/**
- * Chain depth. `codex exec resume` keeps the same thread id, so a guard keyed
- * on the session id treated turn 3 as a second claim on turn 1's session and
- * capped every chain at two turns. Measured on a real six-task run before it
- * was keyed on the parent task instead.
- */
-describe("a chain longer than two", () => {
-  const ids = ["step-one", "step-two", "step-three", "step-four"];
+describe("a chain longer than the group cap", () => {
+  const ids = [
+    "step-one",
+    "step-two",
+    "step-three",
+    "step-four",
+    "step-five",
+    "step-six",
+    "step-seven",
+  ];
   const LINEAR = {
     tasks: ids.map((id, index) => ({
       id,
@@ -233,7 +172,6 @@ describe("a chain longer than two", () => {
       ids.map((id) => [
         id,
         {
-          // Every turn reports the same thread id, exactly as codex does.
           emit: [{ line: '{"type":"thread.started","thread_id":"t-1"}' }],
           final: taskResult("ok", { task_id: id, summary: `${id} done.` }),
         },
@@ -241,22 +179,25 @@ describe("a chain longer than two", () => {
     ),
   };
 
-  it("keeps collapsing past turn two", async () => {
+  it("collapses a chain into as few processes as the cap allows", async () => {
     const result = await runCli(["./tasks.md", "--yes"], { scenario: linear });
     expect(result.code).toBe(0);
     const state = result.readJson(result.paths!.state) as {
-      tasks: Record<string, { continued_from: string | null }>;
+      tasks: Record<string, { group_id: string | null }>;
     };
-    expect(state.tasks["step-one"]?.continued_from).toBeNull();
-    expect(state.tasks["step-two"]?.continued_from).toBe("step-one");
-    expect(state.tasks["step-three"]?.continued_from).toBe("step-two");
-    expect(state.tasks["step-four"]?.continued_from).toBe("step-three");
+    // Cap 6: the first six collapse into one process and the seventh starts
+    // the next — seven tasks, two spawns instead of seven.
+    for (const id of ids.slice(0, 6)) {
+      expect({ id, group: state.tasks[id]?.group_id }).toEqual({
+        id,
+        group: "step-one",
+      });
+    }
+    expect(state.tasks["step-seven"]?.group_id).toBeNull();
   });
 
-  it("still refuses to let two siblings fork one parent's session", async () => {
-    // Spread first, then override: the other way round the linear planner
-    // silently won and this asserted nothing.
-    const forked = {
+  it("groups siblings too, not only chains", async () => {
+    const fanout = {
       ...linear,
       __planner__: {
         final: {
@@ -268,13 +209,13 @@ describe("a chain longer than two", () => {
         },
       },
     };
-    const result = await runCli(["./tasks.md", "--yes"], { scenario: forked });
+    const result = await runCli(["./tasks.md", "--yes"], { scenario: fanout });
     const state = result.readJson(result.paths!.state) as {
-      tasks: Record<string, { continued_from: string | null }>;
+      tasks: Record<string, { group_id: string | null }>;
     };
-    const continued = ["step-two", "step-three"].filter(
-      (id) => state.tasks[id]?.continued_from === "step-one",
-    );
-    expect(continued).toHaveLength(1);
+    // Two siblings and their parent: one process, where session reuse could
+    // only ever have taken one of the two.
+    expect(state.tasks["step-two"]?.group_id).toBe("step-one");
+    expect(state.tasks["step-three"]?.group_id).toBe("step-one");
   });
 });
