@@ -51,6 +51,12 @@ describe("renderPrompt", () => {
   });
 });
 
+const secondTask = {
+  id: "seed-db",
+  title: "Seed the database",
+  instruction: "Insert fixtures.",
+};
+
 describe("renderGroupPrompt", () => {
   const second = request([], {
     id: "seed-db",
@@ -89,5 +95,26 @@ describe("renderGroupPrompt", () => {
   it("still inlines an upstream from outside the group", () => {
     const text = renderGroupPrompt([request([upstream()]), second]);
     expect(text).toContain("<upstream_output>");
+  });
+});
+
+/**
+ * Output was 1.3% of tokens across 17 recorded runs, so this is a small lever.
+ * The reason it needs a test is the failure mode, not the saving: an
+ * instruction to be quiet must never read as permission to thin the response.
+ */
+describe("working style", () => {
+  it("asks for no narration, and says so once for a whole group", () => {
+    expect(renderPrompt(request())).toContain("Work without narration");
+    const group = renderGroupPrompt([request(), request([], secondTask)]);
+    expect(group.match(/# Working style/g)).toHaveLength(1);
+  });
+
+  it("protects the contract fields it could be read as thinning", () => {
+    const text = renderPrompt(request());
+    expect(text).toContain("This is about commentary, not about the response.");
+    for (const field of ["`summary`", "`output`", "`notes`"]) {
+      expect(text).toContain(field);
+    }
   });
 });

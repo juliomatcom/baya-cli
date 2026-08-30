@@ -39,6 +39,7 @@ export function renderPrompt(
   }
 
   lines.push(...workspaceLines(request, options.memory, false));
+  lines.push(...WORKING_STYLE);
 
   lines.push(
     "# Response contract",
@@ -112,6 +113,8 @@ export function renderGroupPrompt(
     }
   });
 
+  lines.push(...WORKING_STYLE);
+
   lines.push(
     "# Response contract",
     "",
@@ -132,6 +135,32 @@ export function renderGroupPrompt(
 
   return lines.join("\n");
 }
+
+/**
+ * Narration is output tokens nobody reads. These CLIs stream their tool calls
+ * already, so a running commentary on top of them is pure cost.
+ *
+ * ⚠️ Deliberately narrow, and the second paragraph is the load-bearing half.
+ * A blunt "output only status or errors" reads as permission to thin the
+ * response itself — and `notes[]` exists precisely so a caveat reaches a human
+ * instead of dying in a result file. Suppressing that to save a few tokens
+ * would trade the most valuable thing a task produces for the cheapest.
+ *
+ * Measured before writing it: across 17 recorded runs output was 1.3% of all
+ * tokens (275k against 21.1M input). This is a small lever pulled because it
+ * is free, not because it is where the money goes — that is input, and
+ * grouping is what attacks it.
+ */
+const WORKING_STYLE = [
+  "# Working style",
+  "",
+  "Work without narration: no progress updates, no restating the task or your",
+  "plan, no account of what you just did. Your tool calls are already visible.",
+  "",
+  "This is about commentary, not about the response. `summary`, `output` and",
+  "`notes` below are the deliverable — say everything that belongs in them.",
+  "",
+];
 
 const FIELD_NOTES = [
   "Field notes:",

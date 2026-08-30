@@ -119,6 +119,14 @@ A process running **one** task answers with the plain `task_result` of §3, byte
 
 No `minItems`/`maxItems`: pinning the count would make a provider reject a partial answer outright and lose the tasks that _were_ done. A short array is handled where it can be handled well — see the ladder below.
 
+### Working style
+
+Every prompt carries a short `# Working style` section asking for no narration — no progress updates, no restating the task, no account of what was just done. These CLIs stream their tool calls already; commentary on top is output tokens nobody reads. Stated once per **process**, so a group pays for it once.
+
+⚠️ It explicitly exempts `summary`, `output` and `notes`. A blunt "output only status or errors" reads as permission to thin the response, and `notes[]` exists precisely so a caveat reaches a human instead of dying in a result file — trading that for a few tokens would give up the most valuable thing a task produces to save the cheapest.
+
+**Measured first, and it is a small lever:** across 17 recorded runs output was **1.3%** of all tokens (275k against 21.1M input) — ~6% of spend once output's higher price is weighted in. The money is in input, and §Grouping is what attacks that.
+
 ## 4. Parsing the result — degradation ladder
 
 Apply in order; stop at first success. Implementation: `src/providers/result.ts` (M2.6).
