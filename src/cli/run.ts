@@ -47,6 +47,7 @@ import {
   exitCodeFor,
   renderDag,
   renderReport,
+  resolveRunModel,
   runModelGate,
   type Progress,
 } from "../ui/index.js";
@@ -172,6 +173,42 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   }
   plannerProvider ??= defaultProvider;
 
+  // Resolve the run-level models before anything spawns. `--default-model` and
+  // `--planner-model` used to reach the provider verbatim, so a catalog alias
+  // like `luna` was handed to codex as `-m luna` and the planner failed on a
+  // name `baya models` lists (model-gate.ts §resolveRunModel). The catalog is
+  // built here rather than at the task gate because the planner needs it first.
+  const catalog = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
+  const modelNotes: string[] = [];
+  for (const [label, provider, current, apply] of [
+    [
+      "--default-model",
+      defaultProvider,
+      defaultModel,
+      (m: string | null) => {
+        defaultModel = m;
+      },
+    ],
+    [
+      "--planner-model",
+      plannerProvider,
+      plannerModel,
+      (m: string | null) => {
+        plannerModel = m;
+      },
+    ],
+  ] as const) {
+    if (provider === null) continue;
+    const resolved = resolveRunModel(current, {
+      catalog,
+      userAliases: loaded.config.modelAliases,
+      provider,
+      label,
+    });
+    apply(resolved.model);
+    if (resolved.note !== null) modelNotes.push(resolved.note);
+  }
+
   // ---- run identity and the directory lock
   const runId = makeRunId();
   const paths = runPaths(cwd, runId);
@@ -205,6 +242,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     sources: loaded.sources,
     user_config: loaded.userPath,
   });
+  for (const note of modelNotes) logger.info("run.model.resolved", { detail: note });
   for (const warning of startupWarnings)
     logger.warn("config.default.inferred", { message: warning });
   for (const status of statuses) {
@@ -357,7 +395,6 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- model gate: resolve every task-named model against the catalog
     //      before anything is written or run. A named model is never silently
     //      swapped for the default (M3.6).
-    const catalog = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
     const modelGate = await runModelGate({
       manifest,
       catalog,

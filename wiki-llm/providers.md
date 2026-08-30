@@ -74,6 +74,14 @@ interface ProviderAdapter {
 - `extractResults` returns **one result per `ctx.taskIds`**, in order. An adapter only says where this provider put the answer; whether that answer is a `task_result` or a `task_result_batch` is settled once in `src/providers/result.ts`, so no adapter knows grouping exists.
 - `extractObservations` is optional and is how a provider contributes commands to memory. `observations: "none"` means it consumes memory and contributes none. Never self-reported by the model, and never scraped from a file the provider does not document.
 
+## Model resolution
+
+A model name reaches a provider **resolved**, never as typed. Task-named models go through the model gate (`planModelGate`); the run-level `--default-model` / `--planner-model` and their config equivalents go through `resolveRunModel`. Both apply the same confidence rule: an exact id, a catalog alias, or a user alias is applied; anything else is not guessed at.
+
+⚠️ The catalog is a **convenience list, not an allowlist**. An unrecognized run-level model passes through unchanged, because model ids ship faster than this catalog does and a real id must always reach the provider. Only a task-named model can stop the run (M3.6) — the user typed the run-level one on this invocation, a planner invented the other.
+
+⚠️ Measured 2026-08-30: before `resolveRunModel`, `--planner-model luna` spawned `codex … -m luna`, codex answered ``Model metadata for `luna` not found``, the planner exited 1 three times and the run fell back to a linear plan — from a name `baya models` lists and the task gate resolves without complaint.
+
 ## Binary resolution
 
 Chain: `.baya/config.json` override → `$PATH` → known locations → not found. Known: `~/.local/bin`, `~/.opencode/bin`, active nvm `bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`.

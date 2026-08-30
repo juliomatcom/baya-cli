@@ -28,6 +28,7 @@ export {
 export { confirmPlan, type ConfirmOutcome, type ConfirmPlanOptions } from "./confirm.js";
 export {
   planModelGate,
+  resolveRunModel,
   runModelGate,
   buildModelAsk,
   type ModelGateOptions,

@@ -239,4 +239,63 @@ export async function runModelGate(options: ModelGateOptions): Promise<ModelGate
   return { decision: "ok", manifest: applyRewrites(options.manifest, rewrites), notes };
 }
 
+/**
+ * Resolve a **run-level** model name — `--default-model`, `--planner-model`, or
+ * their config equivalents — the way `planModelGate` resolves a task's.
+ *
+ * Without this, an alias typed on the command line reached the provider
+ * verbatim. Measured 2026-08-30: `--planner-model luna --default-model luna`
+ * spawned `codex … -m luna`, codex answered `Model metadata for 'luna' not
+ * found`, the planner exited 1 three times, and the run fell back to a linear
+ * plan — from a name `baya models` lists and the task-level gate resolves
+ * without complaint. The gate only ever looked at models a **task** named.
+ *
+ * ⚠️ **The catalog is a convenience list, not an allowlist.** A name it does
+ * not know is passed through **unchanged**, because model ids ship faster than
+ * this catalog does and a real id must always reach the provider. So this
+ * applies a confident hit (exact id, known alias, user alias) and otherwise
+ * does nothing — no ask, no abort. That is the difference from the task-level
+ * gate, and it is deliberate: a run-level model is something the user typed on
+ * this invocation, not something a planner invented on their behalf.
+ */
+export function resolveRunModel(
+  requested: string | null,
+  options: {
+    catalog: Catalog;
+    userAliases: Record<string, string>;
+    /** The provider this model will actually be handed to. */
+    provider: ProviderId;
+    /** For the note only — `--default-model`, `--planner-model`. */
+    label: string;
+  },
+): { model: string | null; note: string | null } {
+  if (requested === null || requested.trim() === "") {
+    return { model: requested, note: null };
+  }
+
+  const { match } = resolveModel(requested, {
+    catalog: options.catalog,
+    userAliases: options.userAliases,
+    runDefaultProvider: options.provider,
+  });
+  if (!match) return { model: requested, note: null };
+
+  // A confident hit that routes to a different provider is still applied — the
+  // user named both explicitly — but it is worth saying out loud, because the
+  // pairing is usually a mistake.
+  const mismatch =
+    match.provider !== options.provider
+      ? ` — note this is a ${match.provider} model and the run is on ${options.provider}`
+      : "";
+  return {
+    model: match.model,
+    note:
+      match.model === requested && match.via !== "user-alias"
+        ? mismatch === ""
+          ? null
+          : `${options.label} ${requested}${mismatch}`
+        : `${options.label} "${requested}" → ${match.model} (${match.via})${mismatch}`,
+  };
+}
+
 export type { Task };

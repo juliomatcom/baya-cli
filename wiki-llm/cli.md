@@ -36,9 +36,9 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | Flag                      | Default       | Meaning                                                                                                                    |
 | :------------------------ | :------------ | :------------------------------------------------------------------------------------------------------------------------- |
 | `--planner-provider <id>` | _from config_ | Provider that parses the task list into a manifest.                                                                        |
-| `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                                                            |
+| `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default. Resolved against the catalog like a task's, so an alias works.                             |
 | `--default-provider <id>` | _from config_ | Fallback for tasks with no stated provider. **Bypasses the first-run wizard.**                                             |
-| `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default.                                                                                            |
+| `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default. Resolved against the catalog like a task's, so an alias works.                             |
 | `--dry-run`               | off           | Render the DAG (with resolved models) and exit `0`.                                                                        |
 | `--yes`                   | off           | Auto-confirm the plan gate; at the model gate takes a best match ≥ 0.85 else exits `2`. **Never answers a task question.** |
 | `--plan-out <f>`          | —             | Write the manifest (models resolved) and exit.                                                                             |
@@ -51,7 +51,7 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                                                         |
 | `--no-memory`             | off           | Do not pass what earlier tasks learned. Every task starts blind. The A/B control for measuring memory.                     |
 | `--memory-budget <n>`     | `1200`        | Chars of the `# Known about this workspace` block (~300 tokens).                                                           |
-| `--group-size <n>`        | `4`           | Max tasks per provider process (execution.md §Grouping). `1` gives every task its own process.                             |
+| `--group-size <n>`        | `6`           | Max tasks per provider process (execution.md §Grouping). `1` gives every task its own process.                             |
 | `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                    |
 | `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                    |
 | `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from the task list.                                                                 |
