@@ -19,8 +19,7 @@ v1 set: `opencode`, `codex`, `claude`, `copilot`. `gemini` verified, deferred to
 | **Session id field**      | `thread_id`                 | `session_id`                         | `sessionId`                  | `sessionID`           |
 | **Pre-assign session id** | ❌ capture                  | ✅ `--session-id <uuid>`             | ✅ `--session-id <id>`       | ❌ capture            |
 | Resume                    | `codex exec resume <id>`    | `-r/--resume <id>`                   | `-r/--resume=<id>`           | `-s/--session <id>`   |
-| **Chain continuation**    | ✅ `buildContinue`          | ✅ `buildContinue`                   | ❌ not wired                 | ❌ not wired          |
-| **Observation source**    | own `events.jsonl`          | `~/.claude/projects/*/<id>.jsonl`    | ❌ none                      | ❌ none               |
+| **Observation source**    | own `events.jsonl`          | ❌ none (one result object)          | ❌ none                      | ❌ none               |
 | Tool calls in events      | ✅ `item.completed`         | ❌ single result object              | ✅ (unwired)                 | ✅ (unwired)          |
 | Working dir flag          | ✅ `-C/--cd`                | ❌ **none** — set spawn `cwd`        | ✅ `-C`                      | ✅ `--dir`            |
 | Disable color             | ✅ `--color never`          | ❌ none                              | ✅ `--no-color`              | ❌ none               |
@@ -28,7 +27,9 @@ v1 set: `opencode`, `codex`, `claude`, `copilot`. `gemini` verified, deferred to
 
 Session id has four spellings — normalizing it is the adapter layer's core justification.
 
-Memory and session reuse are scoped to `codex` + `claude` (execution.md §Memory, §Session reuse). `copilot`/`opencode` do emit tool events, but neither their event shapes nor their resume paths have been exercised for it; they widen one at a time, each with its own contract-test case.
+**Grouping needs nothing from an adapter.** A group is one process, so it is one `buildRun` with a longer prompt and the `task_result_batch` schema — no resume verb, no session id, no per-provider path. All four adapters get it for free (execution.md §Grouping).
+
+Command observations are scoped to `codex`, the only provider whose documented event stream names what it ran. Every provider contributes `files_changed` through the protocol result. `copilot`/`opencode` do emit tool events; they widen one at a time, each with its own contract-test case.
 
 ## Cross-cutting rules
 
@@ -49,7 +50,7 @@ interface ProviderAdapter {
     events: "jsonl" | "json" | "none";
     sessionId: "preassign" | "capture";
     resume: "session" | "none";
-    observations: "events" | "transcript" | "none"; // execution.md §Memory
+    observations: "events" | "none"; // execution.md §Memory
     cwdFlag: boolean;
     modelFlag: boolean;
     maxConcurrency: number;
@@ -60,11 +61,9 @@ interface ProviderAdapter {
     answer,
     env,
   ): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
-  buildContinue?(sessionId, env): SpawnPlan; // next task as another turn
-  transcriptPath?(sessionId: string): string | null;
   extractObservations?(ctx: ExtractContext): Observation[];
   parseEvents(chunk: string): ProviderEvent[]; // fed complete lines only
-  extractResult(ctx: ExtractContext): TaskResult;
+  extractResults(ctx: ExtractContext): TaskResult[]; // one per ctx.taskIds
   extractUsage?(events): { cost_usd?; input_tokens?; output_tokens? };
 }
 ```
@@ -72,8 +71,8 @@ interface ProviderAdapter {
 - `buildRun`/`buildResume` return `argv: string[]`, never a command string; `shell: true` banned repo-wide. Pure + snapshot-tested — the snapshot is the drift alarm.
 - `extractUsage` optional, per-provider. codex reports usage on `turn.completed` (normalized to `unknown`); read it back here rather than widening the `ProviderEvent` union.
 - `parseEvents` gets whole lines only. Partial-chunk buffering lives in `src/executor/spawn.ts`.
-- `buildContinue` is **optional**: absent ⇒ this provider never joins a session chain and its tasks always start cold. That is the honest default for an unexercised resume path — do not add one from documentation. Distinct from `buildResume`, which answers an escalation; `buildContinue` carries a whole new `task_request`, so the prompt re-states the response contract.
-- `extractObservations` + `transcriptPath` are how a provider contributes to cross-task memory. Both optional; `observations: "none"` means the adapter consumes memory and contributes none. Never self-reported by the model — read back out of a record the provider already wrote.
+- `extractResults` returns **one result per `ctx.taskIds`**, in order. An adapter only says where this provider put the answer; whether that answer is a `task_result` or a `task_result_batch` is settled once in `src/providers/result.ts`, so no adapter knows grouping exists.
+- `extractObservations` is optional and is how a provider contributes commands to memory. `observations: "none"` means it consumes memory and contributes none. Never self-reported by the model, and never scraped from a file the provider does not document.
 
 ## Binary resolution
 
@@ -99,7 +98,7 @@ Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-fil
 
 Adapter `src/providers/codex.ts`, snapshot `test/unit/providers/codex.test.ts`. argv: `codex exec --json --color never --skip-git-repo-check -C <cwd> -s <sandbox> --output-schema <file> -o <file> [-m <model>] -`, prompt on stdin behind `-`. Sandbox from task: `access:"read-only"`⇒`read-only`, `access:"read-write"`⇒`workspace-write`, `--dangerously-allow-all`⇒`danger-full-access`.
 
-⚠️ **`codex exec resume` does not share `exec`'s flag surface.** Verified live 2026-08-29 (codex-cli 0.150.1): `resume` takes `--json`, `--skip-git-repo-check`, `--output-schema`, `-o`, `-m`, and **rejects `-C`, `-s`, `--color`** — exit 2, `error: unexpected argument '-C' found`, before the model is reached. Passing the `exec` set is what made every session continuation fail in the first real chain run (caught by the cold-retry fallback, so it cost two unbilled spawns rather than two tasks). Consequences: the working directory comes from the spawn `cwd`; ANSI stripping covers `--color`; and **a resumed turn inherits the sandbox its session was opened with**, so a chain may only collapse across turns of the same `access` (execution.md §Session reuse).
+⚠️ **`codex exec resume` does not share `exec`'s flag surface.** Verified live 2026-08-29 (codex-cli 0.150.1): `resume` takes `--json`, `--skip-git-repo-check`, `--output-schema`, `-o`, `-m`, and **rejects `-C`, `-s`, `--color`** — exit 2, `error: unexpected argument '-C' found`, before the model is reached. Passing the `exec` set is what made every session continuation fail in the first real chain run (caught by the cold-retry fallback, so it cost two unbilled spawns rather than two tasks). Consequences: the working directory comes from the spawn `cwd`, and ANSI stripping covers `--color`. Applies to `buildResume` (escalation, M4) only — grouping never resumes.
 
 ⚠️ `read-only` blocks **every** write, `$TMPDIR` and `/tmp` included — there is no writable-root escape (`sandbox_workspace_write.writable_roots` applies to `workspace-write` only). So a `read-only` task cannot run a test runner, a build, or anything that touches a cache: measured 2026-08-29, jest died on `EPERM` writing its haste-map before a single assertion. That is why the field is named `access` — what the task needs permission to **do**, not what it edits. The old name, `writes`, was read as "this modifies my code" and made a task that only ran a test look dangerous. See protocol.md. `read-only` is for pure reading: reviewing, summarizing, answering.
 
@@ -117,9 +116,9 @@ Flags: `--model` (aliases `opus`/`sonnet`/`haiku`, or full id) · `--output-form
 ⚠️ `--json-schema` rejects a file path; inline JSON only, and strip the `$schema` meta-pointer (claude's validator has no 2020-12 meta-schema: `no schema with key or ref https://json-schema.org/draft/2020-12/schema`).
 💡 `--session-id <uuid>` pre-assigns the id — resume needs no event parsing.
 
-Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-inline'` · `sessionId 'preassign'` · `resume 'session'` · `observations 'transcript'` · `cwdFlag false` · `maxConcurrency 1` (subscription-throttled until measured).
+Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-inline'` · `sessionId 'preassign'` · `resume 'session'` · `observations 'none'` · `cwdFlag false` · `maxConcurrency 1` (subscription-throttled until measured).
 
-⚠️ **`--resume` and `--session-id` are mutually exclusive in practice** — one continues a session, the other creates it. `commonFlags(input, resuming)` drops `--session-id` on both `buildResume` and `buildContinue`.
+⚠️ **`--resume` and `--session-id` are mutually exclusive in practice** — one continues a session, the other creates it. `commonFlags(input, resuming)` drops `--session-id` on `buildResume`.
 
 **Transcript.** `--output-format json` prints one object, so `parseEvents` emits no `tool` events and observations come from Claude Code's own session log at `~/.claude/projects/<cwd-slug>/<session-id>.jsonl`. Verified 2026-08-29: 9 of 10 recorded Baya claude tasks had theirs on disk. Located by **globbing the session id** across project directories — the slug's escaping rules are undocumented and are deliberately not reproduced. Records with `type` `assistant`/`user` carry `message.content[]`; `attachment` / `ai-title` / `queue-operation` / `atis-latch` / `last-prompt` are bookkeeping. `tool_use` gives `Bash.command` (plus a free model-written `description`), `Read.file_path`, `Edit.file_path`; the matching `tool_result.tool_use_id` gives `is_error`.
 

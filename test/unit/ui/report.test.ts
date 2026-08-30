@@ -51,7 +51,7 @@ function state(overrides: Partial<RunState> = {}): RunState {
       context_budget: 12_000,
       memory: true,
       memory_budget: 1200,
-      session_reuse: true,
+      group_size: 4,
     },
     totals: {
       succeeded: 2,

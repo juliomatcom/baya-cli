@@ -97,24 +97,6 @@ describe("renderMemory", () => {
     expect(renderMemory(many, { budget: 200 }).length).toBeLessThan(600);
   });
 
-  it("drops a fact the agent can already see in its own session", () => {
-    const entries = [
-      entry({ kind: "command.verified", value: "npm test", sources: ["t1"] }),
-      entry({ kind: "command.verified", value: "npm run lint", sources: ["t1", "t2"] }),
-    ];
-    const text = renderMemory(entries, { alreadyInSession: new Set(["t1"]) });
-    expect(text).not.toContain("npm test");
-    // Still shown: `t2` is outside the session, so the fact is news there.
-    expect(text).toContain("npm run lint");
-  });
-
-  it("emits nothing when the whole of memory is already in the session", () => {
-    const entries = [
-      entry({ kind: "command.verified", value: "npm test", sources: ["t1"] }),
-    ];
-    expect(renderMemory(entries, { alreadyInSession: new Set(["t1"]) })).toBe("");
-  });
-
   it("attributes a changed file, because who edited it is the useful half", () => {
     const text = renderMemory([
       entry({ kind: "file.changed", value: "src/a.ts", sources: ["gen-schema"] }),

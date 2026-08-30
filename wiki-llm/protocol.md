@@ -111,6 +111,14 @@ Channel for anything a human should see that is **not** a failure and **not** a 
 
 Valid on **any** status (a `failed` task often has the most useful notes). Empty array when nothing to raise; never null. `codex`/`claude` enforce the schema natively, so the shape actively induces the model to fill `notes`.
 
+## 3b. `task_result_batch` (a group's response)
+
+One process returns one document. When the scheduler groups tasks (execution.md §Grouping) that document is `{ baya, kind: "task_result_batch", results: task_result[] }` — one entry per task, each carrying **that task's own `task_id`**. Schema emitted at runtime to `.baya/schema/task_result_batch.schema.json`; `items` is the `task_result` schema unchanged, so a provider that validates one validates the other.
+
+A process running **one** task answers with the plain `task_result` of §3, byte for byte. That is what makes `--group-size 1` a true bypass.
+
+No `minItems`/`maxItems`: pinning the count would make a provider reject a partial answer outright and lose the tasks that _were_ done. A short array is handled where it can be handled well — see the ladder below.
+
 ## 4. Parsing the result — degradation ladder
 
 Apply in order; stop at first success. Implementation: `src/providers/result.ts` (M2.6).
@@ -121,7 +129,9 @@ Apply in order; stop at first success. Implementation: `src/providers/result.ts`
 4. **One repair round-trip.** Resume: _"Return only the JSON object matching the schema. No prose."_ `later` — v1 skips to step 5.
 5. **Synthesize failure.** `status:"failed"`, `error.message:"unparseable result"`, raw stdout kept as an artifact. `synthesizeFailure`.
 
-Only `opencode`/`copilot` reach rungs 2–4 (over concatenated assistant text); `codex`/`claude` enforce up front (`claude` also runs rungs 2–3 over `.result`). Rungs 2–3 and 5 normalize `task_id` to the requested id — a provider echoing the wrong id cannot misroute a result.
+Only `opencode`/`copilot` reach rungs 2–4 (over concatenated assistant text); `codex`/`claude` enforce up front (`claude` also runs rungs 2–3 over `.result`). Every rung produces **one result per task in the process** (`extractResults`), so the ladder is where grouping is resolved and no adapter has to know about it.
+
+**Task-id handling differs by process size, deliberately.** One task ⇒ `task_id` is **normalized** to the requested id: a provider echoing the wrong id cannot misroute a result, and there is only one place it could go. A group ⇒ results are **matched** by `task_id`, and a task the provider never named is reported `failed` rather than assigned by position. Position would be the forgiving read, and forgiving here means filing one task's work under another's id — which downstream tasks then read as fact. Rung 5 synthesizes one failure per task in the process.
 
 **Never regex prose for meaning.** A question is the `needs_input` status field — not a question mark in a stream. Escalation is structural, not heuristic.
 

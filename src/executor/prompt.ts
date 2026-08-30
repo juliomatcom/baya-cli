@@ -2,8 +2,9 @@ import type { TaskRequest } from "../manifest/index.js";
 
 /**
  * Renders the prompt an agent CLI actually receives. The `task_request` JSON
- * is the contract and is always written to disk; this is its human-readable
- * envelope, because these CLIs take a prompt, not an API payload.
+ * is the contract and is always written to disk — one file per task, group or
+ * not; this is its human-readable envelope, because these CLIs take a prompt,
+ * not an API payload.
  *
  * Untrusted task text reaches here (architecture.md trust boundaries) but never
  * argv — it travels by stdin or file, so nothing in it can become a flag.
@@ -15,29 +16,13 @@ export interface RenderPromptOptions {
    * edgeless workspace knowledge, and `# Upstream results` means edges.
    */
   memory?: string;
-  /**
-   * Set when this task is another turn in a session an earlier task opened
-   * (execution.md §Session reuse). Its `inSession` ids are already visible in
-   * the transcript above, so their output is pointed at rather than repeated.
-   */
-  continuation?: { inSession: readonly string[] };
 }
 
 export function renderPrompt(
   request: TaskRequest,
   options: RenderPromptOptions = {},
 ): string {
-  const inSession = new Set(options.continuation?.inSession ?? []);
   const lines: string[] = [];
-
-  if (options.continuation) {
-    lines.push(
-      "You are continuing in the same session. Everything above in this",
-      "conversation is your own earlier work on this run — reuse it rather than",
-      "rediscovering it. This is a NEW task with its own response contract.",
-      "",
-    );
-  }
 
   lines.push(
     `You are executing one task in a Baya run (task id: ${request.task.id}).`,
@@ -50,52 +35,153 @@ export function renderPrompt(
 
   if (request.context.length > 0) {
     lines.push("# Upstream results", "");
-    for (const entry of request.context) {
-      lines.push(`## ${entry.task_id} — ${entry.title} (${entry.status})`);
-      lines.push(entry.summary);
-      lines.push(`Full result: ${entry.result_path}`);
-      lines.push(`Full output: ${entry.output_path}`);
-      if (inSession.has(entry.task_id)) {
-        lines.push("(You produced this earlier in this session — see above.)");
-      } else if (entry.inline !== null) {
-        lines.push("", "<upstream_output>", entry.inline, "</upstream_output>");
-      } else {
-        lines.push("(Output not inlined — read the file above if you need the detail.)");
-      }
-      lines.push("");
-    }
+    lines.push(...contextLines(request, new Set()));
   }
 
-  lines.push(
-    "# Workspace",
-    "",
-    `Working directory: ${request.workspace.cwd}`,
-    request.workspace.access === "read-write"
-      ? "You may create and modify files in this directory."
-      : "This task is read-only. Do not modify any file.",
-    "",
-  );
-
-  const memory = options.memory?.trim() ?? "";
-  if (memory !== "") lines.push(memory, "");
+  lines.push(...workspaceLines(request, options.memory, false));
 
   lines.push(
     "# Response contract",
     "",
     `Respond with a single JSON object matching the schema at ${request.response_contract.schema_path}.`,
-    "Field notes:",
-    "- `summary`: one or two sentences. Its first line is what the user sees in the terminal.",
-    "- `output`: the full result as Markdown. Downstream tasks read this.",
-    "- `notes`: anything a human should know that is neither a failure nor a blocking",
-    "  question — caveats, risks, assumptions you had to make, follow-up work you noticed.",
-    "  Use `warn` for something likely wrong or risky, `action_required` for something only",
-    "  a human can do, `info` otherwise. Empty array if there is nothing to raise.",
-    "- If you cannot proceed without a human decision, set `status` to `needs_input` and",
-    "  fill `question.text` rather than guessing.",
-    "- On failure, set `status` to `failed` and fill `error.message` and `error.retryable`.",
+    ...FIELD_NOTES,
     "",
     `Deadline: ${request.constraints.max_runtime_s} seconds.`,
   );
 
   return lines.join("\n");
+}
+
+/**
+ * The prompt for a **group**: several tasks in one process (execution.md
+ * §Grouping), worked through in the order given.
+ *
+ * Everything the tasks share — the workspace, the memory block — is stated
+ * once, which is most of what grouping saves on the way in. What is not shared
+ * is repeated per task, because a group is still N tasks with N contracts and
+ * not one merged task: the single most likely failure here is a model quietly
+ * treating them as one piece of work, so the boundaries are made explicit and
+ * the response is one entry per task.
+ *
+ * A group of one is delegated to `renderPrompt`, so the single-task prompt is
+ * byte for byte what it was before grouping existed.
+ */
+export function renderGroupPrompt(
+  requests: readonly TaskRequest[],
+  options: RenderPromptOptions = {},
+): string {
+  const only = requests[0];
+  if (requests.length <= 1 && only !== undefined) return renderPrompt(only, options);
+
+  const first = requests[0] as TaskRequest;
+  const ids = requests.map((request) => request.task.id);
+  // An upstream produced by another member of this same group is already in
+  // the conversation above. Re-inlining it is the one cost grouping would
+  // otherwise add back.
+  const inGroup = new Set(ids);
+  const count = String(requests.length);
+  const lines: string[] = [];
+
+  lines.push(
+    `You are executing ${count} tasks in a Baya run, in the order given below.`,
+    "",
+    "Work through them one at a time and in order. They share this workspace and",
+    "this conversation, so a later task can build directly on what an earlier one",
+    "did rather than rediscovering it. They are still separate tasks: each has its",
+    "own instruction and needs its own entry in the response.",
+    "",
+    "If one task fails, keep going with the rest unless they depended on it, and",
+    "report the failure in that task's own entry.",
+    "",
+  );
+
+  lines.push(...workspaceLines(first, options.memory, true));
+
+  requests.forEach((request, index) => {
+    lines.push(
+      `# Task ${String(index + 1)} of ${count}: ${request.task.title}`,
+      "",
+      `Task id: ${request.task.id}`,
+      "",
+      request.task.instruction,
+      "",
+    );
+    if (request.context.length > 0) {
+      lines.push(`## Upstream results for ${request.task.id}`, "");
+      lines.push(...contextLines(request, inGroup));
+    }
+  });
+
+  lines.push(
+    "# Response contract",
+    "",
+    `Respond with a single JSON object matching the schema at ${first.response_contract.schema_path}.`,
+    `Its \`results\` array holds one object per task above — ${count} in total — each`,
+    "carrying that task's own id in `task_id`:",
+    ...ids.map((id) => `- ${id}`),
+    "",
+    "A task you could not finish still needs its entry, with `status` set to",
+    "`failed` or `needs_input`. Omitting it is reported as a failure anyway, and",
+    "without your account of why.",
+    "",
+    "Field notes, per entry:",
+    ...FIELD_NOTES.slice(1),
+    "",
+    `Deadline: ${String(first.constraints.max_runtime_s)} seconds for all ${count} tasks.`,
+  );
+
+  return lines.join("\n");
+}
+
+const FIELD_NOTES = [
+  "Field notes:",
+  "- `summary`: one or two sentences. Its first line is what the user sees in the terminal.",
+  "- `output`: the full result as Markdown. Downstream tasks read this.",
+  "- `notes`: anything a human should know that is neither a failure nor a blocking",
+  "  question — caveats, risks, assumptions you had to make, follow-up work you noticed.",
+  "  Use `warn` for something likely wrong or risky, `action_required` for something only",
+  "  a human can do, `info` otherwise. Empty array if there is nothing to raise.",
+  "- If you cannot proceed without a human decision, set `status` to `needs_input` and",
+  "  fill `question.text` rather than guessing.",
+  "- On failure, set `status` to `failed` and fill `error.message` and `error.retryable`.",
+];
+
+function contextLines(request: TaskRequest, inGroup: ReadonlySet<string>): string[] {
+  const lines: string[] = [];
+  for (const entry of request.context) {
+    lines.push(`## ${entry.task_id} — ${entry.title} (${entry.status})`);
+    lines.push(entry.summary);
+    lines.push(`Full result: ${entry.result_path}`);
+    lines.push(`Full output: ${entry.output_path}`);
+    if (inGroup.has(entry.task_id)) {
+      lines.push("(You did this earlier in this same conversation — see above.)");
+    } else if (entry.inline !== null) {
+      lines.push("", "<upstream_output>", entry.inline, "</upstream_output>");
+    } else {
+      lines.push("(Output not inlined — read the file above if you need the detail.)");
+    }
+    lines.push("");
+  }
+  return lines;
+}
+
+function workspaceLines(
+  request: TaskRequest,
+  memory: string | undefined,
+  plural: boolean,
+): string[] {
+  const lines = [
+    "# Workspace",
+    "",
+    `Working directory: ${request.workspace.cwd}`,
+    request.workspace.access === "read-write"
+      ? "You may create and modify files in this directory."
+      : plural
+        ? "These tasks are read-only. Do not modify any file."
+        : "This task is read-only. Do not modify any file.",
+    "",
+  ];
+  const trimmed = memory?.trim() ?? "";
+  if (trimmed !== "") lines.push(trimmed, "");
+  return lines;
 }

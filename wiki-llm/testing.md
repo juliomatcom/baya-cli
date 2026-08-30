@@ -76,14 +76,15 @@ Run tests via `npm test`, never bare `npx jest` (needs `--experimental-vm-module
 10. **Plan round-trip** — `--plan-out` then `--plan-in` produces an identical execution.
 11. **Model gate** — a task-named model resolves via catalog/alias; an unresolvable name aborts (exit `2`), never defaults.
 
-## Memory & session reuse
+## Grouping & memory
 
 Both are tested against the record a real run leaves, not against invented shapes.
 
-- **Pure halves** (`deriveMemory`, `renderMemory`, `parseClaudeTranscript`) are unit-tested in `test/unit/memory/`. Transcript fixtures are copied from a real Claude Code session log; the selection tests encode measured failures — one task flailing through variations of one invocation crowded out every other fact kind, and `console.log` was reported as a file.
+- **Pure halves** (`formGroup`, `deriveMemory`, `renderMemory`) are unit-tested directly — `test/unit/executor/group.test.ts`, `test/unit/memory/`. The selection tests encode measured failures: one task flailing through variations of one invocation crowded out every other fact kind, and `console.log` was reported as a file.
 - **Delivery** rides on the fake provider's `expect_stdin` (`test/integration/memory.test.ts`): if the memory block never reached the prompt, the task fails and the run exits non-zero. Stronger than reading `memory.json` back — it proves the fact travelled into what a CLI was actually sent.
-- **Session reuse** asserts `state.tasks[id].continued_from`, and pins the cold path with `--no-session-reuse`. A chain-collapse test and a `--no-session-reuse` test must exist for every context-bus assertion, because a continuation deliberately stops re-inlining an in-session upstream.
-- `codex exec resume` stays `⚠️ UNVERIFIED` until the contract tier exercises it (M6.5). The cold-retry fallback is what makes that safe to ship, and has its own case: `reject_stdin` makes the fake provider refuse the resumed invocation only, so the test proves a refused continuation costs one wasted spawn rather than the task.
+- **Grouping** asserts `state.tasks[id].group_id` — chains, siblings, the cap, and the `access` boundary. Pin the ungrouped path with `--group-size 1` for anything that is about a single process: the context bus (grouped, an in-group upstream is pointed at, not inlined), a captured session id, and "the provider wrote no result at all", which only a one-task process can be in.
+- The fake provider answers with a `task_result_batch` when the output path is `batch.json`, assembling one entry per member from that member's own scenario. Process-level fields come from the leader, because there is one process.
+- **Do not over-test.** No assertions on literal prompt wording, terminal formatting, or field order. Test the rule (what got grouped, what did not, what state each task landed in), not the prose that carries it.
 
 ## Dogfooding: your own runs are the fixture set
 

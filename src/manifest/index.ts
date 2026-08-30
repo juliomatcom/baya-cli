@@ -20,6 +20,7 @@ export {
   ArtifactSchema,
   TaskStatusSchema,
   TaskResultSchema,
+  TaskResultBatchSchema,
   ProviderEventSchema,
   type ProviderId,
   type Access,
@@ -32,6 +33,7 @@ export {
   type NoteSeverity,
   type TaskStatus,
   type TaskResult,
+  type TaskResultBatch,
   type ProviderEvent,
 } from "./schemas.js";
 export {
@@ -51,9 +53,12 @@ export {
 } from "./aliases.js";
 export {
   PLAN_DRAFT_SCHEMA_FILENAME,
+  TASK_RESULT_BATCH_SCHEMA_FILENAME,
   TASK_RESULT_SCHEMA_FILENAME,
   planDraftJsonSchema,
+  taskResultBatchJsonSchema,
   taskResultJsonSchema,
   writePlanDraftSchema,
+  writeTaskResultBatchSchema,
   writeTaskResultSchema,
 } from "./json-schema.js";

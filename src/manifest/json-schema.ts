@@ -20,6 +20,7 @@ import {
  * two cannot diverge unnoticed.
  */
 export const TASK_RESULT_SCHEMA_FILENAME = "task_result.schema.json";
+export const TASK_RESULT_BATCH_SCHEMA_FILENAME = "task_result_batch.schema.json";
 export const PLAN_DRAFT_SCHEMA_FILENAME = "plan_draft.schema.json";
 
 export function taskResultJsonSchema(): Record<string, unknown> {
@@ -104,6 +105,50 @@ export function taskResultJsonSchema(): Record<string, unknown> {
       files_changed: { type: "array", items: { type: "string" } },
     },
   };
+}
+
+/**
+ * The `task_result_batch` contract, for a process serving a **group** of tasks
+ * (execution.md §Grouping). Its `results` items are the `task_result` schema
+ * above, unchanged — the wrapper is the only new shape, so a provider that
+ * validates one validates the other.
+ *
+ * Deliberately no `minItems`/`maxItems`. The group size is prompt-level
+ * information, and pinning it in the schema would make a provider reject a
+ * partial answer outright — losing the tasks that *were* done. A short
+ * `results` array is handled where it can be handled well: `alignToTasks`
+ * fails only the tasks actually missing.
+ */
+export function taskResultBatchJsonSchema(): Record<string, unknown> {
+  const { $schema, title: _title, ...item } = taskResultJsonSchema();
+  void _title;
+  return {
+    $schema,
+    title: "baya task_result_batch",
+    type: "object",
+    additionalProperties: false,
+    required: ["baya", "kind", "results"],
+    properties: {
+      baya: { type: "string", const: PROTOCOL_VERSION },
+      kind: { type: "string", const: "task_result_batch" },
+      results: {
+        type: "array",
+        description:
+          "One object per task you were given, each with that task's own id in `task_id`. A task you did not complete still needs an entry, with status 'failed' or 'needs_input'.",
+        items: item,
+      },
+    },
+  };
+}
+
+/** Atomic write, as for the single-task schema. */
+export function writeTaskResultBatchSchema(schemaDir: string): string {
+  const target = join(schemaDir, TASK_RESULT_BATCH_SCHEMA_FILENAME);
+  mkdirSync(dirname(target), { recursive: true });
+  const tmp = `${target}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(taskResultBatchJsonSchema(), null, 2)}\n`, "utf8");
+  renameSync(tmp, target);
+  return target;
 }
 
 /** Atomic write (conventions.md #8) so a concurrent reader never sees a torn file. */

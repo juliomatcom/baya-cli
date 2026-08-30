@@ -3,6 +3,7 @@ import { resolve as resolvePath } from "node:path";
 import {
   validateManifest,
   writePlanDraftSchema,
+  writeTaskResultBatchSchema,
   writeTaskResultSchema,
   type Manifest,
   type ProviderId,
@@ -29,6 +30,7 @@ import {
   type Registry,
 } from "../providers/index.js";
 import {
+  DEFAULT_GROUP_SIZE,
   StateStore,
   emptyTaskEntry,
   killGroup,
@@ -257,6 +259,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
 
   try {
     const schemaPath = writeTaskResultSchema(paths.schemaDir);
+    const batchSchemaPath = writeTaskResultBatchSchema(paths.schemaDir);
     const planSchemaPath = writePlanDraftSchema(paths.schemaDir);
 
     // ---- plan
@@ -436,7 +439,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         context_budget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
         memory: !flags.noMemory,
         memory_budget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
-        session_reuse: !flags.noSessionReuse,
+        group_size: flags.groupSize ?? DEFAULT_GROUP_SIZE,
       },
       totals: {
         succeeded: 0,
@@ -474,6 +477,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       logger,
       store,
       schemaPath,
+      batchSchemaPath,
       defaultProvider: defaultProvider as ProviderId,
       defaultModel,
       binOverrides,
@@ -481,7 +485,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       contextBudget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
       memory: !flags.noMemory,
       memoryBudget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
-      sessionReuse: !flags.noSessionReuse,
+      groupSize: flags.groupSize ?? DEFAULT_GROUP_SIZE,
       env,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
       onTaskSettled: (taskId, _state, result) => {

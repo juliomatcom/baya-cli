@@ -1,11 +1,18 @@
-import { renderPrompt } from "../../../src/executor/prompt.js";
+import { renderGroupPrompt, renderPrompt } from "../../../src/executor/prompt.js";
 import { PROTOCOL_VERSION, type TaskRequest } from "../../../src/manifest/index.js";
 
-const request = (context: TaskRequest["context"] = []): TaskRequest => ({
+const request = (
+  context: TaskRequest["context"] = [],
+  task: TaskRequest["task"] = {
+    id: "gen-schema",
+    title: "Generate DB schema",
+    instruction: "Create tables.",
+  },
+): TaskRequest => ({
   baya: PROTOCOL_VERSION,
   kind: "task_request",
   run_id: "run-1",
-  task: { id: "gen-schema", title: "Generate DB schema", instruction: "Create tables." },
+  task,
   workspace: { cwd: "/work", access: "read-write", isolation: "shared" },
   context,
   response_contract: { schema_path: "/work/.baya/schema/task_result.schema.json" },
@@ -42,27 +49,45 @@ describe("renderPrompt", () => {
       text.indexOf("# Response contract"),
     );
   });
+});
 
-  it("tells a continuation it is one, and that the contract still applies", () => {
-    const text = renderPrompt(request(), { continuation: { inSession: [] } });
-    expect(text).toContain("continuing in the same session");
-    expect(text).toContain("NEW task with its own response contract");
+describe("renderGroupPrompt", () => {
+  const second = request([], {
+    id: "seed-db",
+    title: "Seed the database",
+    instruction: "Insert fixtures.",
   });
 
-  it("points at an upstream the agent produced itself instead of repeating it", () => {
-    const text = renderPrompt(request([upstream()]), {
-      continuation: { inSession: ["design-api"] },
+  it("is byte for byte renderPrompt for a group of one", () => {
+    expect(renderGroupPrompt([request()])).toBe(renderPrompt(request()));
+  });
+
+  it("states the workspace once and every task's contract separately", () => {
+    const text = renderGroupPrompt([request(), second]);
+    expect(text.match(/# Workspace/g)).toHaveLength(1);
+    expect(text).toContain("# Task 1 of 2: Generate DB schema");
+    expect(text).toContain("# Task 2 of 2: Seed the database");
+    // The response is one document naming every task, so a result cannot be
+    // filed under the wrong id.
+    expect(text).toContain("- gen-schema");
+    expect(text).toContain("- seed-db");
+  });
+
+  it("points at an upstream produced earlier in the group instead of repeating it", () => {
+    const withDep = request([upstream({ task_id: "gen-schema", inline: null })], {
+      id: "seed-db",
+      title: "Seed the database",
+      instruction: "Insert fixtures.",
     });
-    expect(text).toContain("You produced this earlier in this session");
+    const text = renderGroupPrompt([request(), withDep]);
+    expect(text).toContain("You did this earlier in this same conversation");
     expect(text).not.toContain("<upstream_output>");
     // The paths stay: they cost ~nothing and the agent may still want the file.
     expect(text).toContain("/work/.baya/runs/r/tasks/design-api/output.md");
   });
 
-  it("still inlines an upstream from outside the session", () => {
-    const text = renderPrompt(request([upstream()]), {
-      continuation: { inSession: ["something-else"] },
-    });
+  it("still inlines an upstream from outside the group", () => {
+    const text = renderGroupPrompt([request([upstream()]), second]);
     expect(text).toContain("<upstream_output>");
   });
 });

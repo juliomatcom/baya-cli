@@ -64,7 +64,7 @@
       "output_tokens": 0,
       "result_rung": null,
       "blocked_by": null,
-      "continued_from": null
+      "group_id": null
     }
   }
 }
@@ -75,7 +75,7 @@
 - `blocked_by` — the failed ancestor that caused a `skipped` state.
 - `result_rung` — which degradation-ladder rung produced the result (`protocol.md` §4).
 - `cached_input_tokens` / `cache_write_input_tokens` — parts of `input_tokens`, kept apart because they are priced differently: a cache read costs about a tenth of fresh input, a write more than it. Fresh input is the remainder. **A single input figure is not a cost proxy** — collapsing the three made a run that cost 14% more read as 52% cheaper.
-- `continued_from` — the task whose provider session this one continued (execution.md §Session reuse), or `null` for a cold start. A resume must treat a captured session as possibly gone: `--provider` may change, and the cache is long dead by then, so a resumed task always starts cold.
+- `group_id` — the task group this one ran in (execution.md §Grouping): the id of the group's first task, or `null` for a process of its own. Cost and the event stream belong to the group, so usage sits on the first member and every member's `artifacts` name the same stream. A resume regroups from scratch; it never reconstructs a previous run's groups.
 
 ## One Baya per directory
 

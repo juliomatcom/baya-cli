@@ -51,7 +51,7 @@ export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
     "  --context-budget <n>       total inline chars (default 12000)",
     "  --no-memory                do not pass what earlier tasks learned",
     "  --memory-budget <n>        memory block size in chars (default 1200)",
-    "  --no-session-reuse         never continue a chain in one provider session",
+    "  --group-size <n>           max tasks per provider process (default 4)",
     "  --dangerously-allow-all    full permission bypass",
     "  --json                     machine-readable run report on stdout",
     "  --log-level <l>            trace|debug|info|warn|error (default info)",

@@ -12,24 +12,36 @@ import type { Observation } from "../memory/index.js";
 import type { ProviderAdapter, ProviderUsage } from "../providers/index.js";
 import { runProcess } from "./spawn.js";
 import type { RunPaths } from "./paths.js";
-import { renderPrompt } from "./prompt.js";
+import { renderGroupPrompt } from "./prompt.js";
 
 /**
- * One task, start to finish: write the request, spawn the adapter's plan,
- * forward every provider event up as it arrives, then persist the full record.
+ * One provider process, start to finish: write a request per task, spawn the
+ * adapter's plan, forward every provider event up as it arrives, then persist
+ * the full record.
+ *
+ * The unit here is a **group** (execution.md §Grouping), not a task — a
+ * process may carry several tasks and answers with one document holding one
+ * result per task. A group of one is the ordinary case and takes exactly the
+ * path it always did, down to the wire format.
  *
  * Everything the child emits reaches the main process (logging.md §Provider
- * output bubbles up as `info`) — a running task is never a black box between
+ * output bubbles up as `info`) — a running group is never a black box between
  * spawn and result.
  */
-export interface ExecuteTaskOptions {
-  task: Task;
-  request: TaskRequest;
+export interface ExecuteGroupOptions {
+  /** The group's tasks, in execution order. The first is the group leader. */
+  tasks: readonly Task[];
+  /** One request per task, same order. Each is persisted to its own file. */
+  requests: readonly TaskRequest[];
   adapter: ProviderAdapter;
   bin: string;
   model: string | null;
   cwd: string;
   paths: RunPaths;
+  /**
+   * The response contract for this process: the `task_result` schema for one
+   * task, the `task_result_batch` schema for a group.
+   */
   schemaPath: string;
   logger: Logger;
   env?: NodeJS.ProcessEnv;
@@ -38,28 +50,26 @@ export interface ExecuteTaskOptions {
   onSpawn?: (pid: number, pgid: number) => void;
   /** Rendered memory block, injected into the prompt. `""`/absent => no section. */
   memory?: string;
-  /**
-   * Run this task as another turn in an existing session rather than a fresh
-   * process (execution.md §Session reuse). `inSession` names the tasks already
-   * visible in that transcript, so their context is pointed at, not repeated.
-   */
-  continueFrom?: { sessionId: string; inSession: readonly string[] };
 }
 
-export interface TaskExecution {
-  result: TaskResult;
+export interface GroupExecution {
+  /** One per task in `tasks`, in that order. Never short, never reordered. */
+  results: TaskResult[];
   events: ProviderEvent[];
   sessionId: string | null;
   exitCode: number | null;
   signal: NodeJS.Signals | null;
   timedOut: boolean;
   durationMs: number;
+  /**
+   * The **process's** usage, not any one task's. A group shares one context
+   * window and one bill; splitting that per task would be inventing numbers.
+   * The scheduler records it against the group leader.
+   */
   usage: ProviderUsage;
   argv: string[];
   /** What the agent did, for cross-task memory. Empty for `observations: 'none'`. */
   observations: Observation[];
-  /** True when this ran as a turn in an existing session rather than a fresh one. */
-  continued: boolean;
 }
 
 function writeFileEnsuringDir(path: string, contents: string): void {
@@ -78,56 +88,61 @@ function flattenToolInput(input: unknown): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExecution> {
-  const { task, adapter, logger, paths } = options;
-  const taskId = task.id;
+export async function executeGroup(
+  options: ExecuteGroupOptions,
+): Promise<GroupExecution> {
+  const { adapter, logger, paths } = options;
+  const tasks = options.tasks;
+  const leader = tasks[0] as Task;
+  const leaderId = leader.id;
+  const taskIds = tasks.map((task) => task.id);
+  const grouped = tasks.length > 1;
 
-  const prompt = renderPrompt(options.request, {
+  const prompt = renderGroupPrompt(options.requests, {
     ...(options.memory ? { memory: options.memory } : {}),
-    ...(options.continueFrom
-      ? { continuation: { inSession: options.continueFrom.inSession } }
-      : {}),
   });
-  writeFileEnsuringDir(
-    paths.request(taskId),
-    `${JSON.stringify(options.request, null, 2)}\n`,
-  );
-  logger.debug("task.request.written", {
-    task_id: taskId,
-    path: paths.request(taskId),
+  for (const request of options.requests) {
+    writeFileEnsuringDir(
+      paths.request(request.task.id),
+      `${JSON.stringify(request, null, 2)}\n`,
+    );
+  }
+  logger.debug("group.request.written", {
+    group_id: leaderId,
+    tasks: taskIds,
     bytes: Buffer.byteLength(prompt, "utf8"),
   });
 
+  // A group answers with one document, so it needs one place to put it. The
+  // ungrouped case keeps writing straight to `result.json` — the path the
+  // adapters, their tests, and every recorded run already use.
+  const resultFile = grouped ? paths.batch(leaderId) : paths.result(leaderId);
   const buildInput = {
     bin: options.bin,
-    task,
-    request: options.request,
+    task: leader,
+    request: options.requests[0] as TaskRequest,
     model: options.model,
     cwd: options.cwd,
     schemaPath: options.schemaPath,
     // Inline schema for providers that reject a file path (`claude --json-schema`).
     schemaContents: readFileSync(options.schemaPath, "utf8"),
-    resultFile: paths.result(taskId),
+    resultFile,
     prompt,
     ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
   };
-  // `buildContinue` is optional by design: an adapter without one never joins
-  // a chain, so the executor degrades to a cold run rather than guessing an
-  // argv for a resume path that provider has not proven.
-  const continueFrom = options.continueFrom;
-  const plan =
-    continueFrom && adapter.buildContinue
-      ? adapter.buildContinue(continueFrom.sessionId, buildInput)
-      : adapter.buildRun(buildInput);
+  const plan = adapter.buildRun(buildInput);
 
   for (const file of plan.files ?? []) {
     writeFileEnsuringDir(file.path, file.contents);
   }
-  mkdirSync(paths.taskDir(taskId), { recursive: true });
+  for (const id of taskIds) mkdirSync(paths.taskDir(id), { recursive: true });
 
   const events: ProviderEvent[] = [];
   let sessionId: string | null = null;
-  const eventsPath = paths.events(taskId);
+  // One process, one event stream. It lands in the leader's task directory and
+  // every member's `artifacts` points at it, rather than being copied N times
+  // into directories that would each claim to be the whole story.
+  const eventsPath = paths.events(leaderId);
 
   const record = (event: ProviderEvent): void => {
     events.push(event);
@@ -138,18 +153,18 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
     switch (event.t) {
       case "session":
         sessionId = event.id;
-        logger.debug("provider.session", { task_id: taskId, session_id: event.id });
+        logger.debug("provider.session", { task_id: leaderId, session_id: event.id });
         break;
       case "text":
         logger.info("provider.text", {
-          task_id: taskId,
+          task_id: leaderId,
           provider: adapter.id,
           text: event.text,
         });
         break;
       case "tool":
         logger.info("provider.tool", {
-          task_id: taskId,
+          task_id: leaderId,
           provider: adapter.id,
           name: event.name,
           input: flattenToolInput(event.input),
@@ -157,27 +172,28 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
         break;
       case "error":
         logger.warn("provider.error", {
-          task_id: taskId,
+          task_id: leaderId,
           provider: adapter.id,
           kind: event.kind,
           message: event.message,
         });
         break;
       default:
-        logger.debug("provider.event.unknown", { task_id: taskId, raw: event.raw });
+        logger.debug("provider.event.unknown", { task_id: leaderId, raw: event.raw });
     }
   };
 
   // Log before acting (logging.md rule 1): a crash must leave evidence of the
   // last thing attempted. The prompt is elided at the sink, not inlined here.
   logger.info("task.spawned", {
-    task_id: taskId,
+    task_id: leaderId,
+    group: taskIds,
     provider: adapter.id,
     model: options.model,
     argv: plan.argv,
     delivery: plan.stdin === "pipe" ? "stdin" : "argv",
     prompt: prompt,
-    request: paths.request(taskId),
+    request: paths.request(leaderId),
   });
 
   const startedAt = Date.now();
@@ -192,7 +208,7 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
     onStderrLine: (line) => {
       // Where these CLIs put their own diagnostics — worth a human's attention.
       logger.info("provider.stderr", {
-        task_id: taskId,
+        task_id: leaderId,
         provider: adapter.id,
         text: line,
       });
@@ -200,64 +216,41 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
   });
   const durationMs = Date.now() - startedAt;
 
-  writeFileEnsuringDir(paths.stdout(taskId), outcome.stdout);
-  writeFileEnsuringDir(paths.stderr(taskId), outcome.stderr);
+  writeFileEnsuringDir(paths.stdout(leaderId), outcome.stdout);
+  writeFileEnsuringDir(paths.stderr(leaderId), outcome.stderr);
 
   let resultFileContents: string | null = null;
   try {
-    resultFileContents = readFileSync(paths.result(taskId), "utf8");
+    resultFileContents = readFileSync(resultFile, "utf8");
   } catch {
     resultFileContents = null;
   }
 
-  // The provider's own session log, for adapters whose event stream cannot
-  // carry tool calls (`claude --output-format json` is a single object). Read
-  // after the process exits, keyed by the session id it reported. A missing or
-  // unreadable transcript thins memory; it never fails the task.
-  let transcript: string | null = null;
-  if (
-    sessionId !== null &&
-    adapter.capabilities.observations === "transcript" &&
-    adapter.transcriptPath
-  ) {
-    const path = adapter.transcriptPath(sessionId);
-    if (path !== null) {
-      try {
-        transcript = readFileSync(path, "utf8");
-      } catch {
-        transcript = null;
-      }
-    }
-    logger.debug("task.transcript", {
-      task_id: taskId,
-      path,
-      found: transcript !== null,
-    });
-  }
-
   const extractContext = {
-    taskId,
+    taskIds,
     events,
     resultFileContents,
     exitCode: outcome.code,
     stderr: outcome.stderr,
-    transcript,
   };
-  const result = adapter.extractResult(extractContext);
+  const results = adapter.extractResults(extractContext);
   const observations = adapter.extractObservations?.(extractContext) ?? [];
-  logger.debug("task.observations", {
-    task_id: taskId,
+  logger.debug("group.observations", {
+    group_id: leaderId,
     provider: adapter.id,
     count: observations.length,
   });
 
-  // Rewrite result.json from the validated object: whatever the provider left
-  // there was untrusted, and downstream context reads this file.
-  writeFileEnsuringDir(paths.result(taskId), `${JSON.stringify(result, null, 2)}\n`);
-  writeFileEnsuringDir(paths.output(taskId), result.output);
+  // Rewrite each result.json from the validated object: whatever the provider
+  // left there was untrusted, and downstream context reads these files.
+  results.forEach((result, index) => {
+    const id = taskIds[index] as string;
+    writeFileEnsuringDir(paths.result(id), `${JSON.stringify(result, null, 2)}\n`);
+    writeFileEnsuringDir(paths.output(id), result.output);
+  });
 
   return {
-    result,
+    results,
     events,
     sessionId,
     exitCode: outcome.code,
@@ -267,6 +260,5 @@ export async function executeTask(options: ExecuteTaskOptions): Promise<TaskExec
     usage: adapter.extractUsage?.(events) ?? {},
     argv: plan.argv,
     observations,
-    continued: continueFrom !== undefined && adapter.buildContinue !== undefined,
   };
 }

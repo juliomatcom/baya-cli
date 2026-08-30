@@ -72,8 +72,10 @@ describe("a two-task chain, end to end", () => {
     expect(state.tasks["gen-schema"]?.state).toBe("succeeded");
   });
 
-  it("captures each provider's session id, which is what resume needs", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+  it("captures the provider's session id, which is what resume needs", async () => {
+    const result = await runCli(["./tasks.md", "--yes", "--group-size", "1"], {
+      scenario,
+    });
     const state = result.readJson(result.paths!.state) as {
       tasks: Record<string, { session_id: string | null }>;
     };
@@ -89,15 +91,24 @@ describe("a two-task chain, end to end", () => {
         paths.request(taskId),
         paths.result(taskId),
         paths.output(taskId),
-        paths.events(taskId),
-        paths.stdout(taskId),
-        paths.stderr(taskId),
       ]) {
         expect({ artifact, exists: existsSync(artifact) }).toEqual({
           artifact,
           exists: true,
         });
       }
+    }
+    // One process, one event stream and one pair of stdio logs — in the group
+    // leader's directory, which every member's `artifacts` points at.
+    for (const artifact of [
+      paths.events("design-api"),
+      paths.stdout("design-api"),
+      paths.stderr("design-api"),
+    ]) {
+      expect({ artifact, exists: existsSync(artifact) }).toEqual({
+        artifact,
+        exists: true,
+      });
     }
     expect(existsSync(paths.manifest)).toBe(true);
     expect(existsSync(paths.report)).toBe(true);
@@ -110,10 +121,10 @@ describe("a two-task chain, end to end", () => {
   });
 
   it("feeds the upstream result downstream as context", async () => {
-    // Cold path. With session reuse on, `gen-schema` continues `design-api`'s
-    // session and the upstream is pointed at instead of inlined — that case is
-    // covered below; this one is the context bus itself.
-    const result = await runCli(["./tasks.md", "--yes", "--no-session-reuse"], {
+    // `--group-size 1`: grouped, the upstream is the agent's own earlier work
+    // and is pointed at rather than inlined (covered below). This is the
+    // context bus itself, which is what carries a result across processes.
+    const result = await runCli(["./tasks.md", "--yes", "--group-size", "1"], {
       scenario,
     });
     const request = result.readJson(result.paths!.request("gen-schema")) as {
@@ -127,15 +138,20 @@ describe("a two-task chain, end to end", () => {
     });
   });
 
-  it("continues the chain in one session and stops re-inlining what is in it", async () => {
+  it("runs a chain as one process and stops re-inlining what is already in it", async () => {
     const result = await runCli(["./tasks.md", "--yes"], { scenario });
     const state = result.readJson(result.paths!.state) as {
-      tasks: Record<string, { continued_from: string | null }>;
+      tasks: Record<string, { group_id: string | null; session_id: string | null }>;
     };
-    expect(state.tasks["design-api"]?.continued_from).toBeNull();
-    expect(state.tasks["gen-schema"]?.continued_from).toBe("design-api");
+    // Both tasks name the same group, and the group is named for its first task.
+    expect(state.tasks["design-api"]?.group_id).toBe("design-api");
+    expect(state.tasks["gen-schema"]?.group_id).toBe("design-api");
+    // One process means one session, so both carry the same id.
+    expect(state.tasks["gen-schema"]?.session_id).toBe(
+      state.tasks["design-api"]?.session_id,
+    );
 
-    // The upstream is the agent's own earlier turn, so its text is not repeated.
+    // The upstream is the agent's own earlier work, so its text is not repeated.
     const request = result.readJson(result.paths!.request("gen-schema")) as {
       context: Array<{ task_id: string; inline: string | null }>;
     };
@@ -143,11 +159,11 @@ describe("a two-task chain, end to end", () => {
   });
 
   /**
-   * `codex exec resume` takes no `-s`, so a resumed turn inherits the sandbox
-   * its session was opened with. Collapsing across a change of `access` would
-   * silently widen or narrow a task's permissions.
+   * A process gets one sandbox. Grouping across a change of `access` would
+   * silently widen the read-only task's permissions — which is the one thing
+   * task-level `access` exists to prevent.
    */
-  it("refuses to collapse a chain whose access level changes", async () => {
+  it("refuses to group a chain whose access level changes", async () => {
     const mixed = {
       ...scenario,
       __planner__: {
@@ -161,19 +177,21 @@ describe("a two-task chain, end to end", () => {
     };
     const result = await runCli(["./tasks.md", "--yes"], { scenario: mixed });
     const state = result.readJson(result.paths!.state) as {
-      tasks: Record<string, { continued_from: string | null }>;
+      tasks: Record<string, { group_id: string | null }>;
     };
-    expect(state.tasks["gen-schema"]?.continued_from).toBeNull();
+    expect(state.tasks["design-api"]?.group_id).toBeNull();
+    expect(state.tasks["gen-schema"]?.group_id).toBeNull();
   });
 
-  it("--no-session-reuse starts every task cold", async () => {
-    const result = await runCli(["./tasks.md", "--yes", "--no-session-reuse"], {
+  it("--group-size 1 gives every task its own process", async () => {
+    const result = await runCli(["./tasks.md", "--yes", "--group-size", "1"], {
       scenario,
     });
     const state = result.readJson(result.paths!.state) as {
-      tasks: Record<string, { continued_from: string | null }>;
+      tasks: Record<string, { group_id: string | null }>;
     };
-    expect(state.tasks["gen-schema"]?.continued_from).toBeNull();
+    expect(state.tasks["design-api"]?.group_id).toBeNull();
+    expect(state.tasks["gen-schema"]?.group_id).toBeNull();
   });
 
   it("records the manifest and a config snapshot a resume could reproduce", async () => {
@@ -205,8 +223,8 @@ describe("the event vocabulary", () => {
       "plan.confirmed",
       "run.created",
       "run.started",
-      "task.ready",
-      "task.request.written",
+      "group.ready",
+      "group.request.written",
       "task.spawned",
       "task.succeeded",
       "run.completed",

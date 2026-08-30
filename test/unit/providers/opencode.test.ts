@@ -3,7 +3,11 @@ import {
   PROTOCOL_VERSION,
   type Task,
   type TaskRequest,
+  type TaskResult,
 } from "../../../src/manifest/index.js";
+
+/** A process returns one result per task; these adapters are exercised with one. */
+const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
 
 const task = (overrides: Partial<Task> = {}): Task => ({
   id: "gen-schema",
@@ -133,7 +137,7 @@ describe("opencodeAdapter.parseEvents", () => {
 
 describe("opencodeAdapter.extractResult", () => {
   const ctx = (raw: string, over: Partial<Record<string, unknown>> = {}) => ({
-    taskId: "gen-schema",
+    taskIds: ["gen-schema"],
     events: opencodeAdapter.parseEvents(raw),
     resultFileContents: null,
     exitCode: 0,
@@ -146,20 +150,20 @@ describe("opencodeAdapter.extractResult", () => {
       /"/g,
       '\\"',
     )}\\n\`\`\`"}}`;
-    const result = opencodeAdapter.extractResult(ctx(raw));
+    const result = one(opencodeAdapter.extractResults(ctx(raw)));
     expect(result.status).toBe("ok");
     expect(result.summary).toBe("made the tables");
   });
 
   it("parses a verbatim result emitted as a plain text part", () => {
     const raw = JSON.stringify({ type: "text", text: conforming });
-    expect(opencodeAdapter.extractResult(ctx(raw)).status).toBe("ok");
+    expect(one(opencodeAdapter.extractResults(ctx(raw))).status).toBe("ok");
   });
 
   it("synthesizes a non-retryable failure from a 401 error line", () => {
     const raw =
       '{"type":"error","error":{"name":"ProviderAuthError","data":{"statusCode":401,"isRetryable":false}}}';
-    const result = opencodeAdapter.extractResult(ctx(raw));
+    const result = one(opencodeAdapter.extractResults(ctx(raw)));
     expect(result.status).toBe("failed");
     expect(result.error?.retryable).toBe(false);
     expect(result.error?.message).toContain("401");
@@ -168,17 +172,19 @@ describe("opencodeAdapter.extractResult", () => {
   it("synthesizes a retryable failure from a 503 error line", () => {
     const raw =
       '{"type":"error","error":{"name":"APIError","data":{"statusCode":503,"isRetryable":true}}}';
-    expect(opencodeAdapter.extractResult(ctx(raw)).error?.retryable).toBe(true);
+    expect(one(opencodeAdapter.extractResults(ctx(raw))).error?.retryable).toBe(true);
   });
 
   it("synthesizes a failure when opencode produced nothing usable", () => {
-    const result = opencodeAdapter.extractResult({
-      taskId: "gen-schema",
-      events: [],
-      resultFileContents: null,
-      exitCode: 1,
-      stderr: "boom",
-    });
+    const result = one(
+      opencodeAdapter.extractResults({
+        taskIds: ["gen-schema"],
+        events: [],
+        resultFileContents: null,
+        exitCode: 1,
+        stderr: "boom",
+      }),
+    );
     expect(result.status).toBe("failed");
     expect(result.error?.message).toContain("no parseable result");
   });

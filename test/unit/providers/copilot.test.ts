@@ -3,7 +3,11 @@ import {
   PROTOCOL_VERSION,
   type Task,
   type TaskRequest,
+  type TaskResult,
 } from "../../../src/manifest/index.js";
+
+/** A process returns one result per task; these adapters are exercised with one. */
+const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
 
 const task = (overrides: Partial<Task> = {}): Task => ({
   id: "gen-schema",
@@ -129,7 +133,7 @@ describe("copilotAdapter.parseEvents", () => {
 
 describe("copilotAdapter.extractResult", () => {
   const ctx = (raw: string, over: Partial<Record<string, unknown>> = {}) => ({
-    taskId: "gen-schema",
+    taskIds: ["gen-schema"],
     events: copilotAdapter.parseEvents(raw),
     resultFileContents: null,
     exitCode: 0,
@@ -142,7 +146,7 @@ describe("copilotAdapter.extractResult", () => {
       type: "assistant",
       data: { text: `Here it is:\n\n\`\`\`json\n${conforming}\n\`\`\`` },
     });
-    const result = copilotAdapter.extractResult(ctx(raw));
+    const result = one(copilotAdapter.extractResults(ctx(raw)));
     expect(result.status).toBe("ok");
     expect(result.summary).toBe("made the tables");
   });
@@ -151,27 +155,29 @@ describe("copilotAdapter.extractResult", () => {
     const assistant = JSON.stringify({ type: "assistant", data: { text: conforming } });
     const resultLine =
       '{"type":"result","sessionId":"s","exitCode":0,"usage":{"codeChanges":{"filesModified":["migrations/001.sql"]}}}';
-    const result = copilotAdapter.extractResult(ctx(`${assistant}\n${resultLine}`));
+    const result = one(copilotAdapter.extractResults(ctx(`${assistant}\n${resultLine}`)));
     expect(result.files_changed).toEqual(["migrations/001.sql"]);
   });
 
   it("synthesizes a non-retryable failure from a quota error", () => {
     const raw =
       '{"type":"session.error","data":{"errorType":"quota","errorCode":"quota_exceeded","statusCode":402}}';
-    const result = copilotAdapter.extractResult(ctx(raw));
+    const result = one(copilotAdapter.extractResults(ctx(raw)));
     expect(result.status).toBe("failed");
     expect(result.error?.retryable).toBe(false);
     expect(result.error?.message).toContain("quota_exceeded");
   });
 
   it("synthesizes a failure when copilot produced nothing usable", () => {
-    const result = copilotAdapter.extractResult({
-      taskId: "gen-schema",
-      events: [],
-      resultFileContents: null,
-      exitCode: 1,
-      stderr: "crash",
-    });
+    const result = one(
+      copilotAdapter.extractResults({
+        taskIds: ["gen-schema"],
+        events: [],
+        resultFileContents: null,
+        exitCode: 1,
+        stderr: "crash",
+      }),
+    );
     expect(result.status).toBe("failed");
     expect(result.error?.message).toContain("no parseable result");
   });

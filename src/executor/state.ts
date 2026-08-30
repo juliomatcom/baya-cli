@@ -77,11 +77,14 @@ export const TaskStateEntrySchema = z
     /** For `skipped`: the failed ancestor that caused it. */
     blocked_by: z.string().nullable().default(null),
     /**
-     * For a task run as another turn in an earlier task's provider session
-     * (execution.md §Session reuse): which task opened that session. `null`
-     * means this task started cold.
+     * The task group this task ran in — the id of the group's first task
+     * (execution.md §Grouping). A group is one provider process serving
+     * several tasks, so its cost and its event stream belong to the group,
+     * not to any one member: usage is recorded on the first member and every
+     * member's `artifacts` point at the same stream. `null` means this task
+     * had a process to itself.
      */
-    continued_from: z.string().nullable().default(null),
+    group_id: z.string().nullable().default(null),
   })
   .strict();
 export type TaskStateEntry = z.infer<typeof TaskStateEntrySchema>;
@@ -103,7 +106,8 @@ export const ConfigSnapshotSchema = z
     /** Cross-task memory settings, so a run can be compared against `--no-memory`. */
     memory: z.boolean().default(true),
     memory_budget: z.number().int().default(0),
-    session_reuse: z.boolean().default(true),
+    /** Max tasks per provider process. `1` restores one process per task. */
+    group_size: z.number().int().default(1),
   })
   .strict();
 export type ConfigSnapshot = z.infer<typeof ConfigSnapshotSchema>;

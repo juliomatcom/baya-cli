@@ -132,23 +132,26 @@ describe("config subcommand", () => {
   });
 });
 
-describe("memory and session-reuse flags", () => {
+describe("memory and grouping flags", () => {
   it("defaults both features on", () => {
     const parsed = parseArgs(["tasks.md"]);
     expect(parsed.flags.noMemory).toBe(false);
-    expect(parsed.flags.noSessionReuse).toBe(false);
+    expect(parsed.flags.groupSize).toBeUndefined();
     expect(parsed.flags.memoryBudget).toBeUndefined();
   });
 
   it("turns each off independently", () => {
-    expect(parseArgs(["tasks.md", "--no-memory"]).flags).toMatchObject({
-      noMemory: true,
-      noSessionReuse: false,
-    });
-    expect(parseArgs(["tasks.md", "--no-session-reuse"]).flags).toMatchObject({
+    expect(parseArgs(["tasks.md", "--no-memory"]).flags.noMemory).toBe(true);
+    expect(parseArgs(["tasks.md", "--group-size", "1"]).flags).toMatchObject({
       noMemory: false,
-      noSessionReuse: true,
+      groupSize: 1,
     });
+  });
+
+  it("rejects a group size below one, which would admit nothing", () => {
+    expect(parseArgs(["tasks.md", "--group-size", "0"]).errors).toContain(
+      "--group-size must be a positive integer",
+    );
   });
 
   it("takes a memory budget and rejects a nonsensical one", () => {

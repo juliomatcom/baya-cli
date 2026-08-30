@@ -20,6 +20,12 @@ export interface RunPaths {
   taskDir(taskId: string): string;
   request(taskId: string): string;
   result(taskId: string): string;
+  /**
+   * Where a **group** leaves its one `task_result_batch` document before it is
+   * split into each member's `result.json` (execution.md §Grouping). Only
+   * written for a group of two or more.
+   */
+  batch(taskId: string): string;
   output(taskId: string): string;
   events(taskId: string): string;
   stdout(taskId: string): string;
@@ -57,6 +63,7 @@ export function runPaths(cwd: string, runId: string): RunPaths {
     taskDir,
     request: (id) => join(taskDir(id), "request.json"),
     result: (id) => join(taskDir(id), "result.json"),
+    batch: (id) => join(taskDir(id), "batch.json"),
     output: (id) => join(taskDir(id), "output.md"),
     events: (id) => join(taskDir(id), "events.jsonl"),
     stdout: (id) => join(taskDir(id), "stdout.log"),

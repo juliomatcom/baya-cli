@@ -198,31 +198,6 @@ export const codexAdapter: ProviderAdapter = {
     };
   },
 
-  /**
-   * The next task as another turn on the same thread. Identical argv to
-   * `buildResume` — only the payload differs, and it differs entirely: a whole
-   * `task_request`, not an answer to a question.
-   *
-   * The executor still falls back to a cold run when a continuation fails —
-   * that fallback is what turned this adapter's first real chain run into two
-   * wasted (and unbilled) spawns instead of two lost tasks.
-   */
-  buildContinue(sessionId: string, input: BuildRunInput): SpawnPlan {
-    return {
-      argv: [
-        input.bin,
-        "exec",
-        "resume",
-        sessionId,
-        ...commonFlags(input, "resume"),
-        "-",
-      ],
-      cwd: input.cwd,
-      stdin: "pipe",
-      stdinData: input.prompt,
-    };
-  },
-
   extractObservations(ctx: ExtractContext): Observation[] {
     const out: Observation[] = [];
     for (const event of ctx.events) {
@@ -260,12 +235,12 @@ export const codexAdapter: ProviderAdapter = {
    * ever fire: `--output-schema` + `-o` means the file holds exactly the
    * conforming JSON. Anything else is a failure to report, not prose to mine.
    */
-  extractResult(ctx: ExtractContext): TaskResult {
+  extractResults(ctx: ExtractContext): TaskResult[] {
     if (ctx.resultFileContents !== null && ctx.resultFileContents.trim() !== "") {
-      const parsed = parseResultJson(ctx.taskId, ctx.resultFileContents);
+      const parsed = parseResultJson(ctx.taskIds, ctx.resultFileContents);
       if (parsed) return parsed;
       return synthesizeFailure(
-        ctx.taskId,
+        ctx.taskIds,
         "codex wrote a result file that does not match task_result",
         { retryable: true },
       );
@@ -275,14 +250,14 @@ export const codexAdapter: ProviderAdapter = {
     // metadata warning) as `error` items too, and a real failure comes after.
     const errorEvent = ctx.events.findLast((event) => event.t === "error");
     if (errorEvent && errorEvent.t === "error") {
-      return synthesizeFailure(ctx.taskId, errorEvent.message, {
+      return synthesizeFailure(ctx.taskIds, errorEvent.message, {
         retryable: errorEvent.kind !== "auth",
       });
     }
 
     const detail = stripAnsi(ctx.stderr).trim().split("\n").slice(-3).join(" ").trim();
     return synthesizeFailure(
-      ctx.taskId,
+      ctx.taskIds,
       `codex produced no result file (exit ${String(ctx.exitCode)})${detail ? `: ${detail}` : ""}`,
     );
   },

@@ -23,8 +23,15 @@ export {
   type SpawnResult,
 } from "./spawn.js";
 export { classifyFailure, type ClassifyInput } from "./classify.js";
-export { renderPrompt } from "./prompt.js";
-export { executeTask, type ExecuteTaskOptions, type TaskExecution } from "./task.js";
+export { renderGroupPrompt, renderPrompt } from "./prompt.js";
+export { executeGroup, type ExecuteGroupOptions, type GroupExecution } from "./task.js";
+export {
+  DEFAULT_GROUP_SIZE,
+  formGroup,
+  groupKey,
+  type FormGroupInput,
+  type GroupCandidate,
+} from "./group.js";
 export {
   runSequential,
   type RunOutcome,
