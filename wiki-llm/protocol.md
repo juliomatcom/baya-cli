@@ -119,6 +119,21 @@ A process running **one** task answers with the plain `task_result` of §3, byte
 
 No `minItems`/`maxItems`: pinning the count would make a provider reject a partial answer outright and lose the tasks that _were_ done. A short array is handled where it can be handled well — see the ladder below.
 
+### Stating the contract
+
+⚠️ **Never name the schema by path in a prompt.** An agent told where a schema lives will go and read it.
+
+Measured 2026-08-30 on a two-task run: the contract read `matching the schema at <path>`, so codex ran `sed -n '1,240p' .baya/schema/task_result.schema.json` — to read a schema `--output-schema` was **already enforcing**. A tool call is cheap; what follows it is not, because the whole conversation is re-sent afterwards. That one line took a trivial task from **16.8k tokens to 35.6k** — unique context grew by only 1.4k, and the other ~17k was the re-send.
+
+| `structuredOutput`             | Providers             | Prompt says                                                                 |
+| :----------------------------- | :-------------------- | :-------------------------------------------------------------------------- |
+| `schema-file`, `schema-inline` | `codex`, `claude`     | the CLI enforces it — **do not open or search for a schema file**           |
+| `none`                         | `opencode`, `copilot` | the schema **inlined in full**, with the same instruction not to go looking |
+
+Inlining costs ~800 tokens once, against a re-send of the whole conversation — an order of magnitude cheaper, and the only way a non-enforcing adapter learns the envelope at all. `response_contract.schema_path` stays in `task_request` and in `request.json`: it is the record of which contract applied, not an instruction to the model.
+
+The planner prompt carries the same rule for `plan_draft.schema.json`.
+
 ### Working style
 
 Every prompt carries a short `# Working style` section asking for no narration — no progress updates, no restating the task, no account of what was just done. These CLIs stream their tool calls already; commentary on top is output tokens nobody reads. Stated once per **process**, so a group pays for it once.

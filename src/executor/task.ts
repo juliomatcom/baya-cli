@@ -98,8 +98,17 @@ export async function executeGroup(
   const taskIds = tasks.map((task) => task.id);
   const grouped = tasks.length > 1;
 
+  // Read once: an adapter that enforces no schema needs it inlined in the
+  // prompt, and every adapter needs it for `buildRun`.
+  const schemaContents = readFileSync(options.schemaPath, "utf8");
   const prompt = renderGroupPrompt(options.requests, {
     ...(options.memory ? { memory: options.memory } : {}),
+    // Only for the adapters that enforce nothing. Handing a path to one that
+    // does enforce makes the agent go and read it — a tool call, and then the
+    // whole conversation re-sent, for a guarantee it already had.
+    ...(adapter.capabilities.structuredOutput === "none"
+      ? { schema: schemaContents }
+      : {}),
   });
   for (const request of options.requests) {
     writeFileEnsuringDir(
@@ -125,7 +134,7 @@ export async function executeGroup(
     cwd: options.cwd,
     schemaPath: options.schemaPath,
     // Inline schema for providers that reject a file path (`claude --json-schema`).
-    schemaContents: readFileSync(options.schemaPath, "utf8"),
+    schemaContents,
     resultFile,
     prompt,
     ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),

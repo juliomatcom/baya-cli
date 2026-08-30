@@ -118,3 +118,31 @@ describe("working style", () => {
     }
   });
 });
+
+/**
+ * Measured 2026-08-30: the contract read "matching the schema at <path>", so
+ * codex ran `sed -n '1,240p' .baya/schema/task_result.schema.json` — reading a
+ * schema `--output-schema` was already enforcing. The tool call is cheap; the
+ * full context re-send that follows it is not. 16.8k tokens became 35.6k.
+ */
+describe("response contract", () => {
+  it("never names a schema path, which is what sent the agent to read it", () => {
+    const path = "/work/.baya/schema/task_result.schema.json";
+    expect(renderPrompt(request())).not.toContain(path);
+    expect(renderGroupPrompt([request(), request([], secondTask)])).not.toContain(path);
+  });
+
+  it("tells an enforcing provider not to go looking", () => {
+    const text = renderPrompt(request());
+    expect(text).toContain("already enforces");
+    expect(text).toContain("Do not open or search for a schema file");
+  });
+
+  it("inlines the schema for a provider that enforces nothing", () => {
+    const schema = '{"type":"object","title":"baya task_result"}';
+    const text = renderPrompt(request(), { schema });
+    expect(text).toContain("<schema>");
+    expect(text).toContain(schema);
+    expect(text).toContain("do not open or search for a schema file");
+  });
+});

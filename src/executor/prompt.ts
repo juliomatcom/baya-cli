@@ -16,6 +16,21 @@ export interface RenderPromptOptions {
    * edgeless workspace knowledge, and `# Upstream results` means edges.
    */
   memory?: string;
+  /**
+   * The schema document, for a provider that enforces **none**
+   * (`opencode`, `copilot`). Absent means the CLI validates the response
+   * itself (`codex --output-schema`, `claude --json-schema`) and the prompt
+   * says so instead.
+   *
+   * ⚠️ Never name the schema by **path**. Measured 2026-08-30: the contract
+   * read "matching the schema at <path>", so codex did the obvious thing and
+   * ran `sed -n '1,240p' .baya/schema/task_result.schema.json` — to read a
+   * schema the CLI was already enforcing through `--output-schema`. A tool
+   * call is cheap; what follows it is not, because the whole conversation is
+   * re-sent afterwards. That one line took a trivial task from 16.8k tokens
+   * to 35.6k, nearly all of it the re-send.
+   */
+  schema?: string;
 }
 
 export function renderPrompt(
@@ -44,7 +59,7 @@ export function renderPrompt(
   lines.push(
     "# Response contract",
     "",
-    `Respond with a single JSON object matching the schema at ${request.response_contract.schema_path}.`,
+    ...contractLines(options.schema, "a single JSON object"),
     ...FIELD_NOTES,
     "",
     `Deadline: ${request.constraints.max_runtime_s} seconds.`,
@@ -118,7 +133,7 @@ export function renderGroupPrompt(
   lines.push(
     "# Response contract",
     "",
-    `Respond with a single JSON object matching the schema at ${first.response_contract.schema_path}.`,
+    ...contractLines(options.schema, "a single JSON object"),
     `Its \`results\` array holds one object per task above — ${count} in total — each`,
     "carrying that task's own id in `task_id`:",
     ...ids.map((id) => `- ${id}`),
@@ -161,6 +176,36 @@ const WORKING_STYLE = [
   "`notes` below are the deliverable — say everything that belongs in them.",
   "",
 ];
+
+/**
+ * How to state the contract without sending the model to go and find it.
+ *
+ * Enforced providers get told it is enforced, and told **not** to go looking:
+ * an agent handed a schema path will read it, and the read costs a full
+ * context re-send for information the runtime already guarantees.
+ *
+ * Providers that enforce nothing get the schema **inlined**. That is ~800
+ * tokens once, against a re-send of the whole conversation — an order of
+ * magnitude cheaper, and the only way those adapters learn the envelope at all.
+ */
+function contractLines(schema: string | undefined, shape: string): string[] {
+  const trimmed = schema?.trim() ?? "";
+  if (trimmed === "") {
+    return [
+      `Respond with ${shape} matching the \`task_result\` contract, which the CLI you`,
+      "are running in already enforces. Do not open or search for a schema file —",
+      "there is nothing in it that is not already being applied to your output.",
+    ];
+  }
+  return [
+    `Respond with ${shape} matching this schema. It is reproduced here in full, so`,
+    "do not open or search for a schema file:",
+    "",
+    "<schema>",
+    trimmed,
+    "</schema>",
+  ];
+}
 
 const FIELD_NOTES = [
   "Field notes:",

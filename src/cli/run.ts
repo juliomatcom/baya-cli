@@ -394,6 +394,11 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
           env,
         }),
         logger,
+        // Inlined only for a planner that enforces nothing. Naming a schema by
+        // path sends the agent to read it, which costs a whole context re-send.
+        ...(plannerAdapter.capabilities.structuredOutput === "none"
+          ? { schema: readFileSync(planSchemaPath, "utf8") }
+          : {}),
         providers: registry.ids,
         defaultProvider: defaultProvider as ProviderId,
         schemaPath: planSchemaPath,

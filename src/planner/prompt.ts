@@ -13,6 +13,12 @@ export interface PlannerPromptOptions {
   providers: readonly ProviderId[];
   defaultProvider: ProviderId;
   schemaPath: string;
+  /**
+   * The schema document, for a planner provider that enforces none. Absent
+   * means the CLI validates the draft itself and the prompt says so — see the
+   * `schema` note in `executor/prompt.ts` for why a **path** is never given.
+   */
+  schema?: string;
 }
 
 export function plannerPrompt(options: PlannerPromptOptions): string {
@@ -42,7 +48,23 @@ export function plannerPrompt(options: PlannerPromptOptions): string {
     "- Order matters only through `depends_on`. Independent work should stay independent",
     "  so it can run in parallel.",
     "",
-    `Respond with a single JSON object matching the schema at ${options.schemaPath}.`,
+    // Never the schema **path**: an agent told where a schema lives will go and
+    // read it, and the tool call costs a full context re-send for something the
+    // CLI is already enforcing (`--output-schema`). See executor/prompt.ts.
+    ...(options.schema === undefined
+      ? [
+          "Respond with a single JSON object matching the plan-draft contract, which",
+          "the CLI you are running in already enforces. Do not open or search for a",
+          "schema file.",
+        ]
+      : [
+          "Respond with a single JSON object matching this schema, reproduced here in",
+          "full so you do not need to open a file:",
+          "",
+          "<schema>",
+          options.schema.trim(),
+          "</schema>",
+        ]),
     "",
     `<task_list path="${options.sourcePath}">`,
     options.taskText,
