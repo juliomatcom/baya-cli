@@ -31,16 +31,7 @@ Requires **Node 24+** and at least one supported CLI on your machine. Run `baya 
 
 ## Usage
 
-```bash
-baya ./tasks.md                    # plan it, show it, run it
-baya ./tasks.md --dry-run          # show the plan, run nothing
-baya ./tasks.md --max-parallel 4
-baya runs                          # list interrupted runs
-baya resume <runId>                # continue one of them
-baya resume <runId> --provider claude   # ...on a different provider
-baya doctor                        # check provider installs
-baya config                        # change your default provider
-```
+<img width="800" height="527" alt="usage" src="https://github.com/user-attachments/assets/cbaca22f-8991-4a26-978e-dadebd882d8e" />
 
 On first run baya asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
 
