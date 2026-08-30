@@ -154,7 +154,7 @@ flowchart TB
     AD --> C1["codex"]
     AD --> C2["claude"]
     AD --> C3["opencode"]
-    AD --> CN["…<br/><i>one per supported CLI</i>"]
+    AD --> CN["…<br/><i>grok, gemini</i>"]
 
     C1 --> RES["task_result JSON<br/><i>one per task in the process</i>"]
     C2 --> RES
