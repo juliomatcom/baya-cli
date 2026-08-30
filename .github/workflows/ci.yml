@@ -42,13 +42,18 @@ jobs:
       - name: Test
         run: npm test
 
+  # semantic-release publishes to npm and cuts a GitHub Release + tag. It does
+  # NOT commit the bumped version back to the repo: the `main` ruleset requires
+  # a PR for every push, which blocks @semantic-release/git. The published
+  # package always carries the right version; the in-repo package.json version
+  # is only a floor and drifts between releases — that is expected.
   release:
     name: release to npm
     needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # push the release tag + changelog commit, cut the GitHub Release
+      contents: write # push the release tag, cut the GitHub Release
       issues: write # semantic-release comments on the issues/PRs it closes
       pull-requests: write
       id-token: write # npm publish provenance
