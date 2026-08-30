@@ -153,10 +153,12 @@ flowchart TB
 
     AD --> C1["codex"]
     AD --> C2["claude"]
+    AD --> C3["opencode"]
     AD --> CN["…<br/><i>one per supported CLI</i>"]
 
     C1 --> RES["task_result JSON<br/><i>one per task in the process</i>"]
     C2 --> RES
+    C3 --> RES
     CN --> RES
 
     RES -->|ok| BUS["Context bus<br/><i>feeds dependents</i>"]
