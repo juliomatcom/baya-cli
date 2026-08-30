@@ -126,7 +126,7 @@ $ baya ./tasks.md --yes
 - ✅ **No API keys** — drives your existing CLI subscriptions; nothing new to pay for.
 - ✅ **Model-per-task** — name `luna`, `sonnet`, etc. in the task text; Baya resolves it to the real id and the provider that serves it.
 - ✅ **Parallel execution** — independent tasks run concurrently (`--max-parallel`); `read-write` tasks are serialized by a write-lock.
-- ✅ **One process, many tasks** — tasks that share a provider, model and permission level are packed into a single agent process and worked through in order, so the repo is read once instead of once per task. `--group-size` (default 4), `--group-size 1` to opt out.
+- ✅ **One process, many tasks** — tasks that share a provider, model and permission level are packed into a single agent process and worked through in order, so the repo is read once instead of once per task. `--group-size` (default 6), `--group-size 1` to opt out.
 - ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files changed) carries across to tasks that could not share a process. `--no-memory` to disable.
 - ✅ **Preview gate** — see the full plan before anything runs; `--dry-run` shows it and runs nothing.
 - ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider.

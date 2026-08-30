@@ -19,8 +19,21 @@
  * works on the two adapters that have no resume at all.
  */
 
-/** Max tasks per process. Small on purpose — see `formGroup`. */
-export const DEFAULT_GROUP_SIZE = 4;
+/**
+ * Max tasks per process.
+ *
+ * ⚠️ **Unmeasured.** Grouping's saving is the fixed per-spawn cost paid once
+ * instead of N times, so the return curve is `(N-1)/N` — 50% of it at 2, 75%
+ * at 4, 83% at 6, 88% at 8. Most of the win is early, and what grows with N is
+ * the risk: a longer prompt to conflate or skip a task in, a longer session to
+ * drift or exhaust its context in, and more unreached members when a process
+ * dies. 6 takes the knee of the curve and stops.
+ *
+ * Settle it with the data rather than by argument: `.baya/runs/*` already
+ * records `cost_usd` and the cache-split token counts per run, so the same A/B
+ * that `M6.6` specifies for `--no-memory` reads this too.
+ */
+export const DEFAULT_GROUP_SIZE = 6;
 
 export interface GroupCandidate {
   id: string;

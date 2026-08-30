@@ -91,8 +91,15 @@ const DEFAULT_MAX_RUNTIME_S = 900;
  * because the tasks run one after another inside the process and each deserves
  * its own allowance; capped because a runaway group must not be able to hold
  * the whole run hostage.
+ *
+ * Derived from the default group size rather than written as its own number,
+ * because the two are not independent: a cap below `size × budget` silently
+ * gives every task **less** time than it was budgeted. The cap must never bite
+ * at the default size. Above it, the squeeze is the point — `--group-size 12`
+ * is a request to pack more into one process, not a request for a three-hour
+ * process with no checkpoint granularity inside it.
  */
-export const MAX_GROUP_RUNTIME_S = 3600;
+export const MAX_GROUP_RUNTIME_S = DEFAULT_GROUP_SIZE * DEFAULT_MAX_RUNTIME_S;
 
 function toReadyStates(store: StateStore, tasks: Task[]): Map<string, ReadyState> {
   const states = new Map<string, ReadyState>();

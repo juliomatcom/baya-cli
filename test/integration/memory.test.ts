@@ -144,7 +144,15 @@ describe("cross-task memory", () => {
 });
 
 describe("a chain longer than the group cap", () => {
-  const ids = ["step-one", "step-two", "step-three", "step-four", "step-five"];
+  const ids = [
+    "step-one",
+    "step-two",
+    "step-three",
+    "step-four",
+    "step-five",
+    "step-six",
+    "step-seven",
+  ];
   const LINEAR = {
     tasks: ids.map((id, index) => ({
       id,
@@ -177,15 +185,15 @@ describe("a chain longer than the group cap", () => {
     const state = result.readJson(result.paths!.state) as {
       tasks: Record<string, { group_id: string | null }>;
     };
-    // Cap 4: the first four collapse into one process, the fifth starts the
-    // next — five tasks, two spawns instead of five.
-    for (const id of ids.slice(0, 4)) {
+    // Cap 6: the first six collapse into one process and the seventh starts
+    // the next — seven tasks, two spawns instead of seven.
+    for (const id of ids.slice(0, 6)) {
       expect({ id, group: state.tasks[id]?.group_id }).toEqual({
         id,
         group: "step-one",
       });
     }
-    expect(state.tasks["step-five"]?.group_id).toBeNull();
+    expect(state.tasks["step-seven"]?.group_id).toBeNull();
   });
 
   it("groups siblings too, not only chains", async () => {
