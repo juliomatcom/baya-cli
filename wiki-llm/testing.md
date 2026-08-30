@@ -9,7 +9,7 @@ Every component spawns nondeterministic, rate-limited, paid subprocesses. The fa
 
 ## Fake-provider harness
 
-`test/fixtures/fake-provider.mjs` — a real executable pointed at via `.baya/config.json` binary override. Reads a scenario from `BAYA_FAKE_SCRIPT` (JSON) and replays it deterministically:
+`test/fixtures/fake-provider.mjs` — a real executable pointed at via the user config's binary override. Reads a scenario from `BAYA_FAKE_SCRIPT` (JSON) and replays it deterministically:
 
 ```json
 {
@@ -46,7 +46,7 @@ Required knobs, each mapping to a real failure mode:
 | `expect_stdin` / `expect_file`    | Prompt-delivery preference chain                   |
 | `by_task` map keyed by task id    | One scenario file scripting a whole multi-task run |
 
-Emulates the **codex file-out contract**: when argv carries `-o <path>`, `final` is written there (not stdout) and the task id is read back from `tasks/<id>/result.json`. This lets one scenario file script a whole run with no stdin coordination, and lets `test/helpers/runCli.ts` drive the real CLI end to end via a `.baya/config.json` binary override — exactly as a user would.
+Emulates the **codex file-out contract**: when argv carries `-o <path>`, `final` is written there (not stdout) and the task id is read back from `tasks/<id>/result.json`. This lets one scenario file script a whole run with no stdin coordination, and lets `test/helpers/runCli.ts` drive the real CLI end to end via a user-config binary override — exactly as a user would.
 
 Every engine test runs against this: zero network, zero LLM, zero cost, deterministic.
 

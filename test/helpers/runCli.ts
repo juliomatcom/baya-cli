@@ -15,7 +15,7 @@ import type { FakeProviderScenario } from "./fakeProvider.js";
 
 /**
  * Drives the real CLI end to end against `fake-provider.mjs`, which stands in
- * for `codex` via the project config's binary override — the same override a
+ * for `codex` via the user config's binary override — the same override a
  * user would set. Zero network, zero cost, deterministic.
  */
 export const FAKE_PROVIDER = fileURLToPath(
@@ -36,7 +36,7 @@ export interface CliOptions {
   taskList?: string;
   /** Basename for the task-list file (default `tasks.md`). */
   taskFile?: string;
-  /** Extra project `.baya/config.json` values merged over the defaults. */
+  /** Extra user-config values merged over the defaults. */
   config?: Record<string, unknown>;
   stdinIsTty?: boolean;
   stdoutIsTty?: boolean;
@@ -63,8 +63,12 @@ export function makeWorkspace(options: CliOptions = {}): Workspace {
         : (options.scenario ?? {});
   writeFileSync(scenarioPath, JSON.stringify(scenario));
 
+  // The user config, since that is the only config layer there is. The fake
+  // provider is reached through its `providers.codex.bin` override — the same
+  // override a real user would write.
+  mkdirSync(join(home, ".config", "baya"), { recursive: true });
   writeFileSync(
-    join(cwd, ".baya", "config.json"),
+    join(home, ".config", "baya", "config.json"),
     JSON.stringify({
       version: 1,
       defaults: { provider: "codex", model: null },

@@ -21,7 +21,7 @@ export interface ProviderStatus {
 }
 
 export interface ResolveOptions {
-  /** `.baya/config.json` `providers.<id>.bin` overrides, keyed by provider id. */
+  /** user config `providers.<id>.bin` overrides, keyed by provider id. */
   binOverrides?: Partial<Record<ProviderId, string>>;
   env?: NodeJS.ProcessEnv;
   /** Skip the `--version` probe — `resolve()` is on the run path, `doctor` is not. */

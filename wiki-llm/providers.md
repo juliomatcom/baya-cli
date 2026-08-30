@@ -84,7 +84,7 @@ A model name reaches a provider **resolved**, never as typed. Task-named models 
 
 ## Binary resolution
 
-Chain: `.baya/config.json` override → `$PATH` → known locations → not found. Known: `~/.local/bin`, `~/.opencode/bin`, active nvm `bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`.
+Chain: user config (`providers.<id>.bin`) override → `$PATH` → known locations → not found. Known: `~/.local/bin`, `~/.opencode/bin`, active nvm `bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`.
 
 Reference machine: `claude`/`codex` in `~/.local/bin`; `copilot`/`gemini` in nvm bin; `opencode` in `~/.opencode/bin`. **None in a system directory** — never assume a plain `$PATH` lookup.
 

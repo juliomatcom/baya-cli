@@ -11,11 +11,12 @@ Highest wins. Every value records its source for `baya config --show`.
 | :-- | :-------- | :--------------------------------------------------------------------- |
 | 1   | CLI flags | `--default-provider`, `--planner-model`, …                             |
 | 2   | Env       | `BAYA_*`                                                               |
-| 3   | Project   | `./.baya/config.json` (gitignored — personal overrides)                |
-| 4   | **User**  | `$XDG_CONFIG_HOME/baya/config.json`, else `~/.config/baya/config.json` |
-| 5   | Built-in  | provider defaults                                                      |
+| 3   | **User**  | `$XDG_CONFIG_HOME/baya/config.json`, else `~/.config/baya/config.json` |
+| 4   | Built-in  | provider defaults                                                      |
 
-Wizard writes **layer 4**. `defaults`/`planner`/`providers` merge per key; `modelAliases` merges per entry key; `modelCatalog` merges per provider, then by entry `id`, with higher layers winning.
+Wizard writes **layer 3**.
+
+There is deliberately **no project layer**. A per-project `./.baya/config.json` existed, was never written by anything, and was never used: which CLI you drive and where its binary lives are properties of the machine, not of the repository. A per-repo override belongs on the command line or in `BAYA_*`, both of which already outrank the user layer. `defaults`/`planner`/`providers` merge per key; `modelAliases` merges per entry key; `modelCatalog` merges per provider, then by entry `id`, with higher layers winning.
 
 ## Schema
 

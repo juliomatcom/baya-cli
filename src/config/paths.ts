@@ -8,11 +8,6 @@ export function userConfigPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(base, "baya", "config.json");
 }
 
-/** Project overrides. Gitignored — personal, not shared. */
-export function projectConfigPath(cwd: string): string {
-  return join(cwd, ".baya", "config.json");
-}
-
 export function bayaDir(cwd: string): string {
   return join(cwd, ".baya");
 }

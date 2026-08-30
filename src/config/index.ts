@@ -8,7 +8,7 @@ export {
   type ResolvedConfig,
   type SettableKey,
 } from "./schema.js";
-export { bayaDir, projectConfigPath, userConfigPath } from "./paths.js";
+export { bayaDir, userConfigPath } from "./paths.js";
 export {
   ConfigError,
   LAYER_NAMES,

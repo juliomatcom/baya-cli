@@ -14,7 +14,7 @@ The admitted unit is a **group**, not a task. Grouping decides what goes in a pr
 | Global       | `--max-parallel`                      | `min(4, cpus)`                                      |
 | Per-provider | adapter `capabilities.maxConcurrency` | `codex` 2 · `opencode` 2 · `claude` 1 · `copilot` 1 |
 
-Per-provider caps conservative — consumer subscriptions throttle. Raise via `.baya/config.json` once measured.
+Per-provider caps conservative — consumer subscriptions throttle. Raise via the user config once measured.
 
 ## Workspace isolation
 

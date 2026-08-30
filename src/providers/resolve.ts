@@ -37,7 +37,7 @@ function isExecutableFile(path: string): boolean {
 }
 
 export interface ResolveBinaryOptions {
-  /** `.baya/config.json` `providers.<id>.bin`. Absolute paths only. */
+  /** user config `providers.<id>.bin`. Absolute paths only. */
   override?: string | undefined;
   env?: NodeJS.ProcessEnv;
   extraLocations?: string[];
