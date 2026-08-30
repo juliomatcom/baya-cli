@@ -127,6 +127,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       case "--help":
         help = true;
         break;
+      case "-v":
       case "-V":
       case "--version":
         showVersion = true;

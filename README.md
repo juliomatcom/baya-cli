@@ -30,11 +30,13 @@ npm install -g baya-cli   # binary: baya
 Requires **Node 24+** and at least one supported CLI on your machine. Run `baya doctor` to see what it found.
 
 ## Usage
+
 ```txt
 1 which model are you? - luna
 2 which model are you? - sonnet
 2 which model are you? - terra
 ```
+
 ![Basic example](https://github.com/user-attachments/assets/47541304-b19f-4044-9382-4da8f86ed170)
 
 📝 On first run `baya` asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.

@@ -58,6 +58,7 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | `--json`                  | off           | Machine-readable run report or `models` catalog to stdout.                                                                 |
 | `--verbose`               | off           | Alias for `--log-level debug`.                                                                                             |
 | `--no-color`              | off           | Disable ANSI. `NO_COLOR` / `FORCE_COLOR` honored natively by chalk.                                                        |
+| `-v`, `-V`, `--version`   | —             | Print the release version (`package.json` of the installed package) to stdout and exit `0`. No banner.                     |
 | `--provider <id>`         | —             | **`resume` only** — re-run unfinished tasks elsewhere (answer to exhausted credits). **M2.8**.                             |
 | `--no-progress`           | off           | Disable the spinner. Auto-off for non-TTY / `--json` / `NO_COLOR`.                                                         |
 | `--log-level <l>`         | `info`        | `trace\|debug\|info\|warn\|error`. Display filter only; the log file always gets everything.                               |

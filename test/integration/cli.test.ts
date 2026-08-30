@@ -341,6 +341,36 @@ describe("baya --help", () => {
   });
 });
 
+describe("baya --version", () => {
+  const expected = String(
+    (
+      JSON.parse(
+        readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+      ) as { version: string }
+    ).version,
+  );
+
+  it("prints the package version to stdout and exits 0", async () => {
+    const result = await runCli(["--version"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe(expected);
+  });
+
+  it("keeps the banner off stdout and stderr", async () => {
+    const result = await runCli(["--version"]);
+    expect(result.stdout.trim()).toBe(expected);
+    expect(result.stderr).toBe("");
+  });
+
+  it("accepts the -v and -V short forms", async () => {
+    for (const flag of ["-v", "-V"]) {
+      const result = await runCli([flag]);
+      expect(result.code).toBe(0);
+      expect(result.stdout.trim()).toBe(expected);
+    }
+  });
+});
+
 describe("argument errors", () => {
   it("exits 2 on an unknown flag rather than ignoring it", async () => {
     const result = await runCli(["./tasks.md", "--turbo"]);
