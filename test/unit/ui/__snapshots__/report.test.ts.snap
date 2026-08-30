@@ -9,7 +9,7 @@ exports[`renderReport matches the recorded output 1`] = `
     ! gen-schema     migration locks users for ~30s
     · deploy-cfg     assumed utf8
 
-  Outputs   .baya/runs/r/tasks/<id>/output.md
+  Outputs   /w/.baya/runs/r/tasks/gen-schema/output.md
 "
 `;
 
@@ -17,6 +17,6 @@ exports[`renderReport omits the Flagged section entirely when there are no notes
 "
    ✓ Run complete  2 succeeded · 47.0s · $0.42
 
-  Outputs   .baya/runs/r/tasks/<id>/output.md
+  Outputs   /w/.baya/runs/r/tasks
 "
 `;
