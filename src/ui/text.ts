@@ -75,6 +75,17 @@ export function formatDuration(ms: number): string {
   return `${minutes}m${String(Math.round(seconds - minutes * 60)).padStart(2, "0")}s`;
 }
 
+/**
+ * Whole seconds, for a line that repaints once a second: `9s` · `59s` ·
+ * `1m04s`. `formatDuration`'s tenths would flicker on a live spinner without
+ * telling anyone anything.
+ */
+export function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  if (total < 60) return `${total}s`;
+  return `${Math.floor(total / 60)}m${String(total % 60).padStart(2, "0")}s`;
+}
+
 export function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }

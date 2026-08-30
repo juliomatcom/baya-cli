@@ -47,6 +47,7 @@ import {
   exitCodeFor,
   renderDag,
   renderReport,
+  formatElapsed,
   resolveRunModel,
   runModelGate,
   type Progress,
@@ -98,6 +99,17 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     json: flags.json,
     env,
   });
+  // Repaints the elapsed count on the spinner line. Declared out here, beside
+  // the progress instance it drives, so the `finally` can always clear it —
+  // an interval left running past a thrown error keeps repainting a line for
+  // a run that is over.
+  let ticker: NodeJS.Timeout | null = null;
+  const stopTicker = (): void => {
+    if (ticker === null) return;
+    clearInterval(ticker);
+    ticker = null;
+  };
+
   // Every persistent write funnels through progress so the spinner line is
   // cleared and repainted around it (conventions.md #16b).
   const stderrSink = {
@@ -506,6 +518,34 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     const summaries = new Map<string, string>();
     const singleTask = manifest.tasks.length === 1;
 
+    // A live line for the whole time a process is out. `claude
+    // --output-format json` returns one object at the very end, so between the
+    // spawn and the result there is structurally nothing to print and a slow
+    // task is indistinguishable from a hung one. The elapsed count is the
+    // point — a spinner alone still leaves "how long has this been?"
+    // unanswered.
+    const spinGroup = (info: {
+      taskIds: string[];
+      provider: string;
+      model: string | null;
+    }): void => {
+      const lead = info.taskIds[0] ?? "";
+      const more =
+        info.taskIds.length > 1 ? theme.note(` +${info.taskIds.length - 1}`) : "";
+      const who = `${theme.provider(info.provider)}${info.model ? theme.note(` ${info.model}`) : ""}`;
+      const label = `${theme.taskId(lead)}${more} ${who}`;
+      const startedAt = Date.now();
+      const paint = (): void =>
+        progress.update(
+          `${label} ${theme.note(`· ${formatElapsed(Date.now() - startedAt)}`)}`,
+        );
+      stopTicker();
+      progress.start(`${label} ${theme.note("· 0s")}`);
+      ticker = setInterval(paint, 1000);
+      // Never hold the event loop open on account of a cosmetic line.
+      ticker.unref();
+    };
+
     await runSequential({
       manifest,
       cwd,
@@ -525,6 +565,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       groupSize: flags.groupSize ?? DEFAULT_GROUP_SIZE,
       env,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
+      onGroupStarted: spinGroup,
       onTaskSettled: (taskId, _state, result) => {
         summaries.set(taskId, result.summary);
         // Full output would bury everything in a multi-task run; it is printed
@@ -547,6 +588,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     });
     writeFileSync(paths.report, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
+    stopTicker();
+
     logger.info(state.totals.failed > 0 ? "run.failed" : "run.completed", {
       succeeded: state.totals.succeeded,
       failed: state.totals.failed,
@@ -566,6 +609,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     return interrupted ? 130 : exitCodeFor(state);
   } finally {
     process.removeListener("SIGINT", onSigint);
+    stopTicker();
     progress.dispose();
     lock.release();
   }

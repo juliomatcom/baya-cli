@@ -74,6 +74,20 @@ export interface RunSequentialOptions {
   env?: NodeJS.ProcessEnv;
   /** Fires the moment a task settles, so `warn`/`action_required` notes print immediately. */
   onTaskSettled?: (taskId: string, state: TaskState, result: TaskResult) => void;
+  /**
+   * Fires just before a group's process is spawned.
+   *
+   * The terminal's only other signal is the provider's own event stream, and
+   * `claude --output-format json` emits a single object at the very end — so
+   * between the spawn and the result there is, structurally, nothing to print.
+   * A long task on that adapter is indistinguishable from a hung one without
+   * this.
+   */
+  onGroupStarted?: (info: {
+    taskIds: string[];
+    provider: ProviderId;
+    model: string | null;
+  }) => void;
 }
 
 export interface RunOutcome {
@@ -225,6 +239,8 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
         group_id: grouped ? leaderId : null,
       });
     }
+
+    options.onGroupStarted?.({ taskIds: [...memberIds], provider, model });
 
     const execution = await executeGroup({
       tasks: members,

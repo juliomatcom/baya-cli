@@ -148,6 +148,14 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
 
 `baya.jsonl` + `events.jsonl` always hold the full stream — verbosity filters display, never the record.
 
+### While a run is working
+
+One spinner line, owned by `src/ui/progress.ts`, held for as long as a provider process is out: `⠋ node-version +4 · claude claude-sonnet-5 · 1m03s` — group leader, `+n` for the rest of the group, provider and model, and **elapsed whole seconds**.
+
+The elapsed count is the point, not decoration. `claude --output-format json` returns a single object at the very end (`events: "json"`), so between the spawn and the result there is structurally nothing to print — no `provider.tool`, no `provider.text` — and a slow task is indistinguishable from a hung one. `codex` streams JSONL and fills the gap on its own; `claude` cannot.
+
+Started from `onGroupStarted`, cleared when the run settles and in the `finally`, so a thrown error cannot leave an interval repainting a line for a run that is over. Ticks once a second — hence `formatElapsed`, not `formatDuration`, whose tenths would flicker without telling anyone anything. Auto-off for non-TTY / `--json` / `NO_COLOR` / `--no-progress`.
+
 ### End-of-run report
 
 ```
