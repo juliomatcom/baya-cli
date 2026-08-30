@@ -12,6 +12,8 @@ Every internal move is logged: source read, planner call, CLI spawn, each normal
 | `.baya/runs/<runId>/baya.jsonl` | **`trace` — everything**                                          | JSONL                          | Forensics. Nothing is filtered out here.                                 |
 | stderr                          | `info` (`--log-level`; `--verbose` ⇒ `debug`, `--quiet` ⇒ `warn`) | rendered via `src/ui/theme.ts` | A readable narrative while it works, **including live provider output**. |
 
+**Verbosity filters chatter, never outcomes.** `task.succeeded`, `task.failed`, `task.parked` and `task.skipped` reach the terminal at **any** level. The last three already did on level alone (`error`/`warn`), so gating only `task.succeeded` — which is `info` — left a `--quiet` run showing every bad outcome and no good one. Enforced in two places, because there are two gates: `ALWAYS_DISPLAYED` in `src/log/logger.ts` bypasses the level filter, and `src/ui/render.ts` no longer drops the success line under `--quiet`. `task.note` is **not** in the set: a note belongs to an outcome, and the end-of-run **Flagged** section reprints every one at any level. For genuinely no stderr, use `--json` (which nulls it) or a shell redirect.
+
 File always gets the full stream; terminal gets a filtered view. **Never stdout** — stdout carries only the `--json` report (`baya … --json | jq` stays valid). Distinct from per-task `events.jsonl` (provider transport events); `baya.jsonl` is the orchestrator's own trace.
 
 ## Line shape

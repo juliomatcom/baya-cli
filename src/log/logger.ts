@@ -8,6 +8,23 @@ export interface LogFields {
   [key: string]: unknown;
 }
 
+/**
+ * Events that reach the terminal whatever the level filter says.
+ *
+ * Verbosity filters **chatter, never outcomes**: `--quiet` asks Baya to stop
+ * narrating the work, not to stop reporting it. The other three outcomes
+ * already survived on level alone — `task.failed` is `error`, `task.parked`
+ * and `task.skipped` are `warn` — so `--quiet` showed every bad outcome and no
+ * good one, which is exactly backwards for the common case.
+ *
+ * `task.note` is deliberately **not** here. A note is attached to an outcome,
+ * and the end-of-run **Flagged** section reprints every one of them at any
+ * level, so nothing is lost by letting the inline copy be filtered.
+ *
+ * For genuinely no stderr: `--json` (which nulls it) or a shell redirect.
+ */
+export const ALWAYS_DISPLAYED: ReadonlySet<string> = new Set(["task.succeeded"]);
+
 export interface LoggerOptions {
   runId: string;
   /** Path to the JSONL trace sink (`.baya/runs/<runId>/baya.jsonl`). Always receives every level. */
@@ -97,7 +114,7 @@ export function createLogger(options: LoggerOptions): Logger {
 
     appendFileSync(options.traceFile, `${JSON.stringify(line)}\n`);
 
-    if (isAtLeast(level, stderrLevel)) {
+    if (isAtLeast(level, stderrLevel) || ALWAYS_DISPLAYED.has(event)) {
       const rendered = render(line);
       if (rendered !== null) stderrStream.write(rendered);
     }

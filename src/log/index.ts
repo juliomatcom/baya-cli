@@ -1,5 +1,6 @@
 export { stripAnsi } from "./ansi.js";
 export {
+  ALWAYS_DISPLAYED,
   type Logger,
   type LogFields,
   type LogLine,

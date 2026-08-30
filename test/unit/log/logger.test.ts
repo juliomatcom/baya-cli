@@ -155,3 +155,46 @@ describe("createLogger", () => {
     }
   });
 });
+
+/**
+ * `--quiet` is a request to stop narrating the work, not to stop reporting it.
+ * The other outcomes survive on level alone (`task.failed` is `error`,
+ * `task.parked`/`task.skipped` are `warn`), so before this a quiet run showed
+ * every bad outcome and no good one.
+ */
+describe("outcomes outrank the level filter", () => {
+  it("shows a succeeded task under --quiet, while chatter stays filtered", () => {
+    const traceFile = tempTraceFile();
+    const { stream, lines } = captureStream();
+    const logger = createLogger({
+      runId: "r1",
+      traceFile,
+      stderrLevel: "warn",
+      stderrStream: stream,
+    });
+
+    logger.info("task.succeeded", { task_id: "gen-schema" });
+    logger.info("provider.text", { text: "thinking out loud" });
+    logger.info("provider.tool", { name: "Read" });
+
+    const rendered = lines().join("");
+    expect(rendered).toContain("task.succeeded");
+    expect(rendered).not.toContain("provider.text");
+    expect(rendered).not.toContain("provider.tool");
+  });
+
+  it("does not change what the trace file records", () => {
+    const traceFile = tempTraceFile();
+    const { stream } = captureStream();
+    const logger = createLogger({
+      runId: "r1",
+      traceFile,
+      stderrLevel: "error",
+      stderrStream: stream,
+    });
+    logger.info("task.succeeded", { task_id: "a" });
+
+    const records = readJsonl(traceFile) as Array<{ level: string }>;
+    expect(records[0]?.level).toBe("info");
+  });
+});

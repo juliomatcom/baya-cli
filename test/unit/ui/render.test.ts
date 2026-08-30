@@ -220,13 +220,35 @@ describe("completion lines", () => {
     expect(out).toContain("which region?");
   });
 
-  it("suppresses success lines under --quiet but keeps failures", () => {
-    expect(
-      quietRender(line("task.succeeded", { task_id: "a", summary: "done" })),
-    ).toBeNull();
-    expect(
-      quietRender(line("task.failed", { task_id: "a", message: "boom" })),
-    ).not.toBeNull();
+  /**
+   * `--quiet` drops narration, not outcomes. Failures, parks and skips were
+   * never suppressed here, so hiding only successes left a quiet run showing
+   * every bad result and no good one.
+   */
+  it("keeps every outcome under --quiet, and drops the narration around them", () => {
+    for (const outcome of [
+      line("task.succeeded", { task_id: "a", summary: "done" }),
+      line("task.failed", { task_id: "a", message: "boom" }),
+      line("task.parked", { task_id: "a", question: "which db?" }),
+      line("task.skipped", { task_id: "a", blocked_by: "b" }),
+    ]) {
+      expect({ event: outcome.event, shown: quietRender(outcome) !== null }).toEqual({
+        event: outcome.event,
+        shown: true,
+      });
+    }
+
+    for (const chatter of [
+      line("provider.text", { task_id: "a", text: "thinking" }),
+      line("provider.tool", { task_id: "a", name: "Read" }),
+      line("provider.stderr", { task_id: "a", text: "warming up" }),
+      line("task.spawned", { task_id: "a", provider: "codex" }),
+    ]) {
+      expect({ event: chatter.event, shown: quietRender(chatter) !== null }).toEqual({
+        event: chatter.event,
+        shown: false,
+      });
+    }
   });
 });
 

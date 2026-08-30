@@ -218,3 +218,22 @@ describe("--json", () => {
     expect(report.exit_code).toBe(0);
   });
 });
+
+/**
+ * `--quiet` asks Baya to stop narrating the work, not to stop reporting it.
+ * The other outcomes survived on level alone — `task.failed` is `error`,
+ * `task.parked`/`task.skipped` are `warn` — so a quiet run used to show every
+ * bad outcome and no good one.
+ */
+describe("--quiet keeps the outcomes and drops the chatter", () => {
+  it("still prints the per-task result line", async () => {
+    const result = await runCli(["./tasks.md", "--yes", "--quiet"], {
+      scenario: chatty,
+    });
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("Created 4 tables with FK constraints.");
+    // The narration around it is what --quiet is for.
+    expect(result.stderr).not.toContain("Adding the FK from orders.user_id.");
+    expect(result.stderr).not.toContain("codex: warming up");
+  });
+});
