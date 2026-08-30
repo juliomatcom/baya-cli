@@ -1,4 +1,4 @@
-# wiki-llm — Baya Documentation Index
+# wiki-llm — Baya Source of Truth & Routing Index
 
 > **Maintenance Invariant:** Routing table only. One row per page. Prohibit orphan pages. Prohibit content here — content lives in the page. Update this row set in the SAME commit as any new/renamed page.
 > **Answers:** Which wiki page answers my question?
