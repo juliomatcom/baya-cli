@@ -3,7 +3,7 @@
 > **Maintenance Invariant:** One section per provider with **verification status + date**. Never document an unverified flag as fact — mark `⚠️ UNVERIFIED`. Re-verify via contract tests (`testing.md`); update in the SAME commit as any adapter change. Token-optimized: imperative, no prose, no redundancy.
 > **Answers:** Each CLI's real flag surface, event shape, session-id field, capability set. How its binary is found. How drift is survived.
 
-v1 set: `opencode`, `codex`, `claude`, `copilot`. `gemini` verified, deferred to v1.1. All live-probed 2026-08-28 (help + real invocation).
+v1 set: `opencode`, `codex`, `claude`, `copilot`. `gemini` verified, deferred to v1.1. All live-probed 2026-08-28 (help + real invocation). `grok` planned, **never probed** — no flag surface, schema support, or event shape is known; record nothing about it here until a live invocation says so.
 
 **Adapter status (M3, 2026-08-29):** all four implemented + registered in `src/providers/registry.ts`; each has an argv snapshot test + a contract-test case. `codex`/`claude` verified end to end. `opencode` (invalid local key) / `copilot` (quota exhausted) — engine paths unit-covered; success-path event shapes `⚠️ UNVERIFIED`, flagged inline; contract tier settles them post env-fix.
 
