@@ -67,13 +67,18 @@ describe("renderDag", () => {
     expect(out).toContain("Run order · 2 stages");
   });
 
+  /**
+   * The line describes the **graph**, never execution: the executor is
+   * sequential until M2.1, and grouping puts a stage's tasks in one process to
+   * be worked through in order.
+   */
   it("explains stage independence only when a stage holds more than one task", () => {
     const parallel = renderDag(
       manifest([task({ id: "a" }), task({ id: "b" })]),
       theme,
       "codex",
     );
-    expect(parallel).toContain("don't wait on each other");
+    expect(parallel).toContain("no dependencies within a stage");
 
     // A pure chain has one task per stage — there is no independence to explain.
     const chain = renderDag(
@@ -81,7 +86,7 @@ describe("renderDag", () => {
       theme,
       "codex",
     );
-    expect(chain).not.toContain("don't wait on each other");
+    expect(chain).not.toContain("no dependencies within a stage");
   });
 
   it("says 'stage', singular, for a one-stage plan", () => {
