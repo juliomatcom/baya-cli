@@ -78,7 +78,7 @@ specs/001/     point-in-time refinement record
 - [ ] New behavior has a test; bug fixes have a failing-first regression test.
 - [ ] No network or real-provider I/O outside the contract tier.
 - [ ] Affected `wiki-llm/` page updated in the same commit, written to the `token-optimize` skill's rules inline (AGENTS.md §0); full skill run only for a new page or large rewrite; new page ⇒ `index.md` row.
-- [ ] Comments only where the WHY is unrecoverable from the code.
+- [ ] No new comment except a true edge-case WHY the code cannot express; none that narrate an edit, mark a fix, or restate code (AGENTS.md §Code Comments).
 - [ ] Formatter run before commit.
 
 ## Documentation split

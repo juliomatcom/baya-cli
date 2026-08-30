@@ -14,6 +14,7 @@
 - **Scoped Mechanical Edit Delegation:** Execute directly in-thread if the active model is already strong enough for the task at hand. Never spawn a subagent if the active model can perform the task in-thread. Do not delegate trivial edits or edits requiring repository-wide context or specification interpretation.
 - **Repository Skills:** Read `.agents/skills/<skill>/SKILL.md` before using a repository skill.
 - **Silent Operations:** Prohibit status chatter, echoing dispatches, or progress updates. Output only standard completion status or errors.
+- **Code Comments (default: none):** Assume the reader reads code. Write a comment ONLY for a true edge case — a WHY the code cannot express: workaround for an external bug, non-obvious constraint, deliberately counterintuitive logic. Prohibit comments that narrate an edit, mark a fix/correction/change, restate the code, or describe what a name already says. Route architectural, protocol, and design explanation to `wiki-llm/`, never inline. When editing a line, delete adjacent obsolete or now-obvious comments.
 - **Memory Protocol (`MEMORY.md`):**
   - **Lazy Read:** Prohibit auto-loading `MEMORY.md` at session start. Query/grep `MEMORY.md` on-demand ONLY during cross-task failure recovery or explicit user invocation.
   - **Explicit Write Triggers:** Write or update `MEMORY.md` ONLY upon discovering unscripted tooling quirks, non-obvious workspace failures, or explicit user command.
@@ -40,5 +41,5 @@
    - [ ] Automated tests pass cleanly (zero real DB/network I/O; mocked dependencies).
    - [ ] Full verification command runs clean (e.g. `npm run typecheck && npm run lint && npm test` — fill in your actual command).
    - [ ] Zero raw `console.*` statements; log via the shared logger.
-   - [ ] Comments present ONLY where the WHY is unrecoverable from the code.
+   - [ ] No new comment except a true edge-case WHY (see Code Comments); zero edit-narrating or restating comments.
    - [ ] Formatter run before commit.
