@@ -91,8 +91,7 @@ function state(overrides: Partial<RunState> = {}): RunState {
   };
 }
 
-const report = (s = state()) =>
-  buildReport(s, manifest, { runDir: "/w/.baya/runs/r" });
+const report = (s = state()) => buildReport(s, manifest, { runDir: "/w/.baya/runs/r" });
 
 describe("buildReport", () => {
   it("aggregates every note across tasks, action_required first", () => {
