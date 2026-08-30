@@ -2,7 +2,7 @@
 
 exports[`renderReport matches the recorded output 1`] = `
 "
-  Run complete · 2 succeeded · 47.0s · $0.42
+   ✓ Run complete  2 succeeded · 47.0s · $0.42
 
   Flagged
     ⚑ deploy-cfg     set STRIPE_WEBHOOK_SECRET before shipping
@@ -15,7 +15,7 @@ exports[`renderReport matches the recorded output 1`] = `
 
 exports[`renderReport omits the Flagged section entirely when there are no notes 1`] = `
 "
-  Run complete · 2 succeeded · 47.0s · $0.42
+   ✓ Run complete  2 succeeded · 47.0s · $0.42
 
   Outputs   .baya/runs/r/tasks/<id>/output.md
 "

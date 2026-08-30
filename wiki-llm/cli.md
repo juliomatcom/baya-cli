@@ -151,7 +151,7 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
 ### End-of-run report
 
 ```
-  Run complete · 5 succeeded · 0 failed · 47s · $0.42
+   ✓ Run complete  5 succeeded · 47s · 2 processes · 114k tokens
 
   Flagged
     ! gen-schema   migration locks `users` for ~30s on tables over 1M rows
@@ -159,6 +159,18 @@ Provider output streamed **live at `info`** — watch each model work, don't wai
 
   Outputs   .baya/runs/20260828T2152Z-a1f4c9-3182/tasks/<id>/output.md
 ```
+
+The headline is a filled badge, graded on **how much of the run landed** — not on whether anything threw:
+
+| Badge                   | Reads    | When                                                                                                     |
+| :---------------------- | :------- | :------------------------------------------------------------------------------------------------------- |
+| green `✓ Run complete`  | complete | every task `succeeded`                                                                                   |
+| yellow `! Run finished` | partial  | some succeeded, some did not — **including a run with nothing `failed` but tasks `skipped` or `parked`** |
+| red `✗ Run failed`      | failed   | nothing succeeded                                                                                        |
+
+`badge` is `theme`'s loudest token and this is its only caller; a second one costs this one its emphasis. Foreground is always set with the background — a background over the terminal's default foreground is how output becomes unreadable on someone else's scheme. Every badge pairs with a glyph, so `--no-color` loses nothing.
+
+`processes` counts provider processes actually spawned (execution.md §Grouping), not tasks — the number that says whether grouping is earning its place. Omitted for a single-task run. Also on the `--json` report as `processes`.
 
 **Flagged** aggregates every `notes[]` entry across all tasks, `action_required` first, printed last. No notes ⇒ section omitted. `--json` carries per-task `notes` + an aggregated `flagged` array — nothing terminal-only is lost to a pipe.
 

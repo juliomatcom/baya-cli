@@ -45,6 +45,16 @@ export interface Theme {
   glyphs: Record<StatusToken, string>;
   /** The glyph for `token`, colored with that token's style — the compact "✓ " marker. */
   status: (token: StatusToken) => string;
+  /**
+   * A filled block, for the one line in a run that must not be scrolled past.
+   * Deliberately rare: it is the loudest thing this theme can do, so a second
+   * caller would cost the first its emphasis.
+   *
+   * The foreground is always set explicitly. A background paired with the
+   * terminal's default foreground is the classic way to produce unreadable
+   * output on somebody else's color scheme.
+   */
+  badge: (token: "ok" | "warn" | "fail", text: string) => string;
   readonly level: 0 | 1 | 2 | 3;
 }
 
@@ -63,6 +73,13 @@ export function createTheme(mode: ColorMode = "auto"): Theme {
   const warn = (text: string): string => c.yellow(text);
   const action = (text: string): string => c.bold.yellow(text);
   const note = (text: string): string => c.dim(text);
+
+  const badge = (token: "ok" | "warn" | "fail", text: string): string =>
+    token === "ok"
+      ? c.bgGreen.black(text)
+      : token === "warn"
+        ? c.bgYellow.black(text)
+        : c.bgRed.white(text);
 
   const byToken: Record<StatusToken, (text: string) => string> = {
     ok,
@@ -90,6 +107,7 @@ export function createTheme(mode: ColorMode = "auto"): Theme {
     note,
     glyphs: { ...GLYPHS },
     status: (token) => byToken[token](GLYPHS[token]),
+    badge,
     level,
   };
 }

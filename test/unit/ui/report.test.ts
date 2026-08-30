@@ -182,3 +182,96 @@ describe("renderReport", () => {
     expect(renderReport(report(), theme)).toContain(".baya/runs/r/tasks/<id>/output.md");
   });
 });
+
+describe("process count", () => {
+  const started = "2026-08-28T21:52:04.000Z";
+
+  const report = (tasks: RunState["tasks"]) =>
+    buildReport(state({ tasks }), manifest, { outputsPath: "/out" });
+
+  it("counts one process for a whole group, not one per task", () => {
+    const { processes } = report({
+      "gen-schema": emptyTaskEntry({
+        state: "succeeded",
+        started_at: started,
+        group_id: "gen-schema",
+      }),
+      "deploy-cfg": emptyTaskEntry({
+        state: "succeeded",
+        started_at: started,
+        group_id: "gen-schema",
+      }),
+    });
+    expect(processes).toBe(1);
+  });
+
+  it("counts an ungrouped task as its own process", () => {
+    const { processes } = report({
+      "gen-schema": emptyTaskEntry({ state: "succeeded", started_at: started }),
+      "deploy-cfg": emptyTaskEntry({ state: "succeeded", started_at: started }),
+    });
+    expect(processes).toBe(2);
+  });
+
+  /** A skipped task never reached `running`, so no CLI was ever launched for it. */
+  it("does not count a task that never spawned", () => {
+    const { processes } = report({
+      "gen-schema": emptyTaskEntry({ state: "failed", started_at: started }),
+      "deploy-cfg": emptyTaskEntry({ state: "skipped", blocked_by: "gen-schema" }),
+    });
+    expect(processes).toBe(1);
+  });
+
+  it("shows the count in the summary, and says nothing for a single task", () => {
+    const many = renderReport(
+      report({
+        "gen-schema": emptyTaskEntry({ state: "succeeded", started_at: started }),
+        "deploy-cfg": emptyTaskEntry({ state: "succeeded", started_at: started }),
+      }),
+      theme,
+    );
+    expect(many).toContain("2 processes");
+
+    const one = buildReport(
+      state({
+        tasks: {
+          "gen-schema": emptyTaskEntry({ state: "succeeded", started_at: started }),
+        },
+      }),
+      { ...manifest, tasks: [manifest.tasks[0]!] },
+      { outputsPath: "/out" },
+    );
+    expect(renderReport(one, theme)).not.toContain("process");
+  });
+});
+
+/**
+ * The badge is graded on how much of the run landed, not on whether anything
+ * threw. A run with nothing `failed` but half its tasks `skipped` did not
+ * complete, and the old `failed > 0` test called that one green.
+ */
+describe("outcome badge", () => {
+  const summary = (totals: Partial<RunState["totals"]>) =>
+    renderReport(
+      buildReport(
+        state({ totals: { ...state().totals, ...totals } as RunState["totals"] }),
+        manifest,
+        { outputsPath: "/out" },
+      ),
+      theme,
+    );
+
+  it("is complete only when every task succeeded", () => {
+    expect(summary({ succeeded: 2 })).toContain("Run complete");
+  });
+
+  it("is finished, not complete, when some tasks did not succeed", () => {
+    expect(summary({ succeeded: 1, failed: 1 })).toContain("Run finished");
+    // Nothing failed here — the tasks were skipped — and it still is not complete.
+    expect(summary({ succeeded: 1, skipped: 1 })).toContain("Run finished");
+  });
+
+  it("is failed when nothing succeeded", () => {
+    expect(summary({ succeeded: 0, failed: 2 })).toContain("Run failed");
+  });
+});
