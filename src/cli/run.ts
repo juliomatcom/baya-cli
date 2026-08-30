@@ -588,7 +588,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     store.setStatus(store.get().totals.failed > 0 ? "failed" : "completed");
     const state = store.get() as RunState;
     const report = buildReport(state, manifest, {
-      outputsPath: `${paths.runDir}/tasks/<id>/output.md`,
+      runDir: paths.runDir,
       summaries,
     });
     writeFileSync(paths.report, `${JSON.stringify(report, null, 2)}\n`, "utf8");

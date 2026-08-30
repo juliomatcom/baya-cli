@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { Manifest, Note, NoteSeverity } from "../manifest/index.js";
 import type { RunState } from "../executor/state.js";
 import type { Theme } from "./theme.js";
@@ -50,6 +51,9 @@ export interface RunReport {
   tasks: ReportTask[];
   /** Every note across every task, `action_required` first. */
   flagged: FlaggedNote[];
+  /** Absolute run directory — where `state.json`, the log and `tasks/` live. */
+  run_dir: string;
+  /** Absolute `tasks/` directory. Every task's `output.md` sits one level in. */
   outputs_path: string;
   exit_code: number;
 }
@@ -63,7 +67,7 @@ const SEVERITY_ORDER: Record<NoteSeverity, number> = {
 export function buildReport(
   state: RunState,
   manifest: Manifest,
-  options: { outputsPath: string; summaries?: ReadonlyMap<string, string> },
+  options: { runDir: string; summaries?: ReadonlyMap<string, string> },
 ): RunReport {
   const titles = new Map(manifest.tasks.map((task) => [task.id, task.title]));
 
@@ -116,7 +120,8 @@ export function buildReport(
     processes,
     tasks: tasks.map((task) => ({ ...task, title: titles.get(task.id) ?? task.title })),
     flagged,
-    outputs_path: options.outputsPath,
+    run_dir: options.runDir,
+    outputs_path: join(options.runDir, "tasks"),
     exit_code: exitCodeFor(state),
   };
 }
@@ -149,20 +154,32 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   // threw: a run with nothing `failed` but half its tasks `skipped` or `parked`
   // did not complete, and a green badge over it would be the report lying about
   // the one thing a glance is for.
+  //
+  // `paused` is its own outcome and outranks the succeeded/total grade. A task
+  // that asked a question did exactly what the protocol asks of it — reporting
+  // that as a failure blames the agent for the one behavior escalation exists
+  // to produce, and hides the real state: the run is waiting on a human.
   const total = report.tasks.length;
-  const outcome: "ok" | "warn" | "fail" =
+  const outcome: "ok" | "warn" | "fail" | "paused" =
     total === 0 || totals.succeeded === total
       ? "ok"
-      : totals.succeeded === 0
-        ? "fail"
-        : "warn";
+      : totals.failed === 0 && totals.parked > 0
+        ? "paused"
+        : totals.succeeded === 0
+          ? "fail"
+          : "warn";
   const headline =
     outcome === "ok"
       ? "Run complete"
-      : outcome === "fail"
-        ? "Run failed"
-        : "Run finished";
-  const glyph = theme.glyphs[outcome];
+      : outcome === "paused"
+        ? "Run paused"
+        : outcome === "fail"
+          ? "Run failed"
+          : "Run finished";
+  // A paused run is unfinished, not wrong: it wears the warn badge, with the
+  // pause glyph rather than the warning one.
+  const badgeToken = outcome === "paused" ? "warn" : outcome;
+  const glyph = outcome === "paused" ? theme.glyphs.park : theme.glyphs[outcome];
   // codex and claude report tokens, not dollars — show what we actually have.
   // The `$` figure stays only when a provider gave us one (cli.md: no fabricated
   // cost). See spec §Non-goals — cost accounting is v1.1.
@@ -179,7 +196,7 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   // Hierarchy, loudest first: a filled badge for the outcome, colored counts
   // for what happened, and the meters dimmed — they are reference numbers, not
   // the news. Without the dimming the badge competes with a row of equals.
-  const badge = theme.badge(outcome, ` ${glyph} ${headline} `);
+  const badge = theme.badge(badgeToken, ` ${glyph} ${headline} `);
   const meters = [formatDuration(report.duration_ms), ...meter];
   lines.push(`  ${badge} ${parts.join(" · ")} ${theme.note(`· ${meters.join(" · ")}`)}`);
 
@@ -200,6 +217,14 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
     }
   }
 
-  lines.push("", `  ${theme.note("Outputs")}   ${report.outputs_path}`, "");
+  // The path a reader can actually open. A `<id>` placeholder made them
+  // reconstruct it by hand, so a single-task run names its one file outright
+  // and a larger run names the directory that holds them all.
+  const written = report.tasks.filter((task) => task.output_path !== null);
+  const outputs =
+    written.length === 1 && written[0] !== undefined
+      ? join(report.run_dir, written[0].output_path as string)
+      : report.outputs_path;
+  lines.push("", `  ${theme.note("Outputs")}   ${outputs}`, "");
   return lines.join("\n");
 }

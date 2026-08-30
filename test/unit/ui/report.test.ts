@@ -92,7 +92,7 @@ function state(overrides: Partial<RunState> = {}): RunState {
 }
 
 const report = (s = state()) =>
-  buildReport(s, manifest, { outputsPath: ".baya/runs/r/tasks/<id>/output.md" });
+  buildReport(s, manifest, { runDir: "/w/.baya/runs/r" });
 
 describe("buildReport", () => {
   it("aggregates every note across tasks, action_required first", () => {
@@ -178,8 +178,30 @@ describe("renderReport", () => {
     expect(text).not.toContain("$0.00");
   });
 
-  it("always points at the outputs directory", () => {
-    expect(renderReport(report(), theme)).toContain(".baya/runs/r/tasks/<id>/output.md");
+  // A `<id>` placeholder in this line left the reader to assemble the path by
+  // hand — the one thing the line exists to spare them.
+  it("names the file itself when a single task wrote an output", () => {
+    expect(renderReport(report(), theme)).toContain(
+      "/w/.baya/runs/r/tasks/gen-schema/output.md",
+    );
+  });
+
+  it("names the directory when several tasks wrote outputs", () => {
+    const both = state({
+      tasks: {
+        "gen-schema": emptyTaskEntry({
+          state: "succeeded",
+          artifacts: { output: "tasks/gen-schema/output.md" },
+        }),
+        "deploy-cfg": emptyTaskEntry({
+          state: "succeeded",
+          artifacts: { output: "tasks/deploy-cfg/output.md" },
+        }),
+      },
+    });
+    const text = renderReport(report(both), theme);
+    expect(text).toContain("/w/.baya/runs/r/tasks");
+    expect(text).not.toContain("output.md");
   });
 });
 
@@ -187,7 +209,7 @@ describe("process count", () => {
   const started = "2026-08-28T21:52:04.000Z";
 
   const report = (tasks: RunState["tasks"]) =>
-    buildReport(state({ tasks }), manifest, { outputsPath: "/out" });
+    buildReport(state({ tasks }), manifest, { runDir: "/out" });
 
   it("counts one process for a whole group, not one per task", () => {
     const { processes } = report({
@@ -239,7 +261,7 @@ describe("process count", () => {
         },
       }),
       { ...manifest, tasks: [manifest.tasks[0]!] },
-      { outputsPath: "/out" },
+      { runDir: "/out" },
     );
     expect(renderReport(one, theme)).not.toContain("process");
   });
@@ -256,7 +278,7 @@ describe("outcome badge", () => {
       buildReport(
         state({ totals: { ...state().totals, ...totals } as RunState["totals"] }),
         manifest,
-        { outputsPath: "/out" },
+        { runDir: "/out" },
       ),
       theme,
     );
@@ -273,5 +295,17 @@ describe("outcome badge", () => {
 
   it("is failed when nothing succeeded", () => {
     expect(summary({ succeeded: 0, failed: 2 })).toContain("Run failed");
+  });
+
+  // A question is the escalation protocol working, not an agent failing: a run
+  // waiting on a human is paused, whatever else did or did not land.
+  it("is paused when a task asked a question and nothing failed", () => {
+    expect(summary({ succeeded: 0, parked: 1 })).toContain("Run paused");
+    expect(summary({ succeeded: 1, parked: 1 })).toContain("Run paused");
+    expect(summary({ succeeded: 0, parked: 1 })).not.toContain("Run failed");
+  });
+
+  it("is failed, not paused, when something actually failed alongside", () => {
+    expect(summary({ succeeded: 0, failed: 1, parked: 1 })).toContain("Run failed");
   });
 });
