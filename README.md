@@ -27,19 +27,19 @@ No config format to learn. No DSL. No API keys for every provider — it drives 
 npm install -g baya-cli   # binary: baya
 ```
 
-Requires **Node 24+** and at least one supported CLI on your machine. Run `baya doctor` to see what it found.
+- Requires **Node 24+** and at least one supported CLI on your machine. Run `baya doctor` to see what it found.  
+- On first run `baya` asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
 
 ## Usage
 
 ```txt
-1 which model are you? - luna
-2 which model are you? - sonnet
-3 which model are you? - terra
+1. Which model are you? State your actual model name and version. — luna
+2. Which model are you? State your actual model name and version. — sonnet
+3. Which model are you? State your actual model name and version. — mimo
 ```
+<img width="833" height="398" alt="Screenshot 2026-08-31 at 16 29 48" src="https://github.com/user-attachments/assets/cf5920d7-5b9f-49ad-91c9-89b0fc3a7637" />
 
-![Basic example](https://github.com/user-attachments/assets/47541304-b19f-4044-9382-4da8f86ed170)
-
-📝 On first run `baya` asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
+[▶️ Full demo](https://github.com/user-attachments/assets/f78724f7-3b88-4e26-a642-7e66471fe141)
 
 ### The task list
 
