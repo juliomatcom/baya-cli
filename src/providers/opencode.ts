@@ -10,6 +10,8 @@ import type {
   SpawnPlan,
 } from "./types.js";
 
+export const OPENCODE_PROVIDER = "opencode" as const;
+
 /**
  * opencode adapter (providers.md §opencode, flags verified live 2026-08-28;
  * **success path unverified** — the reference machine's opencode holds an
@@ -110,7 +112,7 @@ function collectText(events: ProviderEvent[]): string {
 }
 
 export const opencodeAdapter: ProviderAdapter = {
-  id: "opencode",
+  id: OPENCODE_PROVIDER,
 
   capabilities: {
     promptDelivery: ["file", "argv"],

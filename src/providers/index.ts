@@ -37,7 +37,7 @@ export {
 } from "./catalog.js";
 export { codexAdapter } from "./codex.js";
 export { claudeAdapter } from "./claude.js";
-export { opencodeAdapter } from "./opencode.js";
+export { OPENCODE_PROVIDER, opencodeAdapter } from "./opencode.js";
 export { copilotAdapter } from "./copilot.js";
 export {
   V1_ADAPTERS,

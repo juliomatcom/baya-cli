@@ -18,6 +18,7 @@ import {
   createDefaultRegistry,
   enumerateModels,
   mergeCatalog,
+  OPENCODE_PROVIDER,
   withoutBuiltinEntries,
   type Registry,
 } from "../providers/index.js";
@@ -230,6 +231,20 @@ function modelsCommand(
       const cells = `${row.id.padEnd(idWidth)}  ${row.aliases.padEnd(aliasWidth)}  ${row.description.padEnd(descWidth)}`;
       lines.push(`    ${cells}  ${theme.note(row.tag)}`);
     }
+  }
+  // `opencode` ships no built-in list — it is enumerated live and cached by
+  // `refresh-models`. Installing it after setup therefore leaves it with zero
+  // entries, and the loop above would drop it from the output entirely: the
+  // models look like they do not exist rather than like they were never read.
+  if (
+    (filter === undefined || filter === OPENCODE_PROVIDER) &&
+    (effective[OPENCODE_PROVIDER] ?? []).length === 0
+  ) {
+    lines.push(
+      "",
+      `  ${theme.provider(OPENCODE_PROVIDER)}`,
+      `    ${theme.note(`no models cached — run \`baya config refresh-models\` if ${OPENCODE_PROVIDER} is installed`)}`,
+    );
   }
   lines.push("", `  ${theme.note("user config")}    ${loaded.userPath}`, "");
   io.stdout.write(`${lines.join("\n")}\n`);

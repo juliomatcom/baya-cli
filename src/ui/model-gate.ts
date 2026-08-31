@@ -5,7 +5,12 @@ import {
   type ProviderId,
   type Task,
 } from "../manifest/index.js";
-import { resolveModel, type Catalog, type ResolvedModel } from "../providers/index.js";
+import {
+  OPENCODE_PROVIDER,
+  resolveModel,
+  type Catalog,
+  type ResolvedModel,
+} from "../providers/index.js";
 import type { Theme } from "./theme.js";
 
 /**
@@ -166,6 +171,19 @@ export function buildModelAsk(
   };
 }
 
+/**
+ * Every way out of an unresolved name, in one place. `opencode` is named first
+ * because its catalog is a *cache*: it ships empty and is filled by
+ * `refresh-models`, so installing `opencode` after setup leaves every one of
+ * its ~190 model ids invisible to the gate until that command runs.
+ */
+const MODEL_GATE_REMEDY = [
+  "  Fix the name in the task list, or:",
+  `    baya config refresh-models              re-read \`${OPENCODE_PROVIDER} models\` into the catalog`,
+  "    baya models [provider]                  list what the catalog knows",
+  "    baya config set modelAliases.<name> <id>  teach it your own name",
+].join("\n");
+
 function unresolvedMessage(asks: TaskModelAsk[]): string {
   const lines = asks.map(
     (ask) =>
@@ -178,9 +196,10 @@ function unresolvedMessage(asks: TaskModelAsk[]): string {
     "the task list names models that could not be resolved:",
     ...lines,
     "",
-    "Fix the name in the list, add a `modelAliases` entry (`baya config set modelAliases.<name> <id>`),",
-    "run `baya config refresh-models`, or pass --default-model to override. A named model is never",
-    "silently replaced with the default.",
+    MODEL_GATE_REMEDY,
+    "    --default-model <id>                    override the run's default",
+    "",
+    "  A named model is never silently replaced with the default.",
   ].join("\n");
 }
 
@@ -226,7 +245,9 @@ export async function runModelGate(options: ModelGateOptions): Promise<ModelGate
     if (answer === EXIT) {
       return {
         decision: "aborted",
-        message: `stopped at the model gate — ${ask.taskId} names "${ask.requested}".`,
+        message:
+          `stopped at the model gate — ${ask.taskId} names "${ask.requested}".\n` +
+          MODEL_GATE_REMEDY,
       };
     }
     const picked = JSON.parse(answer) as { provider: ProviderId; model: string | null };
