@@ -21,6 +21,7 @@ export default {
   testPathIgnorePatterns: [
     "/node_modules/",
     "/dist/",
+    "<rootDir>/.history/",
     "<rootDir>/test/fixtures/",
     "<rootDir>/test/contract/",
   ],

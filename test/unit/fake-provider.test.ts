@@ -5,6 +5,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * `ps` is absent or blocked in some sandboxes, and there it reports no
+ * children rather than failing — which would pass this suite while asserting
+ * nothing. Probed once so those cases skip loudly instead.
+ */
+const PS_AVAILABLE = ((): boolean => {
+  const probe = spawnSync("ps", ["-A", "-o", "pid=,ppid="]);
+  return probe.status === 0 && probe.stdout !== null && probe.stdout.length > 0;
+})();
+
 /** Finds pids whose ppid matches, via `ps` (portable across BSD/GNU). */
 function childPids(ppid: number): number[] {
   const result = spawnSync("ps", ["-A", "-o", "pid=,ppid="]);
@@ -114,26 +124,29 @@ describe("fake-provider.mjs", () => {
     });
   });
 
-  it("spawn_child spawns a detached grandchild that outlives signal handling", async () => {
-    const child = spawnFakeProvider({
-      hang_ms: 5000,
-      spawn_child: true,
-      on_signal: "ignore",
-    });
-    await sleep(150);
+  (PS_AVAILABLE ? it : it.skip)(
+    "spawn_child spawns a grandchild that outlives the provider's own signal handling",
+    async () => {
+      const child = spawnFakeProvider({
+        hang_ms: 5000,
+        spawn_child: true,
+        on_signal: "ignore",
+      });
+      await sleep(150);
 
-    expect(child.pid).toBeDefined();
-    const grandchildren = childPids(child.pid!);
-    expect(grandchildren.length).toBeGreaterThan(0);
+      expect(child.pid).toBeDefined();
+      const grandchildren = childPids(child.pid!);
+      expect(grandchildren.length).toBeGreaterThan(0);
 
-    for (const pid of grandchildren) {
-      try {
-        process.kill(pid, "SIGKILL");
-      } catch {
-        // already gone
+      for (const pid of grandchildren) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // already gone
+        }
       }
-    }
-    child.kill("SIGKILL");
-    await new Promise<void>((resolve) => child.on("close", () => resolve()));
-  });
+      child.kill("SIGKILL");
+      await new Promise<void>((resolve) => child.on("close", () => resolve()));
+    },
+  );
 });

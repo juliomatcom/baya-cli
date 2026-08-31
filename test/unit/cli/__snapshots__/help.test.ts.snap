@@ -32,6 +32,7 @@ OPTIONS
   --group-size <n>           max tasks per provider process (default 3)
   --max-parallel <n>         global process concurrency (default min(4, cpus))
   --on-error <mode>          continue (default) | stop
+  --retries <n>              extra attempts on a transient failure (default 1)
   --provider <id>            resume only: re-run the unfinished tasks elsewhere
   --dangerously-allow-all    full permission bypass
   --json                     machine-readable run report on stdout

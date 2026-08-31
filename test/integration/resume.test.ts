@@ -96,7 +96,10 @@ describe("baya resume", () => {
     expect(state.run_id).toBe(runId);
     expect(state.totals).toMatchObject({ succeeded: 3, failed: 0, skipped: 0 });
     expect(state.tasks["design"]?.attempts).toBe(1);
-    expect(state.tasks["build"]?.attempts).toBe(2);
+    // `attempts` is the task's lifetime process count, not per-resume: one
+    // initial attempt, one `--retries` retry inside the failed run, one more on
+    // resume. A resume does not reset it or refill the retry budget.
+    expect(state.tasks["build"]?.attempts).toBe(3);
     expect(state.tasks["design"]?.ended_at).toBe(
       (JSON.parse(before) as typeof state).tasks["design"]?.ended_at,
     );

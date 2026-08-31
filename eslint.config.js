@@ -11,6 +11,7 @@ export default tseslint.config(
       "dist/**",
       "coverage/**",
       ".baya/**",
+      ".history/**",
       "node_modules/**",
       "test/fixtures/**",
     ],
