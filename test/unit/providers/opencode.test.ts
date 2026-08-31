@@ -58,18 +58,41 @@ describe('opencodeAdapter.buildRun argv', () => {
     expect(opencodeAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
-  it('delivers the prompt by file, never argv, never stdin', () => {
+  // The bug this pins: `-f` *attaches* a file, it is not the message. An argv
+  // carrying only `-f prompt.md` reaches no model — opencode exits 1 with
+  // "You must provide a message or a command". The prompt must be the trailing
+  // positional, and nothing may follow it.
+  it('delivers the prompt as the trailing positional, never by -f, never stdin', () => {
     const plan = opencodeAdapter.buildRun(input());
     expect(plan.stdin).toBe('ignore');
-    expect(plan.argv).not.toContain('do the thing');
-    expect(plan.files).toEqual([
+    expect(plan.argv.at(-1)).toBe('do the thing');
+    expect(plan.argv).not.toContain('-f');
+  });
+
+  // yargs reads a leading `-` as a flag: without the separator opencode prints
+  // its help text and exits rather than running the prompt.
+  it('separates the prompt from the flags with --', () => {
+    for (const plan of [
+      opencodeAdapter.buildRun(input({ prompt: '--do the thing' })),
+      opencodeAdapter.buildResume('ses_abc', '-use postgres', input()),
+    ]) {
+      expect(plan.argv.at(-2)).toBe('--');
+    }
+  });
+
+  it('still records the prompt on disk for the run directory', () => {
+    expect(opencodeAdapter.buildRun(input()).files).toEqual([
       {
         path: '/work/.baya/runs/r1/tasks/gen-schema/prompt.md',
         contents: 'do the thing',
       },
     ]);
-    const fileArg = plan.argv[plan.argv.indexOf('-f') + 1];
-    expect(fileArg).toBe('/work/.baya/runs/r1/tasks/gen-schema/prompt.md');
+  });
+
+  it('sends the resume answer as the trailing positional too', () => {
+    const plan = opencodeAdapter.buildResume('ses_abc', 'use postgres', input());
+    expect(plan.argv.at(-1)).toBe('use postgres');
+    expect(plan.argv).not.toContain('-f');
   });
 
   it('passes -m only when a model is set, in compound provider/model form as given', () => {
@@ -191,17 +214,58 @@ describe('opencodeAdapter.extractResult', () => {
 });
 
 describe('opencodeAdapter.extractUsage', () => {
-  it('sums tokens and cost off step-finish lines', () => {
+  // Real opencode 1.18.25 `step_finish` line: tokens/cost live under `part`,
+  // and `part.tokens.input` is fresh-only with cache reads/writes alongside.
+  const stepFinish = (
+    input: number,
+    output: number,
+    cacheRead: number,
+    cost: number,
+  ): string =>
+    JSON.stringify({
+      type: 'step_finish',
+      sessionID: 'ses_abc',
+      part: {
+        type: 'step-finish',
+        reason: 'stop',
+        tokens: {
+          total: input + output + cacheRead,
+          input,
+          output,
+          reasoning: 0,
+          cache: { write: 0, read: cacheRead },
+        },
+        cost,
+      },
+    });
+
+  it('sums tokens and cost across step_finish lines, input gross of cache', () => {
     const events = opencodeAdapter.parseEvents(
-      [
-        '{"type":"step-finish","tokens":{"input":10,"output":4},"cost":0.01}',
-        '{"type":"step-finish","tokens":{"input":6,"output":2},"cost":0.02}',
-      ].join('\n'),
+      [stepFinish(10, 4, 100, 0.01), stepFinish(6, 2, 200, 0.02)].join('\n'),
     );
     expect(opencodeAdapter.extractUsage?.(events)).toEqual({
-      input_tokens: 16,
+      input_tokens: 316, // (10 + 6) fresh + (100 + 200) cache read
       output_tokens: 6,
+      cached_input_tokens: 300,
       cost_usd: 0.03,
     });
+  });
+
+  it('still reads a flat top-level shape', () => {
+    const events = opencodeAdapter.parseEvents(
+      '{"type":"step-finish","tokens":{"input":10,"output":4},"cost":0.01}',
+    );
+    expect(opencodeAdapter.extractUsage?.(events)).toEqual({
+      input_tokens: 10,
+      output_tokens: 4,
+      cost_usd: 0.01,
+    });
+  });
+
+  it('reports nothing when no usage lines are present', () => {
+    const events = opencodeAdapter.parseEvents(
+      '{"type":"step-start","sessionID":"ses_abc"}',
+    );
+    expect(opencodeAdapter.extractUsage?.(events)).toEqual({});
   });
 });

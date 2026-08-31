@@ -74,7 +74,18 @@ export function createProgress(options: ProgressOptions = {}): Progress {
 
     start(text: string): void {
       if (!enabled || disposed) return;
-      spinner ??= ora({ stream: stream as NodeJS.WriteStream, text });
+      // `discardStdin: false` is load-bearing. ora's default stdin discarder
+      // puts the TTY in raw mode and only re-emits SIGINT from a `data`
+      // listener it forgets to `resume()` when stdin was never paused (the
+      // default for an untouched `process.stdin`). Raw mode then eats Ctrl+C
+      // and the re-signal never fires, so the spinner running before the first
+      // prompt — planning — cannot be interrupted at all. Baya installs its
+      // own SIGINT teardown; it does not need ora holding stdin.
+      spinner ??= ora({
+        stream: stream as NodeJS.WriteStream,
+        text,
+        discardStdin: false,
+      });
       spinner.text = text;
       spinner.start();
     },

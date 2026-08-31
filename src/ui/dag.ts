@@ -24,14 +24,11 @@ export interface DagOptions {
 }
 
 /**
- * The plan preview shown at the confirmation gate. Stages, not a tree: the
- * question the user is answering is "what runs, and what waits for what",
- * and a staged view answers it at a glance.
- *
- * "Stage" is the user-facing word for what `topoLayers` calls a layer, borrowed
- * from CI (GitLab, Jenkins, Azure) where it already means exactly this — a group
- * that runs together while the next one waits. The graph module keeps saying
- * "layer": there it names the algorithm, not the thing a person reads.
+ * The plan preview shown at the confirmation gate: the task DAG drawn as a
+ * tree, each parent above its children, so "what waits for what" is the shape
+ * of the thing rather than a column of `← dep` notes. A task with more than one
+ * parent is drawn in full under the first and marked `(shown above)` under the
+ * rest — the repeat is the point, it shows a dependency two branches share.
  *
  * The provider column shows the *resolved* provider — after model-alias
  * routing — so `model: "sonnet"` reads as `claude sonnet`, not `default`. A
@@ -40,7 +37,7 @@ export interface DagOptions {
  *
  * ## Grouping
  *
- * Stages answer "what waits for what"; they do not answer "what shares a
+ * The tree answers "what waits for what"; it does not answer "what shares a
  * process", which is the other half of what the user is agreeing to and the
  * half that costs money and bounds blast radius. So each task also carries the
  * group it is projected into, and the header counts processes against tasks.
@@ -62,7 +59,6 @@ export function renderDag(
   }));
   const layers = topoLayers(nodes);
   const byId = new Map(manifest.tasks.map((task) => [task.id, task]));
-  const lines: string[] = [];
 
   // The resolved provider, shown in the provider column and keyed on for
   // grouping — one function so the two can never disagree.
@@ -70,9 +66,7 @@ export function renderDag(
     defaultProvider ? routeProvider(task, defaultProvider) : (task.provider ?? 'default');
 
   // The scheduler's key, built from the same defaults it will use: a task that
-  // pins the run's own model or cwd groups with one that pins nothing, and
-  // substituting `null` here instead would split them apart in the preview
-  // only.
+  // pins the run's own model or cwd groups with one that pins nothing.
   const cap = Math.max(1, options.groupSize ?? DEFAULT_GROUP_SIZE);
   const candidates = new Map<string, GroupCandidate>(
     manifest.tasks.map((task) => [
@@ -96,53 +90,78 @@ export function renderDag(
   }
   // With nothing packed, every task is its own process: the numbers would
   // repeat what the task list already says, so they are not printed at all.
-  // That is the `--group-size 1` view, and the view of a plan with no two
-  // groupable tasks in it.
   const packed = groups.some((group) => group.members.length > 1);
   const full = groups.filter((group) => group.members.length >= cap && cap > 1);
 
-  // The explainer earns its line only when some stage actually holds more than
-  // one task; with one task per stage there is no independence to explain.
-  //
-  // It states a property of the **graph**, not a promise about execution. It
-  // used to read "tasks in a stage don't wait on each other", which was false
-  // twice over: the executor is sequential until M2.1, and grouping
-  // deliberately puts a stage's tasks in one process to be worked through in
-  // order (execution.md §Grouping). What is true, and is the useful half, is
-  // that nothing here depends on anything else here — which is why they may
-  // share a process, and why one failing does not skip the others.
-  const hasIndependent = layers.some((layer) => layer.length > 1);
+  // Children in manifest order, so the plan renders and runs identically each time.
+  const childrenOf = new Map<string, string[]>(manifest.tasks.map((t) => [t.id, []]));
+  for (const task of manifest.tasks) {
+    for (const dep of task.depends_on) childrenOf.get(dep)?.push(task.id);
+  }
+  const roots = manifest.tasks
+    .filter((task) => task.depends_on.length === 0)
+    .map((task) => task.id);
+
+  interface Row {
+    /** The tree scaffold: prefix + connector + id, measured for column alignment. */
+    scaffold: string;
+    task: Task;
+    /** A second-or-later appearance of a task with more than one parent. */
+    ref: boolean;
+  }
+  const rows: Row[] = [];
+  const visited = new Set<string>();
+
+  const walk = (id: string, prefix: string, last: boolean): void => {
+    const task = byId.get(id);
+    if (!task) return;
+    const connector = last ? '└─ ' : '├─ ';
+    const seen = visited.has(id);
+    rows.push({ scaffold: `${prefix}${connector}${id}`, task, ref: seen });
+    if (seen) return;
+    visited.add(id);
+    const kids = childrenOf.get(id) ?? [];
+    const childPrefix = prefix + (last ? '   ' : '│  ');
+    kids.forEach((kid, index) => walk(kid, childPrefix, index === kids.length - 1));
+  };
+  roots.forEach((root, index) => walk(root, '  ', index === roots.length - 1));
+
+  const width = Math.max(0, ...rows.map((row) => row.scaffold.length));
+  const lines: string[] = [];
+
+  const taskCount = `${manifest.tasks.length} ${manifest.tasks.length === 1 ? 'task' : 'tasks'}`;
+  const stageCount = `${layers.length} ${layers.length === 1 ? 'stage' : 'stages'}`;
   lines.push(
     `  ${theme.taskId('Run order')} ${theme.note(
-      `· ${layers.length} ${layers.length === 1 ? 'stage' : 'stages'}${
+      `· ${taskCount} · ${stageCount}${
         packed
-          ? ` · ${manifest.tasks.length} tasks → ${groups.length} ${
-              groups.length === 1 ? 'process' : 'processes'
-            }`
+          ? ` · ${groups.length} ${groups.length === 1 ? 'process' : 'processes'}`
           : ''
-      }${hasIndependent ? ' · no dependencies within a stage' : ''}`,
+      }`,
     )}`,
     '',
   );
 
-  layers.forEach((layer, index) => {
-    lines.push(`  ${theme.note(`stage ${index + 1}`)}`);
-    for (const id of layer) {
-      const task = byId.get(id);
-      if (!task) continue;
-      const deps =
-        task.depends_on.length > 0 ? theme.note(` ← ${task.depends_on.join(', ')}`) : '';
-      // Only the tasks that may act are badged. Badging every read-only task
-      // too would spend the reader's attention on the harmless majority.
-      const access = task.access === 'read-write' ? theme.warn(' read-write') : '';
-      const provider = providerOf(task);
-      const label = task.model ? `${provider} ${task.model}` : provider;
-      const group = packed ? theme.note(` (group #${groupOf.get(id) ?? '?'})`) : '';
-      lines.push(
-        `    ${theme.status('pending')} ${theme.taskId(id.padEnd(16))} ${theme.provider(label.padEnd(18))} ${task.title}${access}${deps}${group}`,
-      );
+  for (const row of rows) {
+    const pad = ' '.repeat(width - row.scaffold.length + 2);
+    const tree = row.scaffold.slice(0, row.scaffold.length - row.task.id.length);
+    const scaffold = `${theme.note(tree)}${theme.taskId(row.task.id)}${pad}`;
+    if (row.ref) {
+      lines.push(`${scaffold}${theme.note('(shown above)')}`);
+      continue;
     }
-  });
+    const provider = providerOf(row.task);
+    const label = row.task.model ? `${provider} ${row.task.model}` : provider;
+    // Only the tasks that may act are badged. Badging every read-only task too
+    // would spend the reader's attention on the harmless majority.
+    const access = row.task.access === 'read-write' ? theme.warn('  read-write') : '';
+    const group = packed
+      ? theme.note(`  (group #${groupOf.get(row.task.id) ?? '?'})`)
+      : '';
+    lines.push(
+      `${scaffold}${theme.provider(label.padEnd(18))} ${row.task.title}${access}${group}`,
+    );
+  }
 
   if (packed) {
     lines.push(
@@ -151,12 +170,10 @@ export function renderDag(
         '· a group is one process worked through in order · projected from this plan, so a failure re-forms the groups after it',
       )}`,
     );
-    // The one thing a large group costs that a small one doesn't: the
-    // scheduler commits to the whole group before the first task runs, so a
-    // process that dies partway never reaches the rest.
+    // The one thing a large group costs that a small one doesn't: the scheduler
+    // commits to the whole group before the first task runs, so a process that
+    // dies partway never reaches the rest.
     if (full.length > 0) {
-      // Named while the list stays readable; counted once it doesn't. Which
-      // group is full stops being the useful fact when most of them are.
       const which =
         full.length === 1
           ? `group #${full[0]?.index} fills`

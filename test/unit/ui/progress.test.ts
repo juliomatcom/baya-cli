@@ -92,6 +92,40 @@ describe('progress.write', () => {
   });
 });
 
+describe('spinner does not hold stdin', () => {
+  // ora's default stdin discarder puts a TTY in raw mode, which suppresses the
+  // kernel's Ctrl+C→SIGINT before the first prompt runs. Baya owns its own
+  // SIGINT teardown, so `start()` must pass `discardStdin: false` and never
+  // touch stdin's raw mode.
+  it('never puts stdin into raw mode', () => {
+    const stdin = process.stdin as unknown as Record<string, unknown>;
+    const original: Record<string, unknown> = {
+      isTTY: stdin['isTTY'],
+      isRaw: stdin['isRaw'],
+      isPaused: stdin['isPaused'],
+      setRawMode: stdin['setRawMode'],
+    };
+    const rawModeCalls: boolean[] = [];
+    stdin['isTTY'] = true;
+    stdin['isRaw'] = false;
+    stdin['isPaused'] = () => false;
+    stdin['setRawMode'] = (mode: boolean) => {
+      rawModeCalls.push(mode);
+      return stdin;
+    };
+    try {
+      const { stream } = fakeTty();
+      const progress = createProgress({ stream, env: {}, installExitGuard: false });
+      progress.start('working');
+      progress.update('still working');
+      progress.dispose();
+      expect(rawModeCalls).toEqual([]);
+    } finally {
+      for (const key of Object.keys(original)) stdin[key] = original[key];
+    }
+  });
+});
+
 describe('cursor restoration', () => {
   it('emits the show-cursor escape on dispose — ora hides it', () => {
     const { stream, written } = fakeTty();
