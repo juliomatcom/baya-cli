@@ -1,4 +1,4 @@
-import { formGroup, groupKey } from "../../../src/executor/group.js";
+import { formGroup, groupKey, projectGroups } from "../../../src/executor/group.js";
 
 /**
  * The admission rule, which is the whole of grouping: same key, and every
@@ -107,5 +107,80 @@ describe("formGroup", () => {
       ["b", ["a"]],
     ];
     expect(form(chain, "b")).toEqual(["a", "b"]);
+  });
+});
+
+/**
+ * The plan gate's projection. What matters is that it agrees with the
+ * scheduler, so the assertions are about group membership — never about how
+ * the preview words it.
+ */
+describe("projectGroups", () => {
+  const project = (spec: Parameters<typeof graph>[0], cap = 3): string[][] => {
+    const { candidates } = graph(spec);
+    const nodes = spec.map(([id, depends_on]) => ({ id, depends_on }));
+    return projectGroups(nodes, candidates, cap).map((group) => group.members);
+  };
+
+  it("collapses a chain into one process, the way the scheduler would", () => {
+    expect(
+      project([
+        ["a", []],
+        ["b", ["a"]],
+        ["c", ["b"]],
+      ]),
+    ).toEqual([["a", "b", "c"]]);
+  });
+
+  it("splits on the grouping key", () => {
+    expect(
+      project([
+        ["a", []],
+        ["b", [], CLAUDE],
+      ]),
+    ).toEqual([["a"], ["b"]]);
+  });
+
+  it("packs a layer up to the cap and starts a new process for the rest", () => {
+    expect(
+      project([
+        ["a", []],
+        ["b", []],
+        ["c", []],
+        ["d", []],
+      ]),
+    ).toEqual([["a", "b", "c"], ["d"]]);
+  });
+
+  it("covers every task exactly once", () => {
+    const groups = project([
+      ["a", []],
+      ["b", ["a"]],
+      ["c", [], CLAUDE],
+      ["d", ["a", "c"]],
+    ]);
+    expect(groups.flat().sort()).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("gives every task its own process at a cap of one", () => {
+    expect(
+      project(
+        [
+          ["a", []],
+          ["b", ["a"]],
+        ],
+        1,
+      ),
+    ).toEqual([["a"], ["b"]]);
+  });
+
+  it("is deterministic — same manifest, same groups", () => {
+    const spec: Parameters<typeof graph>[0] = [
+      ["a", []],
+      ["b", []],
+      ["c", ["a"], CLAUDE],
+      ["d", ["b"]],
+    ];
+    expect(project(spec)).toEqual(project(spec));
   });
 });

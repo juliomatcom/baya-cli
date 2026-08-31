@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { runCli, taskResult } from "../helpers/runCli.js";
+import { DEFAULT_GROUP_SIZE } from "../../src/executor/index.js";
 
 /**
  * Cross-task memory, end to end (execution.md §Memory).
@@ -185,15 +186,17 @@ describe("a chain longer than the group cap", () => {
     const state = result.readJson(result.paths!.state) as {
       tasks: Record<string, { group_id: string | null }>;
     };
-    // Cap 6: the first six collapse into one process and the seventh starts
-    // the next — seven tasks, two spawns instead of seven.
-    for (const id of ids.slice(0, 6)) {
-      expect({ id, group: state.tasks[id]?.group_id }).toEqual({
-        id,
-        group: "step-one",
-      });
+    // The chain packs `DEFAULT_GROUP_SIZE` tasks at a time, so seven tasks
+    // cost ceil(7 / cap) spawns instead of seven. A lone task records no
+    // `group_id` — it is its own process.
+    const processes = ids.map((id) => state.tasks[id]?.group_id ?? id);
+    const distinct = [...new Set(processes)];
+    expect(distinct).toHaveLength(Math.ceil(ids.length / DEFAULT_GROUP_SIZE));
+    for (const leader of distinct) {
+      expect(processes.filter((id) => id === leader).length).toBeLessThanOrEqual(
+        DEFAULT_GROUP_SIZE,
+      );
     }
-    expect(state.tasks["step-seven"]?.group_id).toBeNull();
   });
 
   it("groups siblings too, not only chains", async () => {

@@ -29,8 +29,10 @@ export {
   DEFAULT_GROUP_SIZE,
   formGroup,
   groupKey,
+  projectGroups,
   type FormGroupInput,
   type GroupCandidate,
+  type ProjectedGroup,
 } from "./group.js";
 export {
   runSequential,
