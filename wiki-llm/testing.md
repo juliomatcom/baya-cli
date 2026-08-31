@@ -45,10 +45,15 @@ Required knobs, each mapping to a real failure mode:
 | `writes_file`                     | Workspace write-lock serialization                 |
 | `expect_stdin` / `expect_file`    | Prompt-delivery preference chain                   |
 | `by_task` map keyed by task id    | One scenario file scripting a whole multi-task run |
+| `fail_attempts: <n>`              | `--retries`: a transient failure that then clears  |
 
 Emulates the **codex file-out contract**: when argv carries `-o <path>`, `final` is written there (not stdout) and the task id is read back from `tasks/<id>/result.json`. This lets one scenario file script a whole run with no stdin coordination, and lets `test/helpers/runCli.ts` drive the real CLI end to end via a user-config binary override — exactly as a user would.
 
+Also emulates the **claude `--output-format json` contract**: argv carries `--output-format` and no `-o` ⇒ prompt read from stdin, task id off the prompt, `final` printed as one JSON object with the result string on `.result`. Lets a run stand a second, differently-shaped provider beside codex (the quota-halt case).
+
 Every engine test runs against this: zero network, zero LLM, zero cost, deterministic.
+
+`fail_attempts: <n>` is the only attempt-aware knob: the task answers a retryable `status: "failed"` and the process exits 1 for its first `n` invocations, then behaves normally. The counter lives beside the scenario file, keyed by task id, because every invocation is a fresh process. Needed because a retry is only observable across two attempts of the same task, and no other knob differs between them.
 
 New harness knob: `reject_stdin: "<substring>"` — exit 1 with nothing parseable when stdin carries it. Models a CLI refusing an invocation outright (a resume identifier it will not accept), which is structurally different from running and reporting failure through the schema.
 
@@ -75,6 +80,7 @@ Run tests via `npm test`, never bare `npx jest` (needs `--experimental-vm-module
 9. **Non-TTY** — `needs_input` with no TTY fails cleanly, never hangs (a hang here is the worst failure mode).
 10. **Plan round-trip** — `--plan-out` then `--plan-in` produces an identical execution.
 11. **Model gate** — a task-named model resolves via catalog/alias; an unresolvable name aborts (exit `2`), never defaults.
+12. **Quota halt** — two providers, one `quota`-fails partway; admission stops run-wide, in-flight work on the other provider finishes (not killed), never-started tasks are `skipped` carrying the quota `failure` (not a null dependency skip); `state.json` stays resumable and `baya resume` re-runs exactly the unfinished tasks, never the one that completed.
 
 ## Grouping & memory
 

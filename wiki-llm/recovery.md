@@ -13,7 +13,7 @@
 {
   "version": 1,
   "run_id": "20260828T2152Z-a1f4c9",
-  "status": "running | completed | failed | interrupted",
+  "status": "running | completed | paused | failed | interrupted",
   "started_at": "…",
   "updated_at": "…",
   "source": { "path": "tasks.md", "sha256": "9f2c…" },
@@ -70,8 +70,11 @@
 }
 ```
 
+- `status` — `paused` when the run loop ends with `parked` tasks and nothing `failed`; `baya resume` reads it to know work is left. Any failure ⇒ `failed`, even alongside parked tasks. Set in `src/cli/run.ts`.
+- `status: "paused"` did **not** bump `version`. "Schema changes bump `version`" means structural breaks — a renamed/removed/retyped field a reader misreads. Growing a closed enum is additive, like a new `failure.kind` (added without a bump). An older Baya hitting an unknown `status` fails `RunStateSchema` ⇒ the documented "malformed ⇒ report, stop" path, never a misread; a bump with no migration would strand every `version: 1` run.
 - `config_snapshot` — a resume reproduces the original run's settings, not silently-changed config.
 - `pid` — the child's process-group leader, checkpointed **before** the spawn so `baya doctor` can find a stray group after a crash.
+- `attempts` — lifetime count of provider processes launched for this task; a `retry:"now"` retry and a resume each add one, neither resets it. `--retries` is a whole-run budget — a resume does **not** refill it.
 - `blocked_by` — the failed ancestor that caused a `skipped` state.
 - `result_rung` — which degradation-ladder rung produced the result (`protocol.md` §4).
 - `cached_input_tokens` / `cache_write_input_tokens` — parts of `input_tokens`, kept apart because they are priced differently: a cache read costs about a tenth of fresh input, a write more than it. Fresh input is the remainder. **A single input figure is not a cost proxy** — collapsing the three made a run that cost 14% more read as 52% cheaper.
@@ -120,39 +123,48 @@ cd ../baya-feature-x && baya ./tasks.md
 
 Normalized from real provider signals (verified 2026-08-28, `providers.md`). Classifier: `src/executor/classify.ts`.
 
-| `kind`        | `retry`         | Detected from                                                                                                                                         |
-| :------------ | :-------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `quota`       | `later`         | copilot `errorCode:"quota_exceeded"` / `402`; "quota"/"exhausted"/"credit" in text                                                                    |
-| `rate_limit`  | `later`         | HTTP 429, "overloaded"; opencode `isRetryable:true`                                                                                                   |
-| `auth`        | `never`         | 401/403; opencode `error.kind:"auth"`; "api key"/"unauthorized"                                                                                       |
-| `network`     | `now`           | ECONNRESET / ETIMEDOUT / ENOTFOUND / "fetch failed"                                                                                                   |
-| `timeout`     | `now`           | Baya's `max_runtime_s` exceeded                                                                                                                       |
-| `permission`  | `never`         | claude `permission_denials[]`; "denied permission"; `--allow`/`--dangerously` hints                                                                   |
-| `schema`      | `now`           | result failed the degradation ladder ("unparseable"/"does not match task_result")                                                                     |
-| `crash`       | `now` / `never` | non-zero exit, no classified signal — `now` if adapter `retryable`, else `never`; a bad model name ("model not found"/"unrecognized model") ⇒ `never` |
-| `interrupted` | `now`           | SIGINT/SIGTERM teardown                                                                                                                               |
+| `kind`        | `retry`         | Detected from                                                                                                                                                                                                                                                      |
+| :------------ | :-------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quota`       | `later`         | copilot `errorCode:"quota_exceeded"` / `402`; "quota"/"exhausted"/"credit" in text; a named allowance — `session`/`usage`/`weekly`/`daily` limit — or any "limit … resets …" phrasing (checked before `rate_limit`, gated on **not** matching a rate-limit signal) |
+| `rate_limit`  | `later`         | HTTP 429, "rate limit", "overloaded", "too many requests", "try again in Ns"; opencode `isRetryable:true`. An OpenAI per-minute throttle ("Rate limit reached … tokens per min … rate-limits" URL) stays here, never `quota`                                       |
+| `auth`        | `never`         | 401/403; opencode `error.kind:"auth"`; "api key"/"unauthorized"                                                                                                                                                                                                    |
+| `network`     | `now`           | ECONNRESET / ETIMEDOUT / ENOTFOUND / "fetch failed"                                                                                                                                                                                                                |
+| `timeout`     | `now`           | Baya's `max_runtime_s` exceeded                                                                                                                                                                                                                                    |
+| `permission`  | `never`         | claude `permission_denials[]`; "denied permission"; `--allow`/`--dangerously` hints                                                                                                                                                                                |
+| `schema`      | `now`           | result failed the degradation ladder ("unparseable"/"does not match task_result")                                                                                                                                                                                  |
+| `crash`       | `now` / `never` | non-zero exit, no classified signal — `now` if adapter `retryable`, else `never`; a bad model name ("model not found"/"unrecognized model") ⇒ `never`                                                                                                              |
+| `interrupted` | `now`           | SIGINT/SIGTERM teardown                                                                                                                                                                                                                                            |
 
-**`retry:"later"` — `quota`/`auth` consume no in-run attempts.** Baya records the failure, stops scheduling for **that provider**, lets other providers' branches finish, leaves the run resumable — tomorrow or on a different provider, costing nothing already paid.
+**`retry:"later"`/`"never"` consume no in-run attempts.** A `quota` failure **halts the whole run** (execution.md §Failure semantics): admission stops, in-flight work drains, every unstarted task is `skipped`/`blocked_by` the quota task and carries its `failure`. `auth`/`permission` fail only their own task; independent branches continue. Either way the failure is recorded and the run stays resumable — tomorrow or, for `quota`, via `baya resume --provider`, costing nothing already paid.
 
 ## Resume
 
 ```bash
 baya runs                               # list resumable runs + ids
 baya resume <runId>                     # explicit
-baya resume                             # pick from a list
+baya resume                             # pick from a list; no TTY ⇒ exit 2
 baya resume <runId> --provider claude   # re-run unfinished work elsewhere
-baya resume <runId> --yes               # non-interactive: retry all retryable, skip the rest
 ```
 
 **`resume` never guesses.** Several runs can sit paused at once; picking "most recent" would resume the wrong one and spend real credits. No `runId` ⇒ picker; no TTY ⇒ exit `2`, points at `baya runs`.
 
 - **Re-run:** `failed`, `skipped`, `parked`, and any `running`/`pending` left by a crash.
-- **Kept:** every `succeeded` task + outputs, available as downstream context.
-- `--provider` overrides the provider for re-run tasks only.
+- **Kept:** every `succeeded` task + outputs, available as downstream context. Never re-run, never re-planned.
+- `--provider` overrides the provider for re-run tasks only; their `model` resets to that provider's default — a model resolved for the old provider need not exist on the new one.
+- Settings come from `config_snapshot`, not today's config. A flag passed to the `resume` invocation itself still wins.
+- Regroups from scratch; previous groups are never reconstructed.
 
-### Recovery prompt
+### A resume continues the original run, in the original directory
 
-Opens with the run's state, then actions ordered by `failure.kind`:
+Same `runId`, same `.baya/runs/<runId>/`, same `state.json`: unfinished tasks go back to `pending` and run again; `attempts` counts up; the log appends; per-task usage **accumulates** across attempts, because a failed attempt cost money too.
+
+Rejected alternative — a new run directory linked to the old one. A succeeded task's `result.json` + `output.md` **are** the upstream context a re-run task is handed, addressed relative to the run directory; a second directory means copying them forward or teaching every reader about a chain of runs, and it splits one logical run's cost across two `baya runs` rows. One run, one directory, one cost total.
+
+Code: `src/cli/resume.ts` (shell) · `src/executor/resume.ts` (`resumeTargets`/`resumeReset`, pure) · `src/ui/run-picker.ts` (`buildRunChoices` pure + a thin `select`).
+
+### Recovery prompt `M2.9`
+
+Not built yet — `baya resume <runId>` re-runs every unfinished task without asking. Planned: open with the run's state, then actions ordered by `failure.kind`:
 
 ```
 Run 20260828T2152Z-a1f4c9 · tasks.md · interrupted 4m ago
@@ -175,12 +187,12 @@ Run 20260828T2152Z-a1f4c9 · tasks.md · interrupted 4m ago
 
 ### Guards
 
-| Situation                                     | Behavior                                                                                                        |
-| :-------------------------------------------- | :-------------------------------------------------------------------------------------------------------------- |
-| `tasks.md` changed (`source.sha256` mismatch) | Warn plan is stale; offer re-plan / continue with stored manifest / abort. Never silently execute a stale plan. |
-| Another Baya running here                     | Directory lock refuses at startup — a second resume cannot double-spend.                                        |
-| Not a TTY                                     | No prompt. `--yes` retries everything retryable + skips the rest; else exit `2`.                                |
-| `state.json` unreadable / malformed           | Report the file, stop. Never silently start a fresh run.                                                        |
+| Situation                                     | Behavior                                                                                                                                            |
+| :-------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks.md` changed (`source.sha256` mismatch) | Warn, then run the manifest stored with the run — never silently, and never re-planned: re-planning mid-run would invalidate work already paid for. |
+| Another Baya running here                     | Directory lock refuses at startup — a second resume cannot double-spend.                                                                            |
+| Not a TTY                                     | No prompt. With a `runId`, resume runs unattended; without one, exit `2` and point at `baya runs`.                                                  |
+| `state.json` unreadable / malformed           | Report the file, stop. Never silently start a fresh run.                                                                                            |
 
 ## Progress display
 

@@ -1,4 +1,4 @@
-export { makeRunId, runPaths, type RunPaths } from "./paths.js";
+export { makeRunId, runPaths, type RunPaths } from './paths.js';
 export {
   FAILURE_KINDS,
   RunStateSchema,
@@ -14,17 +14,18 @@ export {
   type RunState,
   type TaskState,
   type TaskStateEntry,
-} from "./state.js";
+} from './state.js';
 export {
   createLineSplitter,
   killGroup,
   runProcess,
   type RunProcessOptions,
   type SpawnResult,
-} from "./spawn.js";
-export { classifyFailure, type ClassifyInput } from "./classify.js";
-export { renderGroupPrompt, renderPrompt } from "./prompt.js";
-export { executeGroup, type ExecuteGroupOptions, type GroupExecution } from "./task.js";
+  type Timers,
+} from './spawn.js';
+export { classifyFailure, type ClassifyInput } from './classify.js';
+export { renderGroupPrompt, renderPrompt } from './prompt.js';
+export { executeGroup, type ExecuteGroupOptions, type GroupExecution } from './task.js';
 export {
   DEFAULT_GROUP_SIZE,
   formGroup,
@@ -33,9 +34,20 @@ export {
   type FormGroupInput,
   type GroupCandidate,
   type ProjectedGroup,
-} from "./group.js";
+} from './group.js';
+export { AdmissionState, type AdmissionConfig, type GroupAdmission } from './budget.js';
+export { resumeReset, resumeTargets, type ResumeTargets } from './resume.js';
 export {
+  RESUMABLE_STATUSES,
+  buildRunRow,
+  selectRuns,
+  type RunRow,
+  type RunRowStatus,
+  type RunRowTotals,
+} from './runs.js';
+export {
+  DEFAULT_RETRIES,
   runSequential,
   type RunOutcome,
   type RunSequentialOptions,
-} from "./sequential.js";
+} from './sequential.js';

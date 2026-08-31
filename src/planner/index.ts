@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import {
   MANIFEST_VERSION,
   validateManifest,
@@ -7,15 +7,17 @@ import {
   type ProviderId,
   type Source,
   type ValidationError,
-} from "../manifest/index.js";
-import type { Logger } from "../log/index.js";
-import { stripAnsi } from "../log/index.js";
-import { linearFallback } from "./fallback.js";
-import { plannerPrompt, repairPrompt } from "./prompt.js";
+} from '../manifest/index.js';
+import type { Logger } from '../log/index.js';
+import { stripAnsi } from '../log/index.js';
+import { detectDoneMarkers, type DoneMarker } from './done.js';
+import { linearFallback } from './fallback.js';
+import { plannerPrompt, repairPrompt } from './prompt.js';
 
-export { linearFallback, slugify, splitSections } from "./fallback.js";
-export { plannerPrompt, repairPrompt } from "./prompt.js";
-export { runPlannerProvider, type RunPlannerProviderOptions } from "./provider.js";
+export { detectDoneMarkers, isDoneLine, type DoneMarker } from './done.js';
+export { linearFallback, slugify, splitSections } from './fallback.js';
+export { plannerPrompt, repairPrompt } from './prompt.js';
+export { runPlannerProvider, type RunPlannerProviderOptions } from './provider.js';
 
 /**
  * Reads the task list and its identity in one step; `sha256` guards resume.
@@ -24,8 +26,8 @@ export { runPlannerProvider, type RunPlannerProviderOptions } from "./provider.j
  * it fails, the deterministic fallback splitter) is what turns text into tasks.
  */
 export function readSource(path: string): { source: Source; taskText: string } {
-  const taskText = readFileSync(path, "utf8");
-  const sha256 = createHash("sha256").update(taskText, "utf8").digest("hex");
+  const taskText = readFileSync(path, 'utf8');
+  const sha256 = createHash('sha256').update(taskText, 'utf8').digest('hex');
   return { source: { path, sha256 }, taskText };
 }
 
@@ -35,7 +37,7 @@ export function readSource(path: string): { source: Source; taskText: string } {
  * Returns a user-facing message, or `null` when the text is usable.
  */
 export function checkTaskText(taskText: string, path: string): string | null {
-  if (taskText.trim() === "") {
+  if (taskText.trim() === '') {
     return `the task list at ${path} is empty`;
   }
   // A binary file decoded as "utf8" hands the planner mojibake it then chokes
@@ -75,9 +77,11 @@ export interface PlanOptions {
 
 export interface PlanResult {
   manifest: Manifest;
-  origin: "planner" | "fallback";
+  origin: 'planner' | 'fallback';
   attempts: number;
   warnings: string[];
+  /** Lines the task list marked as already done. No task is planned for these. */
+  doneMarkers: DoneMarker[];
 }
 
 const DEFAULT_MAX_REPAIRS = 2;
@@ -89,7 +93,7 @@ const DEFAULT_MAX_REPAIRS = 2;
  */
 export function parsePlanDraft(raw: string): unknown | null {
   const text = stripAnsi(raw).trim();
-  if (text === "") return null;
+  if (text === '') return null;
 
   try {
     return JSON.parse(text);
@@ -109,8 +113,8 @@ export function parsePlanDraft(raw: string): unknown | null {
 
 function draftToManifest(draft: unknown, source: Source): unknown {
   const tasks =
-    draft !== null && typeof draft === "object"
-      ? (draft as Record<string, unknown>)["tasks"]
+    draft !== null && typeof draft === 'object'
+      ? (draft as Record<string, unknown>)['tasks']
       : undefined;
   return { version: MANIFEST_VERSION, source, tasks: tasks ?? [] };
 }
@@ -126,6 +130,14 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
   const maxRepairs = options.maxRepairs ?? DEFAULT_MAX_REPAIRS;
   const warnings: string[] = [];
 
+  const doneMarkers = detectDoneMarkers(options.taskText);
+  if (doneMarkers.length > 0) {
+    logger.info('plan.done_markers', {
+      count: doneMarkers.length,
+      lines: doneMarkers.map((marker) => marker.line),
+    });
+  }
+
   const base = plannerPrompt({
     taskText: options.taskText,
     sourcePath: source.path,
@@ -134,18 +146,19 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     defaultProvider: options.defaultProvider,
     schemaPath: options.schemaPath,
     ...(options.schema !== undefined ? { schema: options.schema } : {}),
+    ...(doneMarkers.length > 0 ? { doneMarkers } : {}),
   });
 
   let prompt = base;
   let lastErrors: ValidationError[] = [];
 
   for (let attempt = 0; attempt <= maxRepairs; attempt += 1) {
-    logger.info("plan.requested", { attempt, max_repairs: maxRepairs });
+    logger.info('plan.requested', { attempt, max_repairs: maxRepairs });
     const startedAt = Date.now();
     const raw = await options.runner(prompt, attempt);
-    logger.info("plan.received", {
+    logger.info('plan.received', {
       attempt,
-      bytes: Buffer.byteLength(raw, "utf8"),
+      bytes: Buffer.byteLength(raw, 'utf8'),
       duration_ms: Date.now() - startedAt,
     });
 
@@ -156,45 +169,52 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     });
 
     if (result.ok && result.manifest.tasks.length > 0) {
-      logger.info("plan.validated", {
+      logger.info('plan.validated', {
         tasks: result.manifest.tasks.length,
         edges: result.manifest.tasks.reduce((sum, t) => sum + t.depends_on.length, 0),
         attempts: attempt + 1,
       });
       return {
         manifest: result.manifest,
-        origin: "planner",
+        origin: 'planner',
         attempts: attempt + 1,
         warnings,
+        doneMarkers,
       };
     }
 
     lastErrors = result.ok
-      ? [{ code: "schema", message: "the plan contained no tasks" }]
+      ? [{ code: 'schema', message: 'the plan contained no tasks' }]
       : result.errors;
-    logger.warn("plan.validation.failed", {
+    logger.warn('plan.validation.failed', {
       attempt,
       errors: lastErrors.map((error) => error.message),
     });
 
     if (attempt < maxRepairs) {
-      logger.info("plan.repair.attempted", { attempt: attempt + 1 });
+      logger.info('plan.repair.attempted', { attempt: attempt + 1 });
       prompt = repairPrompt(raw, lastErrors, base);
     }
   }
 
-  const warning = `planner failed after ${maxRepairs + 1} attempts (${lastErrors[0]?.message ?? "no valid plan"}); falling back to a linear chain in document order`;
+  const warning = `planner failed after ${maxRepairs + 1} attempts (${lastErrors[0]?.message ?? 'no valid plan'}); falling back to a linear chain in document order`;
   warnings.push(warning);
-  logger.warn("plan.fallback.linear", {
-    reason: lastErrors[0]?.message ?? "no valid plan",
+  logger.warn('plan.fallback.linear', {
+    reason: lastErrors[0]?.message ?? 'no valid plan',
     attempts: maxRepairs + 1,
   });
 
   const manifest = linearFallback(options.taskText, source, { maxTasks });
-  logger.info("plan.validated", {
+  logger.info('plan.validated', {
     tasks: manifest.tasks.length,
     edges: Math.max(0, manifest.tasks.length - 1),
-    origin: "fallback",
+    origin: 'fallback',
   });
-  return { manifest, origin: "fallback", attempts: maxRepairs + 1, warnings };
+  return {
+    manifest,
+    origin: 'fallback',
+    attempts: maxRepairs + 1,
+    warnings,
+    doneMarkers,
+  };
 }

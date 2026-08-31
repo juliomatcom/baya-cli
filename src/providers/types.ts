@@ -4,17 +4,17 @@ import type {
   Task,
   TaskRequest,
   TaskResult,
-} from "../manifest/index.js";
-import type { Observation } from "../memory/index.js";
+} from '../manifest/index.js';
+import type { Observation } from '../memory/index.js';
 
 /** Adapter interface (providers.md §Adapter interface). */
 export interface ProviderCapabilities {
   /** Ordered preference. The executor uses the first the task supports. */
-  promptDelivery: Array<"file" | "stdin" | "argv">;
-  structuredOutput: "schema-file" | "schema-inline" | "none";
-  events: "jsonl" | "json" | "none";
-  sessionId: "preassign" | "capture";
-  resume: "session" | "none";
+  promptDelivery: Array<'file' | 'stdin' | 'argv'>;
+  structuredOutput: 'schema-file' | 'schema-inline' | 'none';
+  events: 'jsonl' | 'json' | 'none';
+  sessionId: 'preassign' | 'capture';
+  resume: 'session' | 'none';
   /**
    * Whether this provider's own event stream records what its agent *did*
    * (execution.md §Memory). `events` means Baya's `events.jsonl` already holds
@@ -27,7 +27,7 @@ export interface ProviderCapabilities {
    * nobody promises to keep. `files_changed` in the protocol result carries
    * the cross-provider half instead.
    */
-  observations: "events" | "none";
+  observations: 'events' | 'none';
   cwdFlag: boolean;
   modelFlag: boolean;
   /** Conservative by default — these run on consumer subscriptions that throttle. */
@@ -38,7 +38,7 @@ export interface ResolvedProvider {
   bin: string;
   version: string;
   /** Which link of the resolution chain produced `bin`. */
-  source: "config" | "path" | "known-location";
+  source: 'config' | 'path' | 'known-location';
 }
 
 export interface BuildRunInput {
@@ -74,7 +74,7 @@ export interface SpawnPlan {
   argv: string[];
   cwd: string;
   /** Never `inherit` — an inherited stdin stalls `claude -p` for 3s per task. */
-  stdin: "pipe" | "ignore";
+  stdin: 'pipe' | 'ignore';
   /** Written to the child's stdin when `stdin: 'pipe'`. */
   stdinData?: string;
   /** Files the adapter needs on disk before the spawn, e.g. a prompt file. */

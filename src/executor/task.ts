@@ -1,18 +1,18 @@
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import {
   ProviderEventSchema,
   type ProviderEvent,
   type Task,
   type TaskRequest,
   type TaskResult,
-} from "../manifest/index.js";
-import type { Logger } from "../log/index.js";
-import type { Observation } from "../memory/index.js";
-import type { ProviderAdapter, ProviderUsage } from "../providers/index.js";
-import { runProcess } from "./spawn.js";
-import type { RunPaths } from "./paths.js";
-import { renderGroupPrompt } from "./prompt.js";
+} from '../manifest/index.js';
+import type { Logger } from '../log/index.js';
+import type { Observation } from '../memory/index.js';
+import type { ProviderAdapter, ProviderUsage } from '../providers/index.js';
+import { runProcess } from './spawn.js';
+import type { RunPaths } from './paths.js';
+import { renderGroupPrompt } from './prompt.js';
 
 /**
  * One provider process, start to finish: write a request per task, spawn the
@@ -74,7 +74,7 @@ export interface GroupExecution {
 
 function writeFileEnsuringDir(path: string, contents: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, contents, "utf8");
+  writeFileSync(path, contents, 'utf8');
 }
 
 /**
@@ -83,9 +83,9 @@ function writeFileEnsuringDir(path: string, contents: string): void {
  * keeps the exact bytes either way (logging.md rule 3).
  */
 function flattenToolInput(input: unknown): string {
-  if (input === undefined) return "";
-  const text = typeof input === "string" ? input : JSON.stringify(input);
-  return text.replace(/\s+/g, " ").trim();
+  if (input === undefined) return '';
+  const text = typeof input === 'string' ? input : JSON.stringify(input);
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 export async function executeGroup(
@@ -100,13 +100,13 @@ export async function executeGroup(
 
   // Read once: an adapter that enforces no schema needs it inlined in the
   // prompt, and every adapter needs it for `buildRun`.
-  const schemaContents = readFileSync(options.schemaPath, "utf8");
+  const schemaContents = readFileSync(options.schemaPath, 'utf8');
   const prompt = renderGroupPrompt(options.requests, {
     ...(options.memory ? { memory: options.memory } : {}),
     // Only for the adapters that enforce nothing. Handing a path to one that
     // does enforce makes the agent go and read it — a tool call, and then the
     // whole conversation re-sent, for a guarantee it already had.
-    ...(adapter.capabilities.structuredOutput === "none"
+    ...(adapter.capabilities.structuredOutput === 'none'
       ? { schema: schemaContents }
       : {}),
   });
@@ -116,10 +116,10 @@ export async function executeGroup(
       `${JSON.stringify(request, null, 2)}\n`,
     );
   }
-  logger.debug("group.request.written", {
+  logger.debug('group.request.written', {
     group_id: leaderId,
     tasks: taskIds,
-    bytes: Buffer.byteLength(prompt, "utf8"),
+    bytes: Buffer.byteLength(prompt, 'utf8'),
   });
 
   // A group answers with one document, so it needs one place to put it. The
@@ -160,27 +160,27 @@ export async function executeGroup(
     appendFileSync(eventsPath, `${JSON.stringify(ProviderEventSchema.parse(event))}\n`);
 
     switch (event.t) {
-      case "session":
+      case 'session':
         sessionId = event.id;
-        logger.debug("provider.session", { task_id: leaderId, session_id: event.id });
+        logger.debug('provider.session', { task_id: leaderId, session_id: event.id });
         break;
-      case "text":
-        logger.info("provider.text", {
+      case 'text':
+        logger.info('provider.text', {
           task_id: leaderId,
           provider: adapter.id,
           text: event.text,
         });
         break;
-      case "tool":
-        logger.info("provider.tool", {
+      case 'tool':
+        logger.info('provider.tool', {
           task_id: leaderId,
           provider: adapter.id,
           name: event.name,
           input: flattenToolInput(event.input),
         });
         break;
-      case "error":
-        logger.warn("provider.error", {
+      case 'error':
+        logger.warn('provider.error', {
           task_id: leaderId,
           provider: adapter.id,
           kind: event.kind,
@@ -188,19 +188,19 @@ export async function executeGroup(
         });
         break;
       default:
-        logger.debug("provider.event.unknown", { task_id: leaderId, raw: event.raw });
+        logger.debug('provider.event.unknown', { task_id: leaderId, raw: event.raw });
     }
   };
 
   // Log before acting (logging.md rule 1): a crash must leave evidence of the
   // last thing attempted. The prompt is elided at the sink, not inlined here.
-  logger.info("task.spawned", {
+  logger.info('task.spawned', {
     task_id: leaderId,
     group: taskIds,
     provider: adapter.id,
     model: options.model,
     argv: plan.argv,
-    delivery: plan.stdin === "pipe" ? "stdin" : "argv",
+    delivery: plan.stdin === 'pipe' ? 'stdin' : 'argv',
     prompt: prompt,
     request: paths.request(leaderId),
   });
@@ -216,7 +216,7 @@ export async function executeGroup(
     },
     onStderrLine: (line) => {
       // Where these CLIs put their own diagnostics — worth a human's attention.
-      logger.info("provider.stderr", {
+      logger.info('provider.stderr', {
         task_id: leaderId,
         provider: adapter.id,
         text: line,
@@ -230,7 +230,7 @@ export async function executeGroup(
 
   let resultFileContents: string | null = null;
   try {
-    resultFileContents = readFileSync(resultFile, "utf8");
+    resultFileContents = readFileSync(resultFile, 'utf8');
   } catch {
     resultFileContents = null;
   }
@@ -244,7 +244,7 @@ export async function executeGroup(
   };
   const results = adapter.extractResults(extractContext);
   const observations = adapter.extractObservations?.(extractContext) ?? [];
-  logger.debug("group.observations", {
+  logger.debug('group.observations', {
     group_id: leaderId,
     provider: adapter.id,
     count: observations.length,

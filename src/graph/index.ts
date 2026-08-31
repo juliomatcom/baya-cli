@@ -78,7 +78,7 @@ export function topoOrder(nodes: readonly GraphNode[]): string[] {
 
 /** The scheduler's view of a task. Mirrors `TaskState`; only `succeeded` unblocks. */
 export type ReadyState =
-  "pending" | "running" | "succeeded" | "failed" | "skipped" | "parked";
+  'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'parked';
 
 /**
  * The tasks the scheduler may admit right now: still `pending`, with every
@@ -90,8 +90,8 @@ export function readySet(
   states: ReadonlyMap<string, ReadyState>,
 ): string[] {
   return nodes
-    .filter((node) => states.get(node.id) === "pending")
-    .filter((node) => node.depends_on.every((dep) => states.get(dep) === "succeeded"))
+    .filter((node) => states.get(node.id) === 'pending')
+    .filter((node) => node.depends_on.every((dep) => states.get(dep) === 'succeeded'))
     .map((node) => node.id);
 }
 

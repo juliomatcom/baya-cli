@@ -1,10 +1,10 @@
-import { codexAdapter } from "../../../src/providers/index.js";
+import { codexAdapter } from '../../../src/providers/index.js';
 import {
   PROTOCOL_VERSION,
   type Task,
   type TaskRequest,
   type TaskResult,
-} from "../../../src/manifest/index.js";
+} from '../../../src/manifest/index.js';
 
 /** A process returns one result per task; these adapters are exercised with one. */
 const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
@@ -12,107 +12,107 @@ const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
 const ESC = String.fromCharCode(27);
 
 const task = (overrides: Partial<Task> = {}): Task => ({
-  id: "gen-schema",
-  title: "Generate DB schema",
-  instruction: "Create the tables.",
-  provider: "codex",
+  id: 'gen-schema',
+  title: 'Generate DB schema',
+  instruction: 'Create the tables.',
+  provider: 'codex',
   model: null,
   depends_on: [],
-  access: "read-only",
+  access: 'read-only',
   cwd: null,
   ...overrides,
 });
 
 const request: TaskRequest = {
   baya: PROTOCOL_VERSION,
-  kind: "task_request",
-  run_id: "run-1",
-  task: { id: "gen-schema", title: "t", instruction: "i" },
-  workspace: { cwd: "/work", access: "read-only", isolation: "shared" },
+  kind: 'task_request',
+  run_id: 'run-1',
+  task: { id: 'gen-schema', title: 't', instruction: 'i' },
+  workspace: { cwd: '/work', access: 'read-only', isolation: 'shared' },
   context: [],
-  response_contract: { schema_path: "/work/.baya/schema/task_result.schema.json" },
+  response_contract: { schema_path: '/work/.baya/schema/task_result.schema.json' },
   constraints: { max_runtime_s: 900 },
 };
 
 const input = (overrides = {}) => ({
-  bin: "/usr/local/bin/codex",
+  bin: '/usr/local/bin/codex',
   task: task(),
   request,
   model: null,
-  cwd: "/work",
-  schemaPath: "/work/.baya/schema/task_result.schema.json",
+  cwd: '/work',
+  schemaPath: '/work/.baya/schema/task_result.schema.json',
   schemaContents: '{"type":"object"}',
-  resultFile: "/work/.baya/runs/r1/tasks/gen-schema/result.json",
-  prompt: "do the thing",
+  resultFile: '/work/.baya/runs/r1/tasks/gen-schema/result.json',
+  prompt: 'do the thing',
   ...overrides,
 });
 
-describe("codexAdapter.buildRun argv", () => {
-  it("matches the recorded surface", () => {
+describe('codexAdapter.buildRun argv', () => {
+  it('matches the recorded surface', () => {
     expect(codexAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
-  it("uses the workspace-write sandbox only for read-write access", () => {
+  it('uses the workspace-write sandbox only for read-write access', () => {
     expect(
-      codexAdapter.buildRun(input({ task: task({ access: "read-write" }) })).argv,
+      codexAdapter.buildRun(input({ task: task({ access: 'read-write' }) })).argv,
     ).toMatchSnapshot();
   });
 
-  it("passes -m only when a model is set — model ids are never hard-coded", () => {
-    expect(codexAdapter.buildRun(input()).argv).not.toContain("-m");
-    expect(codexAdapter.buildRun(input({ model: "some-model" })).argv).toContain("-m");
+  it('passes -m only when a model is set — model ids are never hard-coded', () => {
+    expect(codexAdapter.buildRun(input()).argv).not.toContain('-m');
+    expect(codexAdapter.buildRun(input({ model: 'some-model' })).argv).toContain('-m');
   });
 
-  it("escalates to danger-full-access only under --dangerously-allow-all", () => {
+  it('escalates to danger-full-access only under --dangerously-allow-all', () => {
     const argv = codexAdapter.buildRun(input({ dangerouslyAllowAll: true })).argv;
-    expect(argv[argv.indexOf("-s") + 1]).toBe("danger-full-access");
+    expect(argv[argv.indexOf('-s') + 1]).toBe('danger-full-access');
   });
 
-  it("never uses -p for the prompt: for codex, -p is --profile", () => {
+  it('never uses -p for the prompt: for codex, -p is --profile', () => {
     const argv = codexAdapter.buildRun(input()).argv;
-    expect(argv).not.toContain("-p");
-    expect(argv).not.toContain("--profile");
+    expect(argv).not.toContain('-p');
+    expect(argv).not.toContain('--profile');
     // The prompt travels by stdin behind the `-` positional, never in argv.
-    expect(argv).not.toContain("do the thing");
-    expect(argv[argv.length - 1]).toBe("-");
+    expect(argv).not.toContain('do the thing');
+    expect(argv[argv.length - 1]).toBe('-');
   });
 
-  it("delivers the prompt on stdin and never inherits it", () => {
+  it('delivers the prompt on stdin and never inherits it', () => {
     const plan = codexAdapter.buildRun(input());
-    expect(plan.stdin).toBe("pipe");
-    expect(plan.stdinData).toBe("do the thing");
+    expect(plan.stdin).toBe('pipe');
+    expect(plan.stdinData).toBe('do the thing');
   });
 
-  it("builds a resume around the captured thread id", () => {
+  it('builds a resume around the captured thread id', () => {
     expect(
-      codexAdapter.buildResume("thread-42", "use postgres", input()).argv,
+      codexAdapter.buildResume('thread-42', 'use postgres', input()).argv,
     ).toMatchSnapshot();
   });
 });
 
-describe("codexAdapter.parseEvents", () => {
-  it("maps thread.started onto the session id that resume needs", () => {
+describe('codexAdapter.parseEvents', () => {
+  it('maps thread.started onto the session id that resume needs', () => {
     expect(
       codexAdapter.parseEvents('{"type":"thread.started","thread_id":"t-9"}'),
-    ).toEqual([{ t: "session", id: "t-9" }]);
+    ).toEqual([{ t: 'session', id: 't-9' }]);
   });
 
-  it("maps an agent_message item onto text", () => {
+  it('maps an agent_message item onto text', () => {
     expect(
       codexAdapter.parseEvents(
         '{"type":"item.completed","item":{"type":"agent_message","text":"hi"}}',
       ),
-    ).toEqual([{ t: "text", text: "hi" }]);
+    ).toEqual([{ t: 'text', text: 'hi' }]);
   });
 
-  it("maps other completed items onto tool events with a readable name", () => {
+  it('maps other completed items onto tool events with a readable name', () => {
     const [event] = codexAdapter.parseEvents(
       '{"type":"item.completed","item":{"type":"file_change","path":"a.sql"}}',
     );
-    expect(event).toMatchObject({ t: "tool", name: "Edit(a.sql)" });
+    expect(event).toMatchObject({ t: 'tool', name: 'Edit(a.sql)' });
   });
 
-  it("names every path in a file_change — the field is `changes`, not `path`", () => {
+  it('names every path in a file_change — the field is `changes`, not `path`', () => {
     // The real shape. Reading `path` produced a bare `Edit()` for every file
     // change codex has ever reported.
     const [event] = codexAdapter.parseEvents(
@@ -121,127 +121,127 @@ describe("codexAdapter.parseEvents", () => {
         '"status":"completed"}}',
     );
     expect(event).toMatchObject({
-      t: "tool",
-      name: "Edit(/repo/src/a.ts, /repo/t/a.test.ts)",
+      t: 'tool',
+      name: 'Edit(/repo/src/a.ts, /repo/t/a.test.ts)',
     });
   });
 
-  it("surfaces a completed `error` item as a full error event, not an abbreviated tool", () => {
+  it('surfaces a completed `error` item as a full error event, not an abbreviated tool', () => {
     const message =
-      "Model metadata for `gpt-5-mini` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.";
+      'Model metadata for `gpt-5-mini` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.';
     expect(
       codexAdapter.parseEvents(
         `{"type":"item.completed","item":{"id":"item_0","type":"error","message":${JSON.stringify(message)}}}`,
       ),
-    ).toEqual([{ t: "error", kind: "other", message }]);
+    ).toEqual([{ t: 'error', kind: 'other', message }]);
   });
 
-  it("keeps an unrecognized type as unknown rather than dropping it", () => {
+  it('keeps an unrecognized type as unknown rather than dropping it', () => {
     expect(codexAdapter.parseEvents('{"type":"turn.started"}')).toEqual([
-      { t: "unknown", raw: '{"type":"turn.started"}' },
+      { t: 'unknown', raw: '{"type":"turn.started"}' },
     ]);
   });
 
-  it("keeps a non-JSON line as unknown", () => {
-    expect(codexAdapter.parseEvents("not json at all")).toEqual([
-      { t: "unknown", raw: "not json at all" },
+  it('keeps a non-JSON line as unknown', () => {
+    expect(codexAdapter.parseEvents('not json at all')).toEqual([
+      { t: 'unknown', raw: 'not json at all' },
     ]);
   });
 
-  it("strips ANSI before parsing, since provider output is untrusted", () => {
+  it('strips ANSI before parsing, since provider output is untrusted', () => {
     const line = `${ESC}[32m{"type":"item.completed","item":{"type":"agent_message","text":"hi"}}${ESC}[0m`;
-    expect(codexAdapter.parseEvents(line)).toEqual([{ t: "text", text: "hi" }]);
+    expect(codexAdapter.parseEvents(line)).toEqual([{ t: 'text', text: 'hi' }]);
   });
 
-  it("classifies a rate-limit error event", () => {
+  it('classifies a rate-limit error event', () => {
     expect(
       codexAdapter.parseEvents('{"type":"error","message":"rate limit exceeded"}'),
-    ).toEqual([{ t: "error", kind: "rate_limit", message: "rate limit exceeded" }]);
+    ).toEqual([{ t: 'error', kind: 'rate_limit', message: 'rate limit exceeded' }]);
   });
 });
 
-describe("codexAdapter.extractResult", () => {
+describe('codexAdapter.extractResult', () => {
   const ok = JSON.stringify({
     baya: PROTOCOL_VERSION,
-    kind: "task_result",
-    task_id: "gen-schema",
-    status: "ok",
-    summary: "done",
+    kind: 'task_result',
+    task_id: 'gen-schema',
+    status: 'ok',
+    summary: 'done',
   });
 
-  it("reads the schema-enforced file — rung 1, no parsing", () => {
+  it('reads the schema-enforced file — rung 1, no parsing', () => {
     const result = one(
       codexAdapter.extractResults({
-        taskIds: ["gen-schema"],
+        taskIds: ['gen-schema'],
         events: [],
         resultFileContents: ok,
         exitCode: 0,
-        stderr: "",
+        stderr: '',
       }),
     );
-    expect(result.status).toBe("ok");
+    expect(result.status).toBe('ok');
     expect(result.notes).toEqual([]);
   });
 
-  it("overrides a mismatched task_id so a result cannot be misrouted", () => {
+  it('overrides a mismatched task_id so a result cannot be misrouted', () => {
     const result = one(
       codexAdapter.extractResults({
-        taskIds: ["gen-schema"],
+        taskIds: ['gen-schema'],
         events: [],
-        resultFileContents: ok.replace("gen-schema", "some-other-task"),
+        resultFileContents: ok.replace('gen-schema', 'some-other-task'),
         exitCode: 0,
-        stderr: "",
+        stderr: '',
       }),
     );
-    expect(result.task_id).toBe("gen-schema");
+    expect(result.task_id).toBe('gen-schema');
   });
 
-  it("synthesizes a failure when no result file was written", () => {
+  it('synthesizes a failure when no result file was written', () => {
     const result = one(
       codexAdapter.extractResults({
-        taskIds: ["gen-schema"],
+        taskIds: ['gen-schema'],
         events: [],
         resultFileContents: null,
         exitCode: 1,
-        stderr: "boom",
+        stderr: 'boom',
       }),
     );
-    expect(result.status).toBe("failed");
-    expect(result.error?.message).toContain("no result file");
+    expect(result.status).toBe('failed');
+    expect(result.error?.message).toContain('no result file');
   });
 
-  it("prefers a classified error event over the raw stderr tail", () => {
+  it('prefers a classified error event over the raw stderr tail', () => {
     const result = one(
       codexAdapter.extractResults({
-        taskIds: ["gen-schema"],
-        events: [{ t: "error", kind: "auth", message: "unauthorized" }],
+        taskIds: ['gen-schema'],
+        events: [{ t: 'error', kind: 'auth', message: 'unauthorized' }],
         resultFileContents: null,
         exitCode: 1,
-        stderr: "noise",
+        stderr: 'noise',
       }),
     );
-    expect(result.error).toEqual({ message: "unauthorized", retryable: false });
+    expect(result.error).toEqual({ message: 'unauthorized', retryable: false });
   });
 
-  it("reports the last error, past a non-fatal diagnostic that came first", () => {
+  it('reports the last error, past a non-fatal diagnostic that came first', () => {
     const result = one(
       codexAdapter.extractResults({
-        taskIds: ["gen-schema"],
+        taskIds: ['gen-schema'],
         events: [
-          { t: "error", kind: "other", message: "Model metadata for `x` not found." },
-          { t: "error", kind: "auth", message: "unauthorized" },
+          { t: 'error', kind: 'other', message: 'Model metadata for `x` not found.' },
+          { t: 'error', kind: 'auth', message: 'unauthorized' },
         ],
         resultFileContents: null,
         exitCode: 1,
-        stderr: "noise",
+        stderr: 'noise',
       }),
     );
-    expect(result.error).toEqual({ message: "unauthorized", retryable: false });
+    expect(result.error).toEqual({ message: 'unauthorized', retryable: false });
   });
 });
 
-describe("codexAdapter.extractUsage", () => {
-  it("recovers usage from the turn.completed line kept as unknown", () => {
+describe('codexAdapter.extractUsage', () => {
+  it('recovers usage from the turn.completed line kept as unknown', () => {
     const events = codexAdapter.parseEvents(
       '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":4}}',
     );
@@ -251,12 +251,12 @@ describe("codexAdapter.extractUsage", () => {
     });
   });
 
-  it("sums usage across turns when a task was resumed", () => {
+  it('sums usage across turns when a task was resumed', () => {
     const events = codexAdapter.parseEvents(
       [
         '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":4}}',
         '{"type":"turn.completed","usage":{"input_tokens":7,"output_tokens":2}}',
-      ].join("\n"),
+      ].join('\n'),
     );
     expect(codexAdapter.extractUsage?.(events)).toEqual({
       input_tokens: 17,
@@ -264,14 +264,14 @@ describe("codexAdapter.extractUsage", () => {
     });
   });
 
-  it("returns nothing when codex emitted no usage line", () => {
+  it('returns nothing when codex emitted no usage line', () => {
     const events = codexAdapter.parseEvents('{"type":"turn.started"}');
     expect(codexAdapter.extractUsage?.(events)).toEqual({});
   });
 });
 
-describe("codex usage accounting", () => {
-  it("keeps the cache split, which decides whether a continuation was cheap", () => {
+describe('codex usage accounting', () => {
+  it('keeps the cache split, which decides whether a continuation was cheap', () => {
     // Discarding these made a continued turn that read 96k of transcript look
     // like a straight 3.5x regression instead of a mostly-cached one.
     const events = codexAdapter.parseEvents(
@@ -287,16 +287,16 @@ describe("codex usage accounting", () => {
   });
 });
 
-describe("codex observations", () => {
+describe('codex observations', () => {
   const ctx = (events: ReturnType<typeof codexAdapter.parseEvents>) => ({
-    taskIds: ["t1"],
+    taskIds: ['t1'],
     events,
     resultFileContents: null,
     exitCode: 0,
-    stderr: "",
+    stderr: '',
   });
 
-  it("reads commands and their exit status straight out of the event stream", () => {
+  it('reads commands and their exit status straight out of the event stream', () => {
     const events = codexAdapter.parseEvents(
       '{"type":"item.completed","item":{"type":"command_execution","command":' +
         '"/bin/zsh -lc \'npm test\'","exit_code":"1","status":"failed"}}\n' +
@@ -304,50 +304,50 @@ describe("codex observations", () => {
         '"/bin/zsh -lc \'npm run lint\'","exit_code":"0","status":"completed"}}',
     );
     expect(codexAdapter.extractObservations?.(ctx(events))).toEqual([
-      { kind: "command", command: "/bin/zsh -lc 'npm test'", ok: false },
-      { kind: "command", command: "/bin/zsh -lc 'npm run lint'", ok: true },
+      { kind: 'command', command: "/bin/zsh -lc 'npm test'", ok: false },
+      { kind: 'command', command: "/bin/zsh -lc 'npm run lint'", ok: true },
     ]);
   });
 
-  it("reports every changed path, which the `path` bug used to swallow", () => {
+  it('reports every changed path, which the `path` bug used to swallow', () => {
     const events = codexAdapter.parseEvents(
       '{"type":"item.completed","item":{"type":"file_change","changes":' +
         '[{"path":"src/a.ts","kind":"update"}],"status":"completed"}}',
     );
     expect(codexAdapter.extractObservations?.(ctx(events))).toEqual([
-      { kind: "write", path: "src/a.ts" },
+      { kind: 'write', path: 'src/a.ts' },
     ]);
   });
 
-  it("reads its observations from its own documented event stream", () => {
-    expect(codexAdapter.capabilities.observations).toBe("events");
+  it('reads its observations from its own documented event stream', () => {
+    expect(codexAdapter.capabilities.observations).toBe('events');
   });
 });
 
-describe("codex exec resume — the escalation path (M4)", () => {
+describe('codex exec resume — the escalation path (M4)', () => {
   /**
    * ⚠️ `exec resume` does NOT take `exec`'s flags. Passing them exits 2 with
    * `error: unexpected argument '-C' found`, before the model is reached.
    * Verified live 2026-08-29 against codex-cli 0.150.1.
    */
-  it("passes no flag `exec resume` rejects", () => {
-    const argv = codexAdapter.buildResume("t-9", "answer", input()).argv;
-    for (const rejected of ["-C", "-s", "--color"]) expect(argv).not.toContain(rejected);
+  it('passes no flag `exec resume` rejects', () => {
+    const argv = codexAdapter.buildResume('t-9', 'answer', input()).argv;
+    for (const rejected of ['-C', '-s', '--color']) expect(argv).not.toContain(rejected);
   });
 
-  it("keeps the flags `exec resume` does accept", () => {
-    const argv = codexAdapter.buildResume("t-9", "answer", input()).argv;
-    for (const kept of ["--json", "--skip-git-repo-check", "--output-schema", "-o"]) {
+  it('keeps the flags `exec resume` does accept', () => {
+    const argv = codexAdapter.buildResume('t-9', 'answer', input()).argv;
+    for (const kept of ['--json', '--skip-git-repo-check', '--output-schema', '-o']) {
       expect(argv).toContain(kept);
     }
   });
 
-  it("still gives `exec` its full surface", () => {
+  it('still gives `exec` its full surface', () => {
     const argv = codexAdapter.buildRun(input()).argv;
-    for (const kept of ["-C", "-s", "--color"]) expect(argv).toContain(kept);
+    for (const kept of ['-C', '-s', '--color']) expect(argv).toContain(kept);
   });
 
-  it("relies on the spawn cwd once -C is gone", () => {
-    expect(codexAdapter.buildResume("t-9", "answer", input()).cwd).toBe("/work");
+  it('relies on the spawn cwd once -C is gone', () => {
+    expect(codexAdapter.buildResume('t-9', 'answer', input()).cwd).toBe('/work');
   });
 });

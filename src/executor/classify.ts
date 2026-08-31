@@ -1,5 +1,5 @@
-import type { ProviderEvent } from "../manifest/index.js";
-import type { Failure } from "./state.js";
+import type { ProviderEvent } from '../manifest/index.js';
+import type { Failure } from './state.js';
 
 /**
  * Failure classifier (plan M2.5). Turns the raw signals of a failed task —
@@ -23,6 +23,12 @@ export interface ClassifyInput {
 }
 
 const QUOTA = /\b(quota|402|exhaust|out of (credit|token)|credit balance|billing)\b/i;
+// A named allowance (`session`/`usage`/`weekly`/`daily` limit) or any "limit …
+// resets …" phrasing is an exhausted budget that only time refills — `quota`,
+// not a rate limit. Guarded by `!RATE` below so an "OpenAI rate limit … resets"
+// message stays `rate_limit`; QUOTA is tested before RATE.
+const QUOTA_LIMIT =
+  /\b((session|usage|weekly|daily)\s+limit|limits?\b[\s\S]{0,60}\bresets?\b|\bresets?\b[\s\S]{0,60}\blimits?\b)/i;
 const RATE = /\b(rate.?limit|429|overloaded|too many requests)\b/i;
 const AUTH =
   /\b(401|403|unauthor|forbidden|authentication|api key|not logged in|login)\b/i;
@@ -47,10 +53,10 @@ function statusCodeFrom(text: string): number | null {
 
 function lastErrorEvent(
   events: ProviderEvent[],
-): Extract<ProviderEvent, { t: "error" }> | null {
+): Extract<ProviderEvent, { t: 'error' }> | null {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
-    if (event && event.t === "error") return event;
+    if (event && event.t === 'error') return event;
   }
   return null;
 }
@@ -61,46 +67,46 @@ export function classifyFailure(
 ): Failure {
   const occurred_at = now().toISOString();
   const errorEvent = lastErrorEvent(input.events);
-  const haystack = `${errorEvent?.message ?? ""} ${input.errorMessage}`.trim();
+  const haystack = `${errorEvent?.message ?? ''} ${input.errorMessage}`.trim();
   const status_code = statusCodeFrom(haystack);
   const base = {
-    message: haystack || "task failed",
+    message: haystack || 'task failed',
     provider_code: null,
     status_code,
     occurred_at,
   };
 
   if (input.timedOut) {
-    return { ...base, kind: "timeout", retry: "now" };
+    return { ...base, kind: 'timeout', retry: 'now' };
   }
 
-  if (errorEvent?.kind === "auth" || (AUTH.test(haystack) && !RATE.test(haystack))) {
-    return { ...base, kind: "auth", retry: "never" };
+  if (errorEvent?.kind === 'auth' || (AUTH.test(haystack) && !RATE.test(haystack))) {
+    return { ...base, kind: 'auth', retry: 'never' };
   }
 
-  if (QUOTA.test(haystack)) {
-    return { ...base, kind: "quota", retry: "later" };
+  if (QUOTA.test(haystack) || (QUOTA_LIMIT.test(haystack) && !RATE.test(haystack))) {
+    return { ...base, kind: 'quota', retry: 'later' };
   }
 
-  if (errorEvent?.kind === "rate_limit" || RATE.test(haystack)) {
-    return { ...base, kind: "rate_limit", retry: "later" };
+  if (errorEvent?.kind === 'rate_limit' || RATE.test(haystack)) {
+    return { ...base, kind: 'rate_limit', retry: 'later' };
   }
 
   if (PERMISSION.test(haystack)) {
-    return { ...base, kind: "permission", retry: "never" };
+    return { ...base, kind: 'permission', retry: 'never' };
   }
 
   if (SCHEMA.test(haystack)) {
-    return { ...base, kind: "schema", retry: "now" };
+    return { ...base, kind: 'schema', retry: 'now' };
   }
 
   if (NETWORK.test(haystack)) {
-    return { ...base, kind: "network", retry: "now" };
+    return { ...base, kind: 'network', retry: 'now' };
   }
 
   if (BAD_MODEL.test(haystack)) {
-    return { ...base, kind: "crash", retry: "never" };
+    return { ...base, kind: 'crash', retry: 'never' };
   }
 
-  return { ...base, kind: "crash", retry: input.retryable ? "now" : "never" };
+  return { ...base, kind: 'crash', retry: input.retryable ? 'now' : 'never' };
 }

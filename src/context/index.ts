@@ -1,4 +1,4 @@
-import type { ContextEntry } from "../manifest/index.js";
+import type { ContextEntry } from '../manifest/index.js';
 
 /**
  * Context bus v1 (execution.md §Context bus). Turns finished upstream results
@@ -8,7 +8,7 @@ import type { ContextEntry } from "../manifest/index.js";
  * break naive prepending — a fan-in of five 40 KB upstreams — are cheap to
  * test here and expensive to test anywhere else.
  */
-export type ContextStrategy = "link-only" | "truncate";
+export type ContextStrategy = 'link-only' | 'truncate';
 
 export const DEFAULT_CONTEXT_BUDGET = 12_000;
 
@@ -68,8 +68,8 @@ export function truncateMiddle(text: string, limit: number): string {
   return [
     text.slice(0, head),
     marker(elided),
-    tail === 0 ? "" : text.slice(text.length - tail),
-  ].join("");
+    tail === 0 ? '' : text.slice(text.length - tail),
+  ].join('');
 }
 
 /**
@@ -82,7 +82,7 @@ export function assembleContext(
   upstreams: readonly Upstream[],
   options: AssembleOptions = {},
 ): ContextEntry[] {
-  const strategy = options.strategy ?? "link-only";
+  const strategy = options.strategy ?? 'link-only';
   const budget = options.budget ?? budgetFrom();
   let spent = 0;
 
@@ -105,7 +105,7 @@ export function assembleContext(
 
     // link-only inlines only what fits whole. Half a document with no marker
     // reads as a complete one, which is worse than a path.
-    if (strategy === "link-only") {
+    if (strategy === 'link-only') {
       if (upstream.output.length > allowance) return { ...base, inline: null };
       spent += upstream.output.length;
       return { ...base, inline: upstream.output };

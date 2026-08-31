@@ -5,7 +5,13 @@
 
 ## Scheduler
 
-Loop: compute ready-set (all `depends_on` `succeeded`) → **form a group** (§Grouping) → admit while **global budget** AND **per-provider budget** AND the **writer semaphore** allow → spawn one process for the group → on completion settle every member → re-evaluate. Terminates when nothing is `running`/`parked` and the ready-set is empty. Sequential today (parallel = M2.1).
+Loop, per pass: compute ready-set (all `depends_on` `succeeded`) → **form a group** (§Grouping) from the tasks still `pending` → offer it to the **global budget**, the **per-provider budget** and the **writer semaphore** → spawn every group admitted, holding each as a promise → wake on the first to settle → settle its members → offer again. Parallel: `src/executor/sequential.ts`.
+
+**Terminates when the ready-set is empty AND nothing is in flight.** On the ready-set alone a run whose last groups are slow exits while they are still out.
+
+State is re-read **per offer**, not per pass — a settle moves tasks out of `pending`, and a group formed from a stale pending set puts one task in two processes.
+
+A refused group is re-offered on a later pass; a refused writer holds readers back until it gets in (§Workspace isolation). Its id is released when regrouping retires it — a group that re-forms around a task that became ready meanwhile has a new leader, and the retired id would block readers for the rest of the run.
 
 The admitted unit is a **group**, not a task. Grouping decides what goes in a process; parallelism decides how many processes run at once. They compose — do not conflate them.
 
@@ -16,11 +22,15 @@ The admitted unit is a **group**, not a task. Grouping decides what goes in a pr
 
 Per-provider caps conservative — consumer subscriptions throttle. Raise via the user config once measured.
 
+Both budgets live in a pure in-memory state object, `src/executor/budget.ts` (`AdmissionState`): `admit(group)` on spawn, `release(id)` on settle, no clock, nothing on disk. A provider absent from the per-provider map is bounded by the global cap alone.
+
 ## Workspace isolation
 
 **v1 — `--isolation shared` (default).** `access:"read-only"` tasks run fully parallel. Any `access:"read-write"` task takes the **single-writer semaphore** — writers serialize against each other, readers continue.
 
-Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per directory ([recovery.md](recovery.md)) means no second process to coordinate with.
+Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per directory ([recovery.md](recovery.md)) means no second process to coordinate with. It lives with the count budgets in `src/executor/budget.ts` (`AdmissionState`, keyed on the group's `access`).
+
+**Writer fairness.** Once a `read-write` group has been offered and refused, no new `read-only` group is admitted until that writer gets its slot — a readers-only wait would otherwise starve it indefinitely. In-flight readers still finish; only new ones are held.
 
 **`later` — `--isolation worktree`.** `git worktree add .baya/wt/<id>` per writing task for true parallel writes + end-of-run merge/report. Deferred until write-parallelism is a measured bottleneck. A user-level worktree already covers "two task lists, one repo".
 
@@ -118,16 +128,16 @@ Flags: `--no-memory` (off, for A/B measurement) · `--memory-budget <chars>` (de
 
 ## Failure semantics
 
-| Concern            | Behavior                                                                                                                                                                                                                       |
-| :----------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Task fails         | **Descendants** ⇒ `skipped`, never `failed`. Independent branches continue.                                                                                                                                                    |
-| `--on-error stop`  | Stop admitting new tasks; let in-flight finish; then report.                                                                                                                                                                   |
-| Retries            | `--retries` (default 1), `retry:"now"` failures only. **`quota`/`rate_limit` ⇒ `retry:"later"`, `auth`/`permission` ⇒ `"never"` — none consume attempts.** Exponential backoff + jitter. Taxonomy: [recovery.md](recovery.md). |
-| Provider exhausted | `quota` failure ⇒ stop scheduling **for that provider**; other providers' branches continue; run stays resumable, optionally elsewhere.                                                                                        |
-| Timeout            | `constraints.max_runtime_s` (default 900, summed per group) ⇒ process-group teardown, `status:failed`, `retryable:true`.                                                                                                       |
-| Group dies partway | First casualty `failed`; every later member `skipped` — it never ran. Members the model **did** report are kept, so finished work in a failed group is banked.                                                                 |
+| Concern            | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| :----------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task fails         | **Descendants** ⇒ `skipped`, never `failed`. Independent branches continue.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `--on-error stop`  | Stop admitting new tasks; let in-flight finish; then report.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Retries            | `--retries` (default 1), `retry:"now"` failures only. **`quota`/`rate_limit` ⇒ `retry:"later"`, `auth`/`permission` ⇒ `"never"` — none consume attempts.** Exponential backoff + jitter. Taxonomy: [recovery.md](recovery.md).                                                                                                                                                                                                                                                                                         |
+| Quota failure      | `quota` (`retry:"later"`) ⇒ **halt the whole run**: stop admitting groups, let in-flight work finish, then `skipped` every unstarted task — independent branches included — `blocked_by` the quota task and carrying its `failure` (so it reads apart from a dependency skip). Run stays resumable; `baya resume --provider` is the recovery. A quota wall is the session or the billing account, not one CLI — finishing half the graph elsewhere spends money to land somewhere no more resumable than a clean stop. |
+| Timeout            | `constraints.max_runtime_s` (default 900, summed per group) ⇒ SIGTERM via `killGroup`, a grace window (`killGraceMs`, default 5s), then SIGKILL to whatever is still alive — `status:failed`, `retryable:true`. Same escalation as SIGINT, so a provider that traps SIGTERM cannot outlive its deadline.                                                                                                                                                                                                               |
+| Group dies partway | First casualty `failed`; every later member `skipped` — it never ran. Members the model **did** report are kept, so finished work in a failed group is banked.                                                                                                                                                                                                                                                                                                                                                         |
 
-Exit: `0` all succeeded · `1` any failed/skipped/parked · `2` planner/validation/model-gate error · `130` SIGINT.
+Exit: `0` all succeeded · `1` any failed/skipped/parked (or `uncaughtException`) · `2` planner/validation/model-gate error · `130` SIGINT · `143` SIGTERM · `129` SIGHUP.
 
 ## Escalation — Pause & Resume
 
@@ -149,7 +159,20 @@ Out of scope permanently: PTY multiplexing, keystroke injection, alternate-buffe
 
 Every spawn sets `stdin` explicitly (prompt pipe or `/dev/null`) — inherited stdin makes `claude -p` block 3s/task. Children spawn `detached:true` in their own process group — Node's `child_process` does not kill grandchildren; agentic CLIs spawn subprocesses.
 
-SIGINT → `process.kill(-pgid,'SIGTERM')` for every live group → 5s grace → `SIGKILL` → checkpoint → exit `130`. **Second Ctrl+C kills immediately.** Same path for SIGTERM/SIGHUP/`uncaughtException`. Live pids checkpointed so a later `baya doctor` can reap strays.
+Teardown contract (`src/cli/interrupt.ts`, `createInterruptHandler`), on the first signal:
+
+1. `logger.warn("signal.received")`, then `checkpointInterrupted()` — evidence + a resumable run **before** anything is killed.
+2. `killGroup(pgid,'SIGTERM')` for every live pid; log `process.killed`.
+3. Wait an injected grace window (`graceMs`, default 5s, matching `DEFAULT_KILL_GRACE_MS` in `src/executor/spawn.ts`). Clock + timer are injected so tests are deterministic and send no real signal.
+4. On grace elapse: `killGroup(pgid,'SIGKILL')` for every pid the scheduler **still lists live** (a provider that exited on SIGTERM was already dropped by `onProcessExit`), log `run.interrupted` with `grace_ms`, `progress.dispose()` (restores the cursor — never reconstruct the escape), `releaseLock()`, `exit(code)`.
+
+Nothing in flight ⇒ the grace window is skipped. **A second Ctrl+C during the grace window escalates immediately** — SIGKILL + teardown now, the first signal's exit code stands.
+
+`installInterruptHandlers` registers SIGINT, SIGTERM, SIGHUP and `uncaughtException` on that one handler in both `src/cli/run.ts` and `src/cli/resume.ts`, and returns the unregister function called in `finally`. Every route runs the identical teardown; only the exit code differs: SIGINT `130`, SIGTERM `143`, SIGHUP `129`, `uncaughtException` `1` (logged as `run.crashed`). A crash therefore reaps its child process groups instead of orphaning them. Live pids are checkpointed so a later `baya doctor` can reap strays.
+
+The set of live pids the handler signals is maintained by the scheduler's `onProcessSpawn`/`onProcessExit` callbacks (`RunSequentialOptions`): add on spawn, remove the exact pid on settle, so parallel groups are all signalled and a settled or reused pid is never carried.
+
+A per-process **timeout** runs the same SIGTERM → grace → SIGKILL escalation inside `src/executor/spawn.ts` (`killGroup`, injectable timers).
 
 ## Run state
 

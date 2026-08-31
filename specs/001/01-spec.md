@@ -141,10 +141,10 @@ interface ProviderAdapter {
   id: ProviderId;
   resolve(): Promise<Resolved | null>; // binary path + version
   capabilities: {
-    promptDelivery: ("file" | "stdin" | "argv")[]; // preference order
-    structuredOutput: "schema" | "json" | "text";
-    events: "jsonl" | "json" | "none";
-    resume: "session" | "last" | "none";
+    promptDelivery: ('file' | 'stdin' | 'argv')[]; // preference order
+    structuredOutput: 'schema' | 'json' | 'text';
+    events: 'jsonl' | 'json' | 'none';
+    resume: 'session' | 'last' | 'none';
     cwdFlag: boolean;
     modelFlag: boolean;
     maxConcurrency: number; // subscription-aware

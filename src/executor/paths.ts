@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { join } from "node:path";
+import { randomBytes } from 'node:crypto';
+import { join } from 'node:path';
 
 /**
  * On-disk layout (architecture.md §On-disk layout). One place that knows where
@@ -39,34 +39,34 @@ export interface RunPaths {
 export function makeRunId(now: Date = new Date(), pid: number = process.pid): string {
   const stamp = now
     .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d+Z$/, "Z");
-  return `${stamp}-${randomBytes(3).toString("hex")}-${pid}`;
+    .replace(/[-:]/g, '')
+    .replace(/\.\d+Z$/, 'Z');
+  return `${stamp}-${randomBytes(3).toString('hex')}-${pid}`;
 }
 
 export function runPaths(cwd: string, runId: string): RunPaths {
-  const bayaDir = join(cwd, ".baya");
-  const runDir = join(bayaDir, "runs", runId);
-  const taskDir = (taskId: string): string => join(runDir, "tasks", taskId);
+  const bayaDir = join(cwd, '.baya');
+  const runDir = join(bayaDir, 'runs', runId);
+  const taskDir = (taskId: string): string => join(runDir, 'tasks', taskId);
 
   return {
     bayaDir,
-    schemaDir: join(bayaDir, "schema"),
-    lockFile: join(bayaDir, "baya.lock"),
-    runsDir: join(bayaDir, "runs"),
+    schemaDir: join(bayaDir, 'schema'),
+    lockFile: join(bayaDir, 'baya.lock'),
+    runsDir: join(bayaDir, 'runs'),
     runDir,
-    manifest: join(runDir, "manifest.json"),
-    state: join(runDir, "state.json"),
-    report: join(runDir, "report.json"),
-    memory: join(runDir, "memory.json"),
-    log: join(runDir, "baya.jsonl"),
+    manifest: join(runDir, 'manifest.json'),
+    state: join(runDir, 'state.json'),
+    report: join(runDir, 'report.json'),
+    memory: join(runDir, 'memory.json'),
+    log: join(runDir, 'baya.jsonl'),
     taskDir,
-    request: (id) => join(taskDir(id), "request.json"),
-    result: (id) => join(taskDir(id), "result.json"),
-    batch: (id) => join(taskDir(id), "batch.json"),
-    output: (id) => join(taskDir(id), "output.md"),
-    events: (id) => join(taskDir(id), "events.jsonl"),
-    stdout: (id) => join(taskDir(id), "stdout.log"),
-    stderr: (id) => join(taskDir(id), "stderr.log"),
+    request: (id) => join(taskDir(id), 'request.json'),
+    result: (id) => join(taskDir(id), 'result.json'),
+    batch: (id) => join(taskDir(id), 'batch.json'),
+    output: (id) => join(taskDir(id), 'output.md'),
+    events: (id) => join(taskDir(id), 'events.jsonl'),
+    stdout: (id) => join(taskDir(id), 'stdout.log'),
+    stderr: (id) => join(taskDir(id), 'stderr.log'),
   };
 }

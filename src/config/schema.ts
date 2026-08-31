@@ -1,6 +1,6 @@
-import { z } from "zod";
-import { ProviderIdSchema } from "../manifest/index.js";
-import type { Catalog } from "../providers/catalog.js";
+import { z } from 'zod';
+import { ProviderIdSchema } from '../manifest/index.js';
+import type { Catalog } from '../providers/catalog.js';
 
 /** Config schema (config.md §Schema). Every key here exists in `src/config/`. */
 export const CONFIG_VERSION = 1;
@@ -40,7 +40,7 @@ const CatalogModelSchema = z
   .object({
     id: z.string().min(1),
     aliases: z.array(z.string()).default([]),
-    description: z.string().default(""),
+    description: z.string().default(''),
   })
   .strict();
 const ModelCatalogSchema = z.record(ProviderIdSchema, z.array(CatalogModelSchema));
@@ -81,9 +81,9 @@ export const BUILTIN_CONFIG: ResolvedConfig = {
 
 /** Keys `baya config set` and `--show` address, in display order. */
 export const SETTABLE_KEYS = [
-  "defaults.provider",
-  "defaults.model",
-  "planner.provider",
-  "planner.model",
+  'defaults.provider',
+  'defaults.model',
+  'planner.provider',
+  'planner.model',
 ] as const;
 export type SettableKey = (typeof SETTABLE_KEYS)[number];

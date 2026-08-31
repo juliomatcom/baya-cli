@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
-import { stripAnsi } from "../log/index.js";
-import type { SpawnPlan } from "../providers/index.js";
+import { spawn } from 'node:child_process';
+import { stripAnsi } from '../log/index.js';
+import type { SpawnPlan } from '../providers/index.js';
 
 /**
  * Subprocess lifecycle. Two hard rules live here:
@@ -13,8 +13,9 @@ import type { SpawnPlan } from "../providers/index.js";
  *
  * Children spawn `detached: true` so they lead their own process group:
  * agentic CLIs spawn their own subprocesses, and Node's `child_process` does
- * not kill grandchildren. Group teardown is M2.4's job; the group is
- * established here so it exists when that lands.
+ * not kill grandchildren. A timeout tears the whole group down — SIGTERM, a
+ * grace window, then SIGKILL to whatever is still alive — always through
+ * `killGroup`, so grandchildren go with it.
  */
 export interface SpawnResult {
   code: number | null;
@@ -29,6 +30,13 @@ export interface RunProcessOptions {
   plan: SpawnPlan;
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
+  /** SIGTERM→SIGKILL grace after a timeout (execution.md §Interrupts). */
+  killGraceMs?: number;
+  /**
+   * Timer injection point, so the SIGKILL escalation is testable without a
+   * real multi-second wait. Defaults to unref'd `setTimeout`/`clearTimeout`.
+   */
+  timers?: Timers;
   /** Complete lines only — partial-chunk buffering is handled here. */
   onStdoutLine?: (line: string) => void;
   onStderrLine?: (line: string) => void;
@@ -36,26 +44,44 @@ export interface RunProcessOptions {
   onSpawn?: (pid: number, pgid: number) => void;
 }
 
+/** The two timer calls `runProcess` makes, injectable for deterministic tests. */
+export interface Timers {
+  set(fn: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
+const REAL_TIMERS: Timers = {
+  set: (fn, ms) => {
+    const handle = setTimeout(fn, ms);
+    handle.unref();
+    return handle;
+  },
+  clear: (handle) => clearTimeout(handle as NodeJS.Timeout),
+};
+
+/** Matches the SIGINT grace in `src/cli/interrupt.ts` and execution.md §Interrupts. */
+const DEFAULT_KILL_GRACE_MS = 5_000;
+
 /** Splits a byte stream into complete lines; the tail is held until terminated. */
 export function createLineSplitter(onLine: (line: string) => void): {
   push: (chunk: string) => void;
   flush: () => void;
 } {
-  let buffer = "";
+  let buffer = '';
   return {
     push(chunk: string): void {
       buffer += chunk;
-      let index = buffer.indexOf("\n");
+      let index = buffer.indexOf('\n');
       while (index !== -1) {
         const line = buffer.slice(0, index);
         buffer = buffer.slice(index + 1);
-        if (line.trim() !== "") onLine(line);
-        index = buffer.indexOf("\n");
+        if (line.trim() !== '') onLine(line);
+        index = buffer.indexOf('\n');
       }
     },
     flush(): void {
-      if (buffer.trim() !== "") onLine(buffer);
-      buffer = "";
+      if (buffer.trim() !== '') onLine(buffer);
+      buffer = '';
     },
   };
 }
@@ -64,7 +90,7 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
   const { plan } = options;
   const [command, ...args] = plan.argv;
   if (command === undefined) {
-    return Promise.reject(new Error("spawn plan has an empty argv"));
+    return Promise.reject(new Error('spawn plan has an empty argv'));
   }
 
   return new Promise((resolve, reject) => {
@@ -73,11 +99,11 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
       env: options.env ?? process.env,
       detached: true,
       windowsHide: true,
-      stdio: [plan.stdin === "pipe" ? "pipe" : "ignore", "pipe", "pipe"],
+      stdio: [plan.stdin === 'pipe' ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     });
 
-    let stdout = "";
-    let stderr = "";
+    let stdout = '';
+    let stderr = '';
     let timedOut = false;
     let settled = false;
 
@@ -89,45 +115,58 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
       options.onSpawn?.(child.pid, child.pid);
     }
 
+    const timers = options.timers ?? REAL_TIMERS;
+    const killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
+    let killTimer: unknown;
+
     const timer =
       options.timeoutMs !== undefined && options.timeoutMs > 0
-        ? setTimeout(() => {
+        ? timers.set(() => {
             timedOut = true;
-            killGroup(child.pid, "SIGTERM");
+            killGroup(child.pid, 'SIGTERM');
+            // A provider that traps SIGTERM would hang the run past its
+            // deadline forever; escalate the whole group once the grace is up.
+            killTimer = timers.set(() => {
+              if (!settled) killGroup(child.pid, 'SIGKILL');
+            }, killGraceMs);
           }, options.timeoutMs)
         : undefined;
-    timer?.unref();
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      const text = stripAnsi(chunk.toString("utf8"));
+    const clearTimers = (): void => {
+      if (timer !== undefined) timers.clear(timer);
+      if (killTimer !== undefined) timers.clear(killTimer);
+    };
+
+    child.stdout?.on('data', (chunk: Buffer) => {
+      const text = stripAnsi(chunk.toString('utf8'));
       stdout += text;
       outSplitter.push(text);
     });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      const text = stripAnsi(chunk.toString("utf8"));
+    child.stderr?.on('data', (chunk: Buffer) => {
+      const text = stripAnsi(chunk.toString('utf8'));
       stderr += text;
       errSplitter.push(text);
     });
 
-    child.on("error", (err) => {
+    child.on('error', (err) => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
+      clearTimers();
       reject(err);
     });
 
-    child.on("close", (code, signal) => {
+    child.on('close', (code, signal) => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
+      clearTimers();
       outSplitter.flush();
       errSplitter.flush();
       resolve({ code, signal, stdout, stderr, pid: child.pid, timedOut });
     });
 
-    if (plan.stdin === "pipe" && child.stdin) {
+    if (plan.stdin === 'pipe' && child.stdin) {
       // EPIPE is normal: a provider that has read enough may close stdin first.
-      child.stdin.on("error", () => undefined);
+      child.stdin.on('error', () => undefined);
       if (plan.stdinData !== undefined) child.stdin.write(plan.stdinData);
       child.stdin.end();
     }

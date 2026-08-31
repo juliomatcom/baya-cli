@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { main } from "./index.js";
+import { main } from './index.js';
 
 /**
  * The published `baya` binary. Kept separate from `index.ts` so importing the

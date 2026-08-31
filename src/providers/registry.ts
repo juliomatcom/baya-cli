@@ -1,10 +1,10 @@
-import type { ProviderId } from "../manifest/index.js";
-import { claudeAdapter } from "./claude.js";
-import { codexAdapter } from "./codex.js";
-import { copilotAdapter } from "./copilot.js";
-import { opencodeAdapter } from "./opencode.js";
-import { probeVersion, resolveBinary } from "./resolve.js";
-import type { ProviderAdapter, ResolvedProvider } from "./types.js";
+import type { ProviderId } from '../manifest/index.js';
+import { claudeAdapter } from './claude.js';
+import { codexAdapter } from './codex.js';
+import { copilotAdapter } from './copilot.js';
+import { opencodeAdapter } from './opencode.js';
+import { probeVersion, resolveBinary } from './resolve.js';
+import type { ProviderAdapter, ResolvedProvider } from './types.js';
 
 /**
  * The adapter registry. `--help`, `doctor`, and the first-run wizard all read
@@ -46,7 +46,7 @@ export function createRegistry(adapters: readonly ProviderAdapter[]): Registry {
     id: ProviderId,
     options: ResolveOptions = {},
   ): Promise<ResolvedProvider | null> {
-    const cacheKey = `${id}:${options.probe === false ? "nover" : "ver"}`;
+    const cacheKey = `${id}:${options.probe === false ? 'nover' : 'ver'}`;
     const cached = cache.get(cacheKey);
     if (cached !== undefined) return cached;
 
@@ -66,7 +66,7 @@ export function createRegistry(adapters: readonly ProviderAdapter[]): Registry {
       return null;
     }
 
-    const version = options.probe === false ? "unknown" : await probeVersion(found.bin);
+    const version = options.probe === false ? 'unknown' : await probeVersion(found.bin);
     const resolved: ResolvedProvider = { ...found, version };
     cache.set(cacheKey, resolved);
     return resolved;

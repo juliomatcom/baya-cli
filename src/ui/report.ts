@@ -1,8 +1,8 @@
-import { join } from "node:path";
-import type { Manifest, Note, NoteSeverity } from "../manifest/index.js";
-import type { RunState } from "../executor/state.js";
-import type { Theme } from "./theme.js";
-import { formatCost, formatDuration, formatTokens, wrap } from "./text.js";
+import { join } from 'node:path';
+import type { Manifest, Note, NoteSeverity } from '../manifest/index.js';
+import type { RunState } from '../executor/state.js';
+import type { Theme } from './theme.js';
+import { formatCost, formatDuration, formatTokens, wrap } from './text.js';
 
 /**
  * End-of-run report (cli.md §End-of-run report).
@@ -27,7 +27,7 @@ export interface ReportTask {
   summary: string;
   notes: Note[];
   files_changed: string[];
-  failure: RunState["tasks"][string]["failure"];
+  failure: RunState['tasks'][string]['failure'];
   output_path: string | null;
   cost_usd: number;
   input_tokens: number;
@@ -36,12 +36,12 @@ export interface ReportTask {
 
 export interface RunReport {
   run_id: string;
-  status: RunState["status"];
-  source: RunState["source"];
+  status: RunState['status'];
+  source: RunState['source'];
   started_at: string;
   ended_at: string;
   duration_ms: number;
-  totals: RunState["totals"];
+  totals: RunState['totals'];
   /**
    * Provider processes actually spawned (execution.md §Grouping). Distinct
    * from the task count, and the number that tracks what a run cost to start:
@@ -76,14 +76,14 @@ export function buildReport(
     return {
       id: task.id,
       title: task.title,
-      state: entry?.state ?? "pending",
+      state: entry?.state ?? 'pending',
       provider: entry?.provider ?? null,
       duration_ms: entry?.duration_ms ?? null,
-      summary: options.summaries?.get(task.id) ?? "",
+      summary: options.summaries?.get(task.id) ?? '',
       notes: entry?.notes ?? [],
       files_changed: entry?.files_changed ?? [],
       failure: entry?.failure ?? null,
-      output_path: entry?.artifacts["output"] ?? null,
+      output_path: entry?.artifacts['output'] ?? null,
       cost_usd: entry?.cost_usd ?? 0,
       input_tokens: entry?.input_tokens ?? 0,
       output_tokens: entry?.output_tokens ?? 0,
@@ -121,14 +121,14 @@ export function buildReport(
     tasks: tasks.map((task) => ({ ...task, title: titles.get(task.id) ?? task.title })),
     flagged,
     run_dir: options.runDir,
-    outputs_path: join(options.runDir, "tasks"),
+    outputs_path: join(options.runDir, 'tasks'),
     exit_code: exitCodeFor(state),
   };
 }
 
 /** 0 all succeeded · 1 any failed · 130 interrupted (cli.md §Exit codes). */
 export function exitCodeFor(state: RunState): number {
-  if (state.status === "interrupted") return 130;
+  if (state.status === 'interrupted') return 130;
   if (state.totals.failed > 0) return 1;
   // A parked task means the run did not finish, so it cannot report success.
   if (state.totals.parked > 0 || state.totals.skipped > 0) return 1;
@@ -136,7 +136,7 @@ export function exitCodeFor(state: RunState): number {
 }
 
 export function renderReport(report: RunReport, theme: Theme, width = 100): string {
-  const lines: string[] = [""];
+  const lines: string[] = [''];
   const { totals } = report;
 
   // The outcome counts carry their own color; `succeeded` was the only one
@@ -160,26 +160,26 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   // that as a failure blames the agent for the one behavior escalation exists
   // to produce, and hides the real state: the run is waiting on a human.
   const total = report.tasks.length;
-  const outcome: "ok" | "warn" | "fail" | "paused" =
+  const outcome: 'ok' | 'warn' | 'fail' | 'paused' =
     total === 0 || totals.succeeded === total
-      ? "ok"
+      ? 'ok'
       : totals.failed === 0 && totals.parked > 0
-        ? "paused"
+        ? 'paused'
         : totals.succeeded === 0
-          ? "fail"
-          : "warn";
+          ? 'fail'
+          : 'warn';
   const headline =
-    outcome === "ok"
-      ? "Run complete"
-      : outcome === "paused"
-        ? "Run paused"
-        : outcome === "fail"
-          ? "Run failed"
-          : "Run finished";
+    outcome === 'ok'
+      ? 'Run complete'
+      : outcome === 'paused'
+        ? 'Run paused'
+        : outcome === 'fail'
+          ? 'Run failed'
+          : 'Run finished';
   // A paused run is unfinished, not wrong: it wears the warn badge, with the
   // pause glyph rather than the warning one.
-  const badgeToken = outcome === "paused" ? "warn" : outcome;
-  const glyph = outcome === "paused" ? theme.glyphs.park : theme.glyphs[outcome];
+  const badgeToken = outcome === 'paused' ? 'warn' : outcome;
+  const glyph = outcome === 'paused' ? theme.glyphs.park : theme.glyphs[outcome];
   // codex and claude report tokens, not dollars — show what we actually have.
   // The `$` figure stays only when a provider gave us one (cli.md: no fabricated
   // cost). See spec §Non-goals — cost accounting is v1.1.
@@ -189,7 +189,7 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   // is: every process re-pays a CLI's startup. Suppressed for a single task,
   // where "1 process" only restates the line already above it.
   if (report.tasks.length > 1 && report.processes > 0) {
-    meter.push(`${report.processes} ${report.processes === 1 ? "process" : "processes"}`);
+    meter.push(`${report.processes} ${report.processes === 1 ? 'process' : 'processes'}`);
   }
   if (tokens > 0) meter.push(`${formatTokens(tokens)} tokens`);
   if (totals.cost_usd > 0) meter.push(formatCost(totals.cost_usd));
@@ -198,22 +198,22 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   // the news. Without the dimming the badge competes with a row of equals.
   const badge = theme.badge(badgeToken, ` ${glyph} ${headline} `);
   const meters = [formatDuration(report.duration_ms), ...meter];
-  lines.push(`  ${badge} ${parts.join(" · ")} ${theme.note(`· ${meters.join(" · ")}`)}`);
+  lines.push(`  ${badge} ${parts.join(' · ')} ${theme.note(`· ${meters.join(' · ')}`)}`);
 
   if (report.flagged.length > 0) {
-    lines.push("", `  ${theme.taskId("Flagged")}`);
+    lines.push('', `  ${theme.taskId('Flagged')}`);
     for (const note of report.flagged) {
       const glyph =
-        note.severity === "action_required"
-          ? theme.status("action")
-          : note.severity === "warn"
-            ? theme.status("warn")
-            : theme.status("note");
+        note.severity === 'action_required'
+          ? theme.status('action')
+          : note.severity === 'warn'
+            ? theme.status('warn')
+            : theme.status('note');
       const rows = wrap(note.message, width - 24);
       lines.push(
-        `    ${glyph} ${theme.taskId(note.task_id.padEnd(14))} ${rows[0] ?? ""}`,
+        `    ${glyph} ${theme.taskId(note.task_id.padEnd(14))} ${rows[0] ?? ''}`,
       );
-      for (const row of rows.slice(1)) lines.push(`      ${" ".repeat(15)} ${row}`);
+      for (const row of rows.slice(1)) lines.push(`      ${' '.repeat(15)} ${row}`);
     }
   }
 
@@ -225,6 +225,6 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
     written.length === 1 && written[0] !== undefined
       ? join(report.run_dir, written[0].output_path as string)
       : report.outputs_path;
-  lines.push("", `  ${theme.note("Outputs")}   ${outputs}`, "");
-  return lines.join("\n");
+  lines.push('', `  ${theme.note('Outputs')}   ${outputs}`, '');
+  return lines.join('\n');
 }

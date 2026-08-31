@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 import {
   mkdirSync,
   openSync,
@@ -8,16 +8,16 @@ import {
   renameSync,
   unlinkSync,
   writeFileSync,
-} from "node:fs";
-import { hostname } from "node:os";
-import { dirname } from "node:path";
+} from 'node:fs';
+import { hostname } from 'node:os';
+import { dirname } from 'node:path';
 import {
   DEFAULT_STALE_AFTER_MS,
   classifyLock,
   isLockInfo,
   type LockInfo,
   type LockVerdict,
-} from "./classify.js";
+} from './classify.js';
 
 export interface LockLogger {
   warn(event: string, fields?: Record<string, unknown>): void;
@@ -38,12 +38,12 @@ export interface FileLockOptions {
 
 export type AcquireResult =
   | { ok: true; token: string }
-  | { ok: false; holder: LockInfo | null; verdict: LockVerdict | "unreadable" };
+  | { ok: false; holder: LockInfo | null; verdict: LockVerdict | 'unreadable' };
 
 export type InspectResult =
-  | { state: "free" }
-  | { state: "held"; verdict: LockVerdict; info: LockInfo }
-  | { state: "unreadable" };
+  | { state: 'free' }
+  | { state: 'held'; verdict: LockVerdict; info: LockInfo }
+  | { state: 'unreadable' };
 
 const DEFAULT_HEARTBEAT_MS = 5_000;
 
@@ -53,7 +53,7 @@ export function defaultIsAlive(pid: number): boolean {
     return true;
   } catch (err) {
     // EPERM means the process exists but belongs to another user.
-    return (err as NodeJS.ErrnoException).code === "EPERM";
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
 
@@ -63,7 +63,7 @@ function isErrno(err: unknown, code: string): boolean {
 
 function readInfo(path: string): LockInfo | null {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
     return isLockInfo(parsed) ? parsed : null;
   } catch {
     return null;
@@ -132,9 +132,9 @@ export class FileLock {
     mkdirSync(dirname(this.path), { recursive: true });
     let fd: number;
     try {
-      fd = openSync(this.path, "wx");
+      fd = openSync(this.path, 'wx');
     } catch (err) {
-      if (isErrno(err, "EEXIST")) return null;
+      if (isErrno(err, 'EEXIST')) return null;
       throw err;
     }
     try {
@@ -159,7 +159,7 @@ export class FileLock {
     const current = readInfo(this.path);
     if (current === null || current.token !== judged.token) return false;
 
-    this.logger?.warn("lock.reclaimed", {
+    this.logger?.warn('lock.reclaimed', {
       path: this.path,
       stale_pid: judged.pid,
       stale_owner: judged.owner,
@@ -169,7 +169,7 @@ export class FileLock {
     try {
       unlinkSync(this.path);
     } catch (err) {
-      if (!isErrno(err, "ENOENT")) throw err;
+      if (!isErrno(err, 'ENOENT')) throw err;
     }
     return true;
   }
@@ -189,21 +189,21 @@ export class FileLock {
     const info = readInfo(this.path);
     // An unparseable lock is never removed automatically — we cannot tell
     // whether its holder is alive. `baya doctor` reports the path to delete.
-    if (info === null) return { ok: false, holder: null, verdict: "unreadable" };
+    if (info === null) return { ok: false, holder: null, verdict: 'unreadable' };
 
     const verdict = classifyLock(
       info,
       { now: this.now(), isAlive: this.isAlive },
       this.staleAfterMs,
     );
-    if (verdict === "live") return { ok: false, holder: info, verdict };
+    if (verdict === 'live') return { ok: false, holder: info, verdict };
 
     if (!this.tryReclaim(info)) return { ok: false, holder: info, verdict };
 
     const retaken = this.tryCreate();
     if (!retaken) {
       // Another reclaimer won the race; theirs is the live lock now.
-      return { ok: false, holder: readInfo(this.path), verdict: "live" };
+      return { ok: false, holder: readInfo(this.path), verdict: 'live' };
     }
     this.onAcquired(retaken);
     return { ok: true, token: retaken.token };
@@ -218,7 +218,7 @@ export class FileLock {
 
     // Best-effort release on a clean exit. Signal teardown is M2.4's job.
     this.exitHook = () => this.release();
-    process.once("exit", this.exitHook);
+    process.once('exit', this.exitHook);
   }
 
   private beat(): void {
@@ -227,12 +227,12 @@ export class FileLock {
     try {
       // Atomic content swap, so a concurrent reader never sees a partial write.
       const tmp = `${this.path}.${next.token}.tmp`;
-      writeFileSync(tmp, `${JSON.stringify(next)}\n`, "utf8");
+      writeFileSync(tmp, `${JSON.stringify(next)}\n`, 'utf8');
       renameSync(tmp, this.path);
       this.held = next;
     } catch (err) {
       // Not fatal: the lock ages toward stale and the next beat may succeed.
-      this.logger?.debug("lock.heartbeat_failed", {
+      this.logger?.debug('lock.heartbeat_failed', {
         path: this.path,
         error: (err as Error).message,
       });
@@ -250,16 +250,16 @@ export class FileLock {
       this.timer = undefined;
     }
     if (this.exitHook) {
-      process.removeListener("exit", this.exitHook);
+      process.removeListener('exit', this.exitHook);
       this.exitHook = undefined;
     }
 
     const current = readInfo(this.path);
     if (current !== null && current.token !== mine.token) {
       // Someone reclaimed us — deleting now would destroy their lock.
-      this.logger?.warn("lock.release_skipped", {
+      this.logger?.warn('lock.release_skipped', {
         path: this.path,
-        reason: "token_mismatch",
+        reason: 'token_mismatch',
       });
       return;
     }
@@ -267,7 +267,7 @@ export class FileLock {
     try {
       unlinkSync(this.path);
     } catch (err) {
-      if (!isErrno(err, "ENOENT")) throw err;
+      if (!isErrno(err, 'ENOENT')) throw err;
     }
   }
 
@@ -292,9 +292,9 @@ export function inspectLock(
 
   let raw: string;
   try {
-    raw = readFileSync(path, "utf8");
+    raw = readFileSync(path, 'utf8');
   } catch (err) {
-    if (isErrno(err, "ENOENT")) return { state: "free" };
+    if (isErrno(err, 'ENOENT')) return { state: 'free' };
     throw err;
   }
 
@@ -302,12 +302,12 @@ export function inspectLock(
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { state: "unreadable" };
+    return { state: 'unreadable' };
   }
-  if (!isLockInfo(parsed)) return { state: "unreadable" };
+  if (!isLockInfo(parsed)) return { state: 'unreadable' };
 
   return {
-    state: "held",
+    state: 'held',
     verdict: classifyLock(
       parsed,
       { now: now(), isAlive: options.isAlive ?? defaultIsAlive },

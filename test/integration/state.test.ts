@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
-import { RunStateSchema } from "../../src/executor/index.js";
-import { makeWorkspace, runCli, runIds, taskResult } from "../helpers/runCli.js";
-import { runPaths } from "../../src/executor/index.js";
+import { existsSync, readFileSync } from 'node:fs';
+import { RunStateSchema } from '../../src/executor/index.js';
+import { makeWorkspace, runCli, runIds, taskResult } from '../helpers/runCli.js';
+import { runPaths } from '../../src/executor/index.js';
 
 /**
  * `state.json` is written **before** each transition is acted on
@@ -12,23 +12,23 @@ import { runPaths } from "../../src/executor/index.js";
 const PLAN = {
   tasks: [
     {
-      id: "a",
-      title: "A",
-      instruction: "do a",
-      provider: "codex",
+      id: 'a',
+      title: 'A',
+      instruction: 'do a',
+      provider: 'codex',
       model: null,
       depends_on: [],
-      access: "read-only",
+      access: 'read-only',
       cwd: null,
     },
     {
-      id: "b",
-      title: "B",
-      instruction: "do b",
-      provider: "codex",
+      id: 'b',
+      title: 'B',
+      instruction: 'do b',
+      provider: 'codex',
       model: null,
-      depends_on: ["a"],
-      access: "read-only",
+      depends_on: ['a'],
+      access: 'read-only',
       cwd: null,
     },
   ],
@@ -38,19 +38,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-describe("state.json under a mid-run kill", () => {
-  it("is valid and reflects the last transition at every instant of a run", async () => {
+describe('state.json under a mid-run kill', () => {
+  it('is valid and reflects the last transition at every instant of a run', async () => {
     const workspace = makeWorkspace({
       scenario: {
         __planner__: { final: PLAN },
         // Long enough that the assertions below land while `a` is running.
-        a: { hang_ms: 400, final: taskResult("ok", { task_id: "a", summary: "did a" }) },
-        b: { final: taskResult("ok", { task_id: "b", summary: "did b" }) },
+        a: { hang_ms: 400, final: taskResult('ok', { task_id: 'a', summary: 'did a' }) },
+        b: { final: taskResult('ok', { task_id: 'b', summary: 'did b' }) },
       },
     });
 
     const before = new Set(runIds(workspace.cwd));
-    const running = runCli(["./tasks.md", "--yes"], { workspace });
+    const running = runCli(['./tasks.md', '--yes'], { workspace });
 
     // Poll the file the way a post-crash reader would: parse whatever is there.
     const snapshots: Array<{ status: string; states: Record<string, string> }> = [];
@@ -62,7 +62,7 @@ describe("state.json under a mid-run kill", () => {
       if (!existsSync(statePath)) continue;
 
       const parsed = RunStateSchema.safeParse(
-        JSON.parse(readFileSync(statePath, "utf8")),
+        JSON.parse(readFileSync(statePath, 'utf8')),
       );
       expect(parsed.success).toBe(true);
       if (!parsed.success) break;
@@ -72,7 +72,7 @@ describe("state.json under a mid-run kill", () => {
           Object.entries(parsed.data.tasks).map(([id, entry]) => [id, entry.state]),
         ),
       });
-      if (parsed.data.status !== "running") break;
+      if (parsed.data.status !== 'running') break;
     }
 
     const result = await running;
@@ -80,31 +80,31 @@ describe("state.json under a mid-run kill", () => {
 
     // The `running` transition was observable, which is what proves it was
     // checkpointed before the spawn rather than after it returned.
-    expect(snapshots.some((snapshot) => snapshot.states["a"] === "running")).toBe(true);
-    expect(snapshots[snapshots.length - 1]?.status).toBe("completed");
+    expect(snapshots.some((snapshot) => snapshot.states['a'] === 'running')).toBe(true);
+    expect(snapshots[snapshots.length - 1]?.status).toBe('completed');
   }, 20_000);
 
   it("records the child's pid, so a later doctor can reap a stray group", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], {
+    const result = await runCli(['./tasks.md', '--yes'], {
       scenario: {
         __planner__: { final: PLAN },
-        a: { final: taskResult("ok", { task_id: "a", summary: "did a" }) },
-        b: { final: taskResult("ok", { task_id: "b", summary: "did b" }) },
+        a: { final: taskResult('ok', { task_id: 'a', summary: 'did a' }) },
+        b: { final: taskResult('ok', { task_id: 'b', summary: 'did b' }) },
       },
     });
     const state = result.readJson(result.paths!.state) as {
       tasks: Record<string, { pid: number | null; duration_ms: number | null }>;
     };
-    expect(state.tasks["a"]?.pid).toBeGreaterThan(0);
-    expect(state.tasks["a"]?.duration_ms).toBeGreaterThanOrEqual(0);
+    expect(state.tasks['a']?.pid).toBeGreaterThan(0);
+    expect(state.tasks['a']?.duration_ms).toBeGreaterThanOrEqual(0);
   });
 
-  it("leaves no temporary file behind after the final checkpoint", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], {
+  it('leaves no temporary file behind after the final checkpoint', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], {
       scenario: {
         __planner__: { final: PLAN },
-        a: { final: taskResult("ok", { task_id: "a", summary: "did a" }) },
-        b: { final: taskResult("ok", { task_id: "b", summary: "did b" }) },
+        a: { final: taskResult('ok', { task_id: 'a', summary: 'did a' }) },
+        b: { final: taskResult('ok', { task_id: 'b', summary: 'did b' }) },
       },
     });
     expect(existsSync(`${result.paths!.state}.${process.pid}.tmp`)).toBe(false);

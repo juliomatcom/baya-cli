@@ -6,13 +6,13 @@ export {
   type ProviderUsage,
   type ResolvedProvider,
   type SpawnPlan,
-} from "./types.js";
+} from './types.js';
 export {
   enumerateModels,
   knownLocations,
   probeVersion,
   resolveBinary,
-} from "./resolve.js";
+} from './resolve.js';
 export {
   extractResultFromText,
   lastJsonFence,
@@ -20,7 +20,7 @@ export {
   synthesizeFailure,
   type ParsedResults,
   type ResultRung,
-} from "./result.js";
+} from './result.js';
 export {
   BUILTIN_CATALOG,
   catalogToPersist,
@@ -34,11 +34,11 @@ export {
   type ResolvedModel,
   type ResolveResult,
   type ResolvedVia,
-} from "./catalog.js";
-export { codexAdapter } from "./codex.js";
-export { claudeAdapter } from "./claude.js";
-export { opencodeAdapter } from "./opencode.js";
-export { copilotAdapter } from "./copilot.js";
+} from './catalog.js';
+export { codexAdapter } from './codex.js';
+export { claudeAdapter } from './claude.js';
+export { OPENCODE_PROVIDER, opencodeAdapter } from './opencode.js';
+export { copilotAdapter } from './copilot.js';
 export {
   V1_ADAPTERS,
   createDefaultRegistry,
@@ -46,4 +46,4 @@ export {
   type ProviderStatus,
   type Registry,
   type ResolveOptions,
-} from "./registry.js";
+} from './registry.js';

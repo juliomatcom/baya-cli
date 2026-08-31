@@ -9,6 +9,8 @@ USAGE
   baya doctor                     check provider installs
   baya config [--show|path|set|refresh-models]
   baya models [provider]          list effective catalog; optional provider filter; --json emits catalog as JSON
+  baya runs                       list resumable runs, newest first; --json emits the rows
+  baya resume [<runId>]           re-run a run's unfinished tasks; no id ⇒ pick from a list
 
 PROVIDERS
   codex      ✗ not found — npm i -g @openai/codex
@@ -28,6 +30,10 @@ OPTIONS
   --no-memory                do not pass what earlier tasks learned
   --memory-budget <n>        memory block size in chars (default 1200)
   --group-size <n>           max tasks per provider process (default 3)
+  --max-parallel <n>         global process concurrency (default min(4, cpus))
+  --on-error <mode>          continue (default) | stop
+  --retries <n>              extra attempts on a transient failure (default 1)
+  --provider <id>            resume only: re-run the unfinished tasks elsewhere
   --dangerously-allow-all    full permission bypass
   --json                     machine-readable run report on stdout
   --log-level <l>            trace|debug|info|warn|error (default info)

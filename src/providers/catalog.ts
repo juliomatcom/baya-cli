@@ -2,7 +2,7 @@
  * For a new or corrected model, add a `modelCatalog` config override first;
  * submit a PR updating `BUILTIN_CATALOG` only when it is a confirmed shared default.
  */
-import { PROVIDER_IDS, providerForModel, type ProviderId } from "../manifest/index.js";
+import { PROVIDER_IDS, providerForModel, type ProviderId } from '../manifest/index.js';
 
 /**
  * Model catalog + resolution (M3.6, extended 2026-08-29).
@@ -34,38 +34,38 @@ export type Catalog = Partial<Record<ProviderId, CatalogModel[]>>;
 
 export const BUILTIN_CATALOG: Catalog = {
   codex: [
-    { id: "gpt-5.6-sol", aliases: ["sol"], description: "highest capability" },
+    { id: 'gpt-5.6-sol', aliases: ['sol'], description: 'highest capability' },
     {
-      id: "gpt-5.6-terra",
-      aliases: ["terra"],
-      description: "balances quality and cost",
+      id: 'gpt-5.6-terra',
+      aliases: ['terra'],
+      description: 'balances quality and cost',
     },
     {
-      id: "gpt-5.6-luna",
-      aliases: ["luna"],
-      description: "optimized for cost and high volume",
+      id: 'gpt-5.6-luna',
+      aliases: ['luna'],
+      description: 'optimized for cost and high volume',
     },
   ],
   claude: [
     {
-      id: "claude-fable-5",
-      aliases: ["fable"],
-      description: "next-generation intelligence for long-running agents; slower",
+      id: 'claude-fable-5',
+      aliases: ['fable'],
+      description: 'next-generation intelligence for long-running agents; slower',
     },
     {
-      id: "claude-opus-5",
-      aliases: ["opus"],
-      description: "complex agentic coding and enterprise work; moderate speed",
+      id: 'claude-opus-5',
+      aliases: ['opus'],
+      description: 'complex agentic coding and enterprise work; moderate speed',
     },
     {
-      id: "claude-sonnet-5",
-      aliases: ["sonnet"],
-      description: "best combination of speed and intelligence; fast",
+      id: 'claude-sonnet-5',
+      aliases: ['sonnet'],
+      description: 'best combination of speed and intelligence; fast',
     },
     {
-      id: "claude-haiku-4-5-20251001",
-      aliases: ["haiku"],
-      description: "fastest model with near-frontier intelligence; cheapest",
+      id: 'claude-haiku-4-5-20251001',
+      aliases: ['haiku'],
+      description: 'fastest model with near-frontier intelligence; cheapest',
     },
   ],
   // copilot has no `models` command and its docs list display names, not the
@@ -75,38 +75,38 @@ export const BUILTIN_CATALOG: Catalog = {
   // model gate's best-match + prompt and `baya config refresh-models` (once a
   // list command exists) are the escape hatches. Fix a slug here when you hit one.
   copilot: [
-    { id: "auto", aliases: [], description: "copilot picks a model per request" },
-    { id: "claude-sonnet-4.6", aliases: [], description: "anthropic, balanced" },
-    { id: "claude-sonnet-5", aliases: [], description: "anthropic, latest balanced" },
-    { id: "claude-opus-4.6", aliases: [], description: "anthropic, complex reasoning" },
-    { id: "claude-opus-4.7", aliases: [], description: "anthropic, advanced reasoning" },
+    { id: 'auto', aliases: [], description: 'copilot picks a model per request' },
+    { id: 'claude-sonnet-4.6', aliases: [], description: 'anthropic, balanced' },
+    { id: 'claude-sonnet-5', aliases: [], description: 'anthropic, latest balanced' },
+    { id: 'claude-opus-4.6', aliases: [], description: 'anthropic, complex reasoning' },
+    { id: 'claude-opus-4.7', aliases: [], description: 'anthropic, advanced reasoning' },
     {
-      id: "claude-opus-4.8",
+      id: 'claude-opus-4.8',
       aliases: [],
-      description: "anthropic, complex problem-solving",
+      description: 'anthropic, complex problem-solving',
     },
     {
-      id: "claude-opus-4.8-fast",
+      id: 'claude-opus-4.8-fast',
       aliases: [],
-      description: "anthropic, opus 4.8 speed-focused (preview)",
+      description: 'anthropic, opus 4.8 speed-focused (preview)',
     },
     {
-      id: "claude-opus-5",
+      id: 'claude-opus-5',
       aliases: [],
-      description: "anthropic, latest high-performance",
+      description: 'anthropic, latest high-performance',
     },
     {
-      id: "claude-fable-5",
+      id: 'claude-fable-5',
       aliases: [],
-      description: "anthropic, cost-efficient, safety focus",
+      description: 'anthropic, cost-efficient, safety focus',
     },
-    { id: "gpt-5.3-codex", aliases: [], description: "openai, long-term support" },
-    { id: "gpt-5.4", aliases: [], description: "openai, strong general capability" },
-    { id: "gpt-5.5", aliases: [], description: "openai, enhanced performance" },
-    { id: "gpt-5.6-luna", aliases: [], description: "openai, cost and high volume" },
-    { id: "gpt-5.6-sol", aliases: [], description: "openai, highest capability" },
-    { id: "gpt-5.6-terra", aliases: [], description: "openai, quality and cost" },
-    { id: "kimi-k3", aliases: [], description: "moonshot ai, multilingual" },
+    { id: 'gpt-5.3-codex', aliases: [], description: 'openai, long-term support' },
+    { id: 'gpt-5.4', aliases: [], description: 'openai, strong general capability' },
+    { id: 'gpt-5.5', aliases: [], description: 'openai, enhanced performance' },
+    { id: 'gpt-5.6-luna', aliases: [], description: 'openai, cost and high volume' },
+    { id: 'gpt-5.6-sol', aliases: [], description: 'openai, highest capability' },
+    { id: 'gpt-5.6-terra', aliases: [], description: 'openai, quality and cost' },
+    { id: 'kimi-k3', aliases: [], description: 'moonshot ai, multilingual' },
   ],
 };
 
@@ -125,7 +125,7 @@ export function mergeCatalog(base: Catalog, extra: Catalog | undefined): Catalog
 
 /** `opencode models` prints `provider/model` lines; turn them into catalog entries. */
 export function opencodeCatalog(ids: readonly string[]): CatalogModel[] {
-  return ids.map((id) => ({ id, aliases: [], description: "" }));
+  return ids.map((id) => ({ id, aliases: [], description: '' }));
 }
 
 // ------------------------------------------------------------- what to persist
@@ -141,7 +141,7 @@ function sameEntry(a: CatalogModel, b: CatalogModel): boolean {
 
 /** A generated `opencode` entry carries no aliases and no description. */
 function isAuthoredOpencodeEntry(model: CatalogModel): boolean {
-  return model.aliases.length > 0 || model.description !== "";
+  return model.aliases.length > 0 || model.description !== '';
 }
 
 /**
@@ -203,7 +203,7 @@ export function catalogToPersist(
 
 // ---------------------------------------------------------------- resolution
 
-export type ResolvedVia = "exact" | "alias" | "user-alias" | "best-match" | "literal";
+export type ResolvedVia = 'exact' | 'alias' | 'user-alias' | 'best-match' | 'literal';
 
 export interface ResolvedModel {
   provider: ProviderId;
@@ -293,7 +293,7 @@ export function scoreModel(requested: string, model: CatalogModel): number {
   }
   best = Math.max(
     best,
-    tokenSimilarity(requested, `${model.id} ${model.aliases.join(" ")}`),
+    tokenSimilarity(requested, `${model.id} ${model.aliases.join(' ')}`),
   );
   if (model.description) {
     best = Math.max(best, tokenSimilarity(requested, model.description) * 0.6);
@@ -334,7 +334,7 @@ export function resolveModel(requested: string, options: ResolveOptions): Resolv
     .map(({ provider, model }) => ({
       provider,
       model: model.id,
-      via: (viaUserAlias ? "user-alias" : "exact") as ResolvedVia,
+      via: (viaUserAlias ? 'user-alias' : 'exact') as ResolvedVia,
       score: 1,
     }));
   if (exact.length > 0) {
@@ -349,7 +349,7 @@ export function resolveModel(requested: string, options: ResolveOptions): Resolv
     .map(({ provider, model }) => ({
       provider,
       model: model.id,
-      via: (viaUserAlias ? "user-alias" : "alias") as ResolvedVia,
+      via: (viaUserAlias ? 'user-alias' : 'alias') as ResolvedVia,
       score: 1,
     }));
   if (aliased.length > 0) {
@@ -364,7 +364,7 @@ export function resolveModel(requested: string, options: ResolveOptions): Resolv
     .map(({ provider, model }) => ({
       provider,
       model: model.id,
-      via: "best-match" as ResolvedVia,
+      via: 'best-match' as ResolvedVia,
       score: scoreModel(name, model),
     }))
     .filter((c) => c.score > 0.2)
@@ -377,7 +377,7 @@ export function resolveModel(requested: string, options: ResolveOptions): Resolv
     ranked.push({
       provider: patternProvider,
       model: name,
-      via: "literal",
+      via: 'literal',
       score: 0.3,
     });
   }

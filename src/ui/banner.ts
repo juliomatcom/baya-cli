@@ -1,4 +1,4 @@
-import type { Theme } from "./theme.js";
+import type { Theme } from './theme.js';
 
 /**
  * The wordmark printed once at the top of every human-facing invocation.
@@ -8,12 +8,12 @@ import type { Theme } from "./theme.js";
  * (`--json`, `--version`, `--quiet`) — see `shouldShowBanner` in `cli/index.ts`.
  */
 const LINES = [
-  "▗▄▄▖  ▗▄▖▗▖  ▗▖▗▄▖      ▗▄▄▖▗▖   ▗▄▄▄▖",
-  "▐▌ ▐▌▐▌ ▐▌▝▚▞▘▐▌ ▐▌    ▐▌   ▐▌     █         (º>",
-  "▐▛▀▚▖▐▛▀▜▌ ▐▌ ▐▛▀▜▌    ▐▌   ▐▌     █      //(  )",
-  "▐▙▄▞▘▐▌ ▐▌ ▐▌ ▐▌ ▐▌    ▝▚▄▄▖▐▙▄▄▖▗▄█▄▖     //¯\\\\",
+  '▗▄▄▖  ▗▄▖▗▖  ▗▖▗▄▖      ▗▄▄▖▗▖   ▗▄▄▄▖',
+  '▐▌ ▐▌▐▌ ▐▌▝▚▞▘▐▌ ▐▌    ▐▌   ▐▌     █         (º>',
+  '▐▛▀▚▖▐▛▀▜▌ ▐▌ ▐▛▀▜▌    ▐▌   ▐▌     █      //(  )',
+  '▐▙▄▞▘▐▌ ▐▌ ▐▌ ▐▌ ▐▌    ▝▚▄▄▖▐▙▄▄▖▗▄█▄▖     //¯\\\\',
 ];
 
 export function renderBanner(theme: Theme): string {
-  return `${LINES.map((line) => theme.run(line)).join("\n")}\n\n`;
+  return `${LINES.map((line) => theme.run(line)).join('\n')}\n\n`;
 }

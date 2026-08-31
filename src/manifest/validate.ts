@@ -1,4 +1,4 @@
-import { checkModelRouting } from "./aliases.js";
+import { checkModelRouting } from './aliases.js';
 import {
   ManifestSchema,
   PROVIDER_IDS,
@@ -6,21 +6,21 @@ import {
   type Manifest,
   type ProviderId,
   type Task,
-} from "./schemas.js";
+} from './schemas.js';
 
 /**
  * Manifest validation (protocol.md §1). Pure — no I/O, no clock, no spawn —
  * which is why it carries the bulk of the test coverage.
  */
 export type ValidationCode =
-  | "schema"
-  | "id_format"
-  | "id_duplicate"
-  | "dep_unresolved"
-  | "dep_cycle"
-  | "provider_not_allowed"
-  | "model_routing"
-  | "too_many_tasks";
+  | 'schema'
+  | 'id_format'
+  | 'id_duplicate'
+  | 'dep_unresolved'
+  | 'dep_cycle'
+  | 'provider_not_allowed'
+  | 'model_routing'
+  | 'too_many_tasks';
 
 export interface ValidationError {
   code: ValidationCode;
@@ -58,8 +58,8 @@ export function validateManifest(
     return {
       ok: false,
       errors: parsed.error.issues.map((issue) => ({
-        code: "schema" as const,
-        message: `${issue.path.join(".") || "<root>"}: ${issue.message}`,
+        code: 'schema' as const,
+        message: `${issue.path.join('.') || '<root>'}: ${issue.message}`,
       })),
     };
   }
@@ -86,7 +86,7 @@ function checkIdFormat(tasks: Task[]): ValidationError[] {
   return tasks
     .filter((task) => !TASK_ID_PATTERN.test(task.id))
     .map((task) => ({
-      code: "id_format" as const,
+      code: 'id_format' as const,
       taskId: task.id,
       message: `task id "${task.id}" must be kebab-case matching ${TASK_ID_PATTERN.source}`,
     }));
@@ -100,7 +100,7 @@ function checkIdUniqueness(tasks: Task[]): ValidationError[] {
     seen.add(task.id);
   }
   return [...duplicated].map((id) => ({
-    code: "id_duplicate" as const,
+    code: 'id_duplicate' as const,
     taskId: id,
     message: `duplicate task id "${id}"`,
   }));
@@ -113,7 +113,7 @@ function checkDepsResolve(tasks: Task[]): ValidationError[] {
     for (const dep of task.depends_on) {
       if (!ids.has(dep)) {
         errors.push({
-          code: "dep_unresolved",
+          code: 'dep_unresolved',
           taskId: task.id,
           message: `task "${task.id}" depends on unknown task "${dep}"`,
         });
@@ -158,8 +158,8 @@ function checkAcyclic(tasks: Task[]): ValidationError[] {
   );
   return [
     {
-      code: "dep_cycle",
-      message: `dependency cycle: ${cycle.join(" -> ")}`,
+      code: 'dep_cycle',
+      message: `dependency cycle: ${cycle.join(' -> ')}`,
       ...(cycle.length > 0 ? { path: cycle } : {}),
     },
   ];
@@ -167,31 +167,31 @@ function checkAcyclic(tasks: Task[]): ValidationError[] {
 
 /** Iterative DFS over the unsettled nodes; returns the cycle as a closed path. */
 function findCycle(candidates: string[], deps: Map<string, string[]>): string[] {
-  const state = new Map<string, "open" | "closed">();
+  const state = new Map<string, 'open' | 'closed'>();
   const stack: string[] = [];
 
   const visit = (start: string): string[] | null => {
     const frames: Array<{ id: string; queue: string[] }> = [
       { id: start, queue: [...(deps.get(start) ?? [])] },
     ];
-    state.set(start, "open");
+    state.set(start, 'open');
     stack.push(start);
 
     while (frames.length > 0) {
       const frame = frames[frames.length - 1] as { id: string; queue: string[] };
       const next = frame.queue.shift();
       if (next === undefined) {
-        state.set(frame.id, "closed");
+        state.set(frame.id, 'closed');
         stack.pop();
         frames.pop();
         continue;
       }
-      if (state.get(next) === "open") {
+      if (state.get(next) === 'open') {
         const from = stack.indexOf(next);
         return [...stack.slice(from), next];
       }
-      if (state.get(next) === "closed" || !deps.has(next)) continue;
-      state.set(next, "open");
+      if (state.get(next) === 'closed' || !deps.has(next)) continue;
+      state.set(next, 'open');
       stack.push(next);
       frames.push({ id: next, queue: [...(deps.get(next) ?? [])] });
     }
@@ -213,9 +213,9 @@ function checkProviders(
   return tasks
     .filter((task) => task.provider !== null && !allowlist.includes(task.provider))
     .map((task) => ({
-      code: "provider_not_allowed" as const,
+      code: 'provider_not_allowed' as const,
       taskId: task.id,
-      message: `task "${task.id}" names provider "${task.provider as string}", not in the allowlist [${allowlist.join(", ")}]`,
+      message: `task "${task.id}" names provider "${task.provider as string}", not in the allowlist [${allowlist.join(', ')}]`,
     }));
 }
 
@@ -229,7 +229,7 @@ function checkModelAliases(
   allowlist: readonly ProviderId[],
 ): ValidationError[] {
   return checkModelRouting(tasks, allowlist).map((issue) => ({
-    code: "model_routing" as const,
+    code: 'model_routing' as const,
     taskId: issue.taskId,
     message: issue.message,
   }));
@@ -239,7 +239,7 @@ function checkTaskCount(tasks: Task[], maxTasks: number): ValidationError[] {
   if (tasks.length <= maxTasks) return [];
   return [
     {
-      code: "too_many_tasks",
+      code: 'too_many_tasks',
       message: `plan has ${tasks.length} tasks, above the --max-tasks limit of ${maxTasks}`,
     },
   ];

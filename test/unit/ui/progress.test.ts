@@ -1,14 +1,14 @@
-import { PassThrough } from "node:stream";
-import { createProgress, restoreCursor } from "../../../src/ui/progress.js";
+import { PassThrough } from 'node:stream';
+import { createProgress, restoreCursor } from '../../../src/ui/progress.js';
 
-const SHOW_CURSOR = "\u001B[?25h";
+const SHOW_CURSOR = '\u001B[?25h';
 
 /** A writable that reports itself as a TTY, so ora takes its live path. */
 function fakeTty(): { stream: NodeJS.WriteStream; written: () => string } {
   const stream = new PassThrough() as unknown as NodeJS.WriteStream;
-  let buffer = "";
-  (stream as unknown as PassThrough).on("data", (chunk: Buffer) => {
-    buffer += chunk.toString("utf8");
+  let buffer = '';
+  (stream as unknown as PassThrough).on('data', (chunk: Buffer) => {
+    buffer += chunk.toString('utf8');
   });
   (stream as { isTTY?: boolean }).isTTY = true;
   (stream as { columns?: number }).columns = 80;
@@ -23,43 +23,43 @@ function fakeTty(): { stream: NodeJS.WriteStream; written: () => string } {
 
 function fakePipe(): { stream: NodeJS.WritableStream; written: () => string } {
   const stream = new PassThrough();
-  let buffer = "";
-  stream.on("data", (chunk: Buffer) => {
-    buffer += chunk.toString("utf8");
+  let buffer = '';
+  stream.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString('utf8');
   });
   return { stream, written: () => buffer };
 }
 
-describe("createProgress enablement", () => {
-  it("is on for an interactive stderr", () => {
+describe('createProgress enablement', () => {
+  it('is on for an interactive stderr', () => {
     const { stream } = fakeTty();
     expect(createProgress({ stream, env: {}, installExitGuard: false }).enabled).toBe(
       true,
     );
   });
 
-  it("is off when stderr is not a TTY — spinner frames in a pipe are noise", () => {
+  it('is off when stderr is not a TTY — spinner frames in a pipe are noise', () => {
     const { stream } = fakePipe();
     expect(createProgress({ stream, env: {}, installExitGuard: false }).enabled).toBe(
       false,
     );
   });
 
-  it("is off under --json, so stdout stays a clean document", () => {
+  it('is off under --json, so stdout stays a clean document', () => {
     const { stream } = fakeTty();
     expect(
       createProgress({ stream, env: {}, json: true, installExitGuard: false }).enabled,
     ).toBe(false);
   });
 
-  it("is off under NO_COLOR", () => {
+  it('is off under NO_COLOR', () => {
     const { stream } = fakeTty();
     expect(
-      createProgress({ stream, env: { NO_COLOR: "1" }, installExitGuard: false }).enabled,
+      createProgress({ stream, env: { NO_COLOR: '1' }, installExitGuard: false }).enabled,
     ).toBe(false);
   });
 
-  it("is off under --no-progress", () => {
+  it('is off under --no-progress', () => {
     const { stream } = fakeTty();
     expect(
       createProgress({ stream, env: {}, disabled: true, installExitGuard: false })
@@ -68,58 +68,58 @@ describe("createProgress enablement", () => {
   });
 });
 
-describe("progress.write", () => {
-  it("passes lines straight through when disabled", () => {
+describe('progress.write', () => {
+  it('passes lines straight through when disabled', () => {
     const { stream, written } = fakePipe();
     const progress = createProgress({ stream, env: {}, installExitGuard: false });
-    progress.write("hello");
-    expect(written()).toBe("hello\n");
+    progress.write('hello');
+    expect(written()).toBe('hello\n');
   });
 
-  it("does not double a trailing newline", () => {
+  it('does not double a trailing newline', () => {
     const { stream, written } = fakePipe();
-    createProgress({ stream, env: {}, installExitGuard: false }).write("hello\n");
-    expect(written()).toBe("hello\n");
+    createProgress({ stream, env: {}, installExitGuard: false }).write('hello\n');
+    expect(written()).toBe('hello\n');
   });
 
-  it("clears and repaints around a persistent line while spinning", () => {
+  it('clears and repaints around a persistent line while spinning', () => {
     const { stream, written } = fakeTty();
     const progress = createProgress({ stream, env: {}, installExitGuard: false });
-    progress.start("working");
-    progress.write("a task finished");
+    progress.start('working');
+    progress.write('a task finished');
     progress.dispose();
-    expect(written()).toContain("a task finished");
+    expect(written()).toContain('a task finished');
   });
 });
 
-describe("cursor restoration", () => {
-  it("emits the show-cursor escape on dispose — ora hides it", () => {
+describe('cursor restoration', () => {
+  it('emits the show-cursor escape on dispose — ora hides it', () => {
     const { stream, written } = fakeTty();
     const progress = createProgress({ stream, env: {}, installExitGuard: false });
-    progress.start("working");
+    progress.start('working');
     progress.dispose();
     expect(written()).toContain(SHOW_CURSOR);
   });
 
-  it("restores again on a second dispose, as a signal handler would call it", () => {
+  it('restores again on a second dispose, as a signal handler would call it', () => {
     const { stream, written } = fakeTty();
     const progress = createProgress({ stream, env: {}, installExitGuard: false });
-    progress.start("working");
+    progress.start('working');
     progress.dispose();
     const afterFirst = written().split(SHOW_CURSOR).length - 1;
     progress.dispose();
     expect(written().split(SHOW_CURSOR).length - 1).toBeGreaterThan(afterFirst);
   });
 
-  it("restoreCursor is callable directly from a signal handler", () => {
+  it('restoreCursor is callable directly from a signal handler', () => {
     const { stream, written } = fakeTty();
     restoreCursor(stream);
     expect(written()).toBe(SHOW_CURSOR);
   });
 
-  it("writes no escape to a non-TTY, which would otherwise pollute a log file", () => {
+  it('writes no escape to a non-TTY, which would otherwise pollute a log file', () => {
     const { stream, written } = fakePipe();
     restoreCursor(stream);
-    expect(written()).toBe("");
+    expect(written()).toBe('');
   });
 });

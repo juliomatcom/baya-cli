@@ -1,3 +1,3 @@
-import chalk from "chalk";
+import chalk from 'chalk';
 
-export const banner = chalk.green("this should never compile outside theme.ts");
+export const banner = chalk.green('this should never compile outside theme.ts');

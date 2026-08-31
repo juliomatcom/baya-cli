@@ -1,4 +1,4 @@
-import { Chalk } from "chalk";
+import { Chalk } from 'chalk';
 
 /**
  * The sole chalk importer (conventions.md #11, cli.md "Color"). Everywhere
@@ -6,26 +6,26 @@ import { Chalk } from "chalk";
  * is a lint error (`no-restricted-imports` in eslint.config.js).
  */
 export type StatusToken =
-  "ok" | "fail" | "skip" | "park" | "run" | "pending" | "warn" | "action" | "note";
+  'ok' | 'fail' | 'skip' | 'park' | 'run' | 'pending' | 'warn' | 'action' | 'note';
 
 /** Meaning is never carried by color alone — every status token pairs with a glyph. */
 export const GLYPHS: Record<StatusToken, string> = {
-  ok: "✓",
-  fail: "✗",
-  skip: "⊘",
-  park: "⏸",
-  run: "▸",
-  pending: "·",
-  warn: "!",
-  action: "⚑",
-  note: "·",
+  ok: '✓',
+  fail: '✗',
+  skip: '⊘',
+  park: '⏸',
+  run: '▸',
+  pending: '·',
+  warn: '!',
+  action: '⚑',
+  note: '·',
 };
 
-export type ColorMode = "auto" | "always" | "never";
+export type ColorMode = 'auto' | 'always' | 'never';
 
 function resolveLevel(mode: ColorMode): 0 | 1 | 2 | 3 {
-  if (mode === "never") return 0;
-  if (mode === "always") return 1;
+  if (mode === 'never') return 0;
+  if (mode === 'always') return 1;
   // "auto": chalk's own detection already honors NO_COLOR, FORCE_COLOR, and TTY.
   return new Chalk().level;
 }
@@ -54,11 +54,11 @@ export interface Theme {
    * terminal's default foreground is the classic way to produce unreadable
    * output on somebody else's color scheme.
    */
-  badge: (token: "ok" | "warn" | "fail", text: string) => string;
+  badge: (token: 'ok' | 'warn' | 'fail', text: string) => string;
   readonly level: 0 | 1 | 2 | 3;
 }
 
-export function createTheme(mode: ColorMode = "auto"): Theme {
+export function createTheme(mode: ColorMode = 'auto'): Theme {
   const level = resolveLevel(mode);
   const c = new Chalk({ level });
 
@@ -74,10 +74,10 @@ export function createTheme(mode: ColorMode = "auto"): Theme {
   const action = (text: string): string => c.bold.yellow(text);
   const note = (text: string): string => c.dim(text);
 
-  const badge = (token: "ok" | "warn" | "fail", text: string): string =>
-    token === "ok"
+  const badge = (token: 'ok' | 'warn' | 'fail', text: string): string =>
+    token === 'ok'
       ? c.bgGreen.black(text)
-      : token === "warn"
+      : token === 'warn'
         ? c.bgYellow.black(text)
         : c.bgRed.white(text);
 
@@ -117,11 +117,11 @@ export function createTheme(mode: ColorMode = "auto"): Theme {
  * `report.json`, `result.json`, `events.jsonl`, `stdout.log` (cli.md, forced
  * rather than TTY-inferred so a piped `--json` run never emits ANSI).
  */
-export const machineTheme: Theme = createTheme("never");
+export const machineTheme: Theme = createTheme('never');
 
 /**
  * Default theme, auto-detected (NO_COLOR/FORCE_COLOR/TTY via chalk). Command
  * routing (M1.9) builds a theme from `--color`/`--no-color` per invocation;
  * this singleton serves modules that render before that's wired up.
  */
-export const theme: Theme = createTheme("auto");
+export const theme: Theme = createTheme('auto');

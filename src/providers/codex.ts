@@ -1,6 +1,6 @@
-import { type ProviderEvent, type TaskResult } from "../manifest/index.js";
-import { stripAnsi } from "../log/index.js";
-import { parseResultJson, synthesizeFailure } from "./result.js";
+import { type ProviderEvent, type TaskResult } from '../manifest/index.js';
+import { stripAnsi } from '../log/index.js';
+import { parseResultJson, synthesizeFailure } from './result.js';
 import type {
   BuildRunInput,
   ExtractContext,
@@ -8,7 +8,7 @@ import type {
   ProviderAdapter,
   ProviderUsage,
   SpawnPlan,
-} from "./types.js";
+} from './types.js';
 
 /**
  * codex adapter (providers.md §codex, verified live 2026-08-28).
@@ -23,8 +23,8 @@ import type {
  */
 
 function sandboxFor(input: BuildRunInput): string {
-  if (input.dangerouslyAllowAll) return "danger-full-access";
-  return input.task.access === "read-write" ? "workspace-write" : "read-only";
+  if (input.dangerouslyAllowAll) return 'danger-full-access';
+  return input.task.access === 'read-write' ? 'workspace-write' : 'read-only';
 }
 
 /**
@@ -45,13 +45,13 @@ function sandboxFor(input: BuildRunInput): string {
  * - **`--color`** — ANSI is stripped everywhere regardless (conventions #12),
  *   so this costs nothing.
  */
-function commonFlags(input: BuildRunInput, mode: "exec" | "resume"): string[] {
-  const argv = ["--json"];
-  if (mode === "exec") argv.push("--color", "never");
-  argv.push("--skip-git-repo-check");
-  if (mode === "exec") argv.push("-C", input.cwd, "-s", sandboxFor(input));
-  argv.push("--output-schema", input.schemaPath, "-o", input.resultFile);
-  if (input.model !== null) argv.push("-m", input.model);
+function commonFlags(input: BuildRunInput, mode: 'exec' | 'resume'): string[] {
+  const argv = ['--json'];
+  if (mode === 'exec') argv.push('--color', 'never');
+  argv.push('--skip-git-repo-check');
+  if (mode === 'exec') argv.push('-C', input.cwd, '-s', sandboxFor(input));
+  argv.push('--output-schema', input.schemaPath, '-o', input.resultFile);
+  if (input.model !== null) argv.push('-m', input.model);
   return argv;
 }
 
@@ -63,29 +63,29 @@ function commonFlags(input: BuildRunInput, mode: "exec" | "resume"): string[] {
  * older shape is kept as a fallback because it costs one `??`.
  */
 function changedPaths(item: Record<string, unknown>): string[] {
-  const changes = item["changes"];
+  const changes = item['changes'];
   if (Array.isArray(changes)) {
     return changes
       .map((change) => {
-        if (change === null || typeof change !== "object") return "";
-        return String((change as Record<string, unknown>)["path"] ?? "");
+        if (change === null || typeof change !== 'object') return '';
+        return String((change as Record<string, unknown>)['path'] ?? '');
       })
-      .filter((path) => path !== "");
+      .filter((path) => path !== '');
   }
-  const single = item["path"];
-  return typeof single === "string" && single !== "" ? [single] : [];
+  const single = item['path'];
+  return typeof single === 'string' && single !== '' ? [single] : [];
 }
 
 function toolNameFor(itemType: string, item: Record<string, unknown>): string {
   switch (itemType) {
-    case "command_execution":
-      return `Shell(${String(item["command"] ?? "")})`;
-    case "file_change":
-      return `Edit(${changedPaths(item).join(", ")})`;
-    case "mcp_tool_call":
-      return `${String(item["server"] ?? "mcp")}.${String(item["tool"] ?? "")}`;
-    case "web_search":
-      return `Search(${String(item["query"] ?? "")})`;
+    case 'command_execution':
+      return `Shell(${String(item['command'] ?? '')})`;
+    case 'file_change':
+      return `Edit(${changedPaths(item).join(', ')})`;
+    case 'mcp_tool_call':
+      return `${String(item['server'] ?? 'mcp')}.${String(item['tool'] ?? '')}`;
+    case 'web_search':
+      return `Search(${String(item['query'] ?? '')})`;
     default:
       return itemType;
   }
@@ -97,82 +97,82 @@ function eventForLine(line: string): ProviderEvent {
   try {
     parsed = JSON.parse(trimmed);
   } catch {
-    return { t: "unknown", raw: trimmed };
+    return { t: 'unknown', raw: trimmed };
   }
-  if (parsed === null || typeof parsed !== "object") {
-    return { t: "unknown", raw: trimmed };
+  if (parsed === null || typeof parsed !== 'object') {
+    return { t: 'unknown', raw: trimmed };
   }
   const obj = parsed as Record<string, unknown>;
 
-  switch (obj["type"]) {
-    case "thread.started": {
-      const id = obj["thread_id"];
+  switch (obj['type']) {
+    case 'thread.started': {
+      const id = obj['thread_id'];
       // The session id is the whole reason this event matters; without it the
       // line is just noise, and `unknown` is where noise belongs.
-      if (typeof id === "string") return { t: "session", id };
-      return { t: "unknown", raw: trimmed };
+      if (typeof id === 'string') return { t: 'session', id };
+      return { t: 'unknown', raw: trimmed };
     }
-    case "item.completed": {
-      const item = obj["item"];
-      if (item === null || typeof item !== "object") {
-        return { t: "unknown", raw: trimmed };
+    case 'item.completed': {
+      const item = obj['item'];
+      if (item === null || typeof item !== 'object') {
+        return { t: 'unknown', raw: trimmed };
       }
       const record = item as Record<string, unknown>;
-      const itemType = String(record["type"] ?? "");
-      if (itemType === "agent_message") {
-        return { t: "text", text: String(record["text"] ?? "") };
+      const itemType = String(record['type'] ?? '');
+      if (itemType === 'agent_message') {
+        return { t: 'text', text: String(record['text'] ?? '') };
       }
       // codex reports its own diagnostics (a missing model-metadata entry, a
       // truncated turn) as an `error` item. That is a message to read in full,
       // not a tool call to abbreviate.
-      if (itemType === "error") {
-        const message = String(record["message"] ?? trimmed);
-        return { t: "error", kind: classifyErrorText(message), message };
+      if (itemType === 'error') {
+        const message = String(record['message'] ?? trimmed);
+        return { t: 'error', kind: classifyErrorText(message), message };
       }
-      return { t: "tool", name: toolNameFor(itemType, record), input: record };
+      return { t: 'tool', name: toolNameFor(itemType, record), input: record };
     }
-    case "error": {
-      const message = String(obj["message"] ?? trimmed);
-      return { t: "error", kind: classifyErrorText(message), message };
+    case 'error': {
+      const message = String(obj['message'] ?? trimmed);
+      return { t: 'error', kind: classifyErrorText(message), message };
     }
     default:
       // turn.started / turn.completed and anything codex adds next. Kept, not
       // dropped: `turn.completed` carries usage, and silent drops make drift invisible.
-      return { t: "unknown", raw: trimmed };
+      return { t: 'unknown', raw: trimmed };
   }
 }
 
-function classifyErrorText(message: string): "rate_limit" | "auth" | "other" {
+function classifyErrorText(message: string): 'rate_limit' | 'auth' | 'other' {
   const lower = message.toLowerCase();
-  if (lower.includes("rate limit") || lower.includes("429")) return "rate_limit";
-  if (lower.includes("unauthorized") || lower.includes("401")) return "auth";
-  return "other";
+  if (lower.includes('rate limit') || lower.includes('429')) return 'rate_limit';
+  if (lower.includes('unauthorized') || lower.includes('401')) return 'auth';
+  return 'other';
 }
 
 export const codexAdapter: ProviderAdapter = {
-  id: "codex",
+  id: 'codex',
 
   capabilities: {
-    promptDelivery: ["stdin", "argv"],
-    structuredOutput: "schema-file",
-    events: "jsonl",
-    sessionId: "capture",
-    resume: "session",
+    promptDelivery: ['stdin', 'argv'],
+    structuredOutput: 'schema-file',
+    events: 'jsonl',
+    sessionId: 'capture',
+    resume: 'session',
     // `--json` already carries `command_execution` (with `exit_code`) and
     // `file_change`, so Baya's own `events.jsonl` is the record — no sidecar.
-    observations: "events",
+    observations: 'events',
     cwdFlag: true,
     modelFlag: true,
     maxConcurrency: 2,
   },
 
-  installHint: "npm i -g @openai/codex",
+  installHint: 'npm i -g @openai/codex',
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, "exec", ...commonFlags(input, "exec"), "-"],
+      argv: [input.bin, 'exec', ...commonFlags(input, 'exec'), '-'],
       cwd: input.cwd,
-      stdin: "pipe",
+      stdin: 'pipe',
       stdinData: input.prompt,
     };
   },
@@ -186,14 +186,14 @@ export const codexAdapter: ProviderAdapter = {
     return {
       argv: [
         input.bin,
-        "exec",
-        "resume",
+        'exec',
+        'resume',
         sessionId,
-        ...commonFlags(input, "resume"),
-        "-",
+        ...commonFlags(input, 'resume'),
+        '-',
       ],
       cwd: input.cwd,
-      stdin: "pipe",
+      stdin: 'pipe',
       stdinData: answer,
     };
   },
@@ -201,22 +201,22 @@ export const codexAdapter: ProviderAdapter = {
   extractObservations(ctx: ExtractContext): Observation[] {
     const out: Observation[] = [];
     for (const event of ctx.events) {
-      if (event.t !== "tool") continue;
+      if (event.t !== 'tool') continue;
       const item = event.input;
-      if (item === null || typeof item !== "object") continue;
+      if (item === null || typeof item !== 'object') continue;
       const record = item as Record<string, unknown>;
-      if (record["type"] === "command_execution") {
-        const command = record["command"];
-        if (typeof command !== "string" || command.trim() === "") continue;
+      if (record['type'] === 'command_execution') {
+        const command = record['command'];
+        if (typeof command !== 'string' || command.trim() === '') continue;
         // `exit_code` arrives as a string in the JSONL; `status` is the
         // narrative version of the same thing and is the safer read.
         const ok =
-          record["status"] === "completed" && String(record["exit_code"] ?? "0") === "0";
-        out.push({ kind: "command", command, ok });
+          record['status'] === 'completed' && String(record['exit_code'] ?? '0') === '0';
+        out.push({ kind: 'command', command, ok });
         continue;
       }
-      if (record["type"] === "file_change") {
-        for (const path of changedPaths(record)) out.push({ kind: "write", path });
+      if (record['type'] === 'file_change') {
+        for (const path of changedPaths(record)) out.push({ kind: 'write', path });
       }
     }
     return out;
@@ -224,7 +224,7 @@ export const codexAdapter: ProviderAdapter = {
 
   parseEvents(chunk: string): ProviderEvent[] {
     return chunk
-      .split("\n")
+      .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
       .map(eventForLine);
@@ -236,29 +236,29 @@ export const codexAdapter: ProviderAdapter = {
    * conforming JSON. Anything else is a failure to report, not prose to mine.
    */
   extractResults(ctx: ExtractContext): TaskResult[] {
-    if (ctx.resultFileContents !== null && ctx.resultFileContents.trim() !== "") {
+    if (ctx.resultFileContents !== null && ctx.resultFileContents.trim() !== '') {
       const parsed = parseResultJson(ctx.taskIds, ctx.resultFileContents);
       if (parsed) return parsed;
       return synthesizeFailure(
         ctx.taskIds,
-        "codex wrote a result file that does not match task_result",
+        'codex wrote a result file that does not match task_result',
         { retryable: true },
       );
     }
 
     // The last error wins: codex emits non-fatal diagnostics (an unknown-model
     // metadata warning) as `error` items too, and a real failure comes after.
-    const errorEvent = ctx.events.findLast((event) => event.t === "error");
-    if (errorEvent && errorEvent.t === "error") {
+    const errorEvent = ctx.events.findLast((event) => event.t === 'error');
+    if (errorEvent && errorEvent.t === 'error') {
       return synthesizeFailure(ctx.taskIds, errorEvent.message, {
-        retryable: errorEvent.kind !== "auth",
+        retryable: errorEvent.kind !== 'auth',
       });
     }
 
-    const detail = stripAnsi(ctx.stderr).trim().split("\n").slice(-3).join(" ").trim();
+    const detail = stripAnsi(ctx.stderr).trim().split('\n').slice(-3).join(' ').trim();
     return synthesizeFailure(
       ctx.taskIds,
-      `codex produced no result file (exit ${String(ctx.exitCode)})${detail ? `: ${detail}` : ""}`,
+      `codex produced no result file (exit ${String(ctx.exitCode)})${detail ? `: ${detail}` : ''}`,
     );
   },
 
@@ -270,7 +270,7 @@ export const codexAdapter: ProviderAdapter = {
     // own; a run's dollar figure stays 0 until a provider that reports it.)
     const out: ProviderUsage = {};
     for (const event of events) {
-      if (event.t !== "unknown") continue;
+      if (event.t !== 'unknown') continue;
       let parsed: unknown;
       try {
         parsed = JSON.parse(event.raw);
@@ -278,28 +278,28 @@ export const codexAdapter: ProviderAdapter = {
         continue;
       }
       const obj = parsed as Record<string, unknown> | null;
-      if (!obj || obj["type"] !== "turn.completed") continue;
-      const usage = obj["usage"];
-      if (!usage || typeof usage !== "object") continue;
+      if (!obj || obj['type'] !== 'turn.completed') continue;
+      const usage = obj['usage'];
+      if (!usage || typeof usage !== 'object') continue;
       const u = usage as Record<string, unknown>;
-      if (typeof u["input_tokens"] === "number") {
-        out.input_tokens = (out.input_tokens ?? 0) + u["input_tokens"];
+      if (typeof u['input_tokens'] === 'number') {
+        out.input_tokens = (out.input_tokens ?? 0) + u['input_tokens'];
       }
       // codex reports the cache split on the same line; ignoring it hid that a
       // continued turn reads ~96k of transcript to do 35k of work.
-      if (typeof u["cached_input_tokens"] === "number") {
+      if (typeof u['cached_input_tokens'] === 'number') {
         out.cached_input_tokens =
-          (out.cached_input_tokens ?? 0) + u["cached_input_tokens"];
+          (out.cached_input_tokens ?? 0) + u['cached_input_tokens'];
       }
-      if (typeof u["cache_write_input_tokens"] === "number") {
+      if (typeof u['cache_write_input_tokens'] === 'number') {
         out.cache_write_input_tokens =
-          (out.cache_write_input_tokens ?? 0) + u["cache_write_input_tokens"];
+          (out.cache_write_input_tokens ?? 0) + u['cache_write_input_tokens'];
       }
-      if (typeof u["output_tokens"] === "number") {
-        out.output_tokens = (out.output_tokens ?? 0) + u["output_tokens"];
+      if (typeof u['output_tokens'] === 'number') {
+        out.output_tokens = (out.output_tokens ?? 0) + u['output_tokens'];
       }
-      if (typeof u["cost_usd"] === "number") {
-        out.cost_usd = (out.cost_usd ?? 0) + u["cost_usd"];
+      if (typeof u['cost_usd'] === 'number') {
+        out.cost_usd = (out.cost_usd ?? 0) + u['cost_usd'];
       }
     }
     return out;

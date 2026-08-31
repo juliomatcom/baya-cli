@@ -5,7 +5,7 @@ export {
   type ClassifyContext,
   type LockInfo,
   type LockVerdict,
-} from "./classify.js";
+} from './classify.js';
 export {
   FileLock,
   inspectLock,
@@ -14,4 +14,4 @@ export {
   type FileLockOptions,
   type InspectResult,
   type LockLogger,
-} from "./file-lock.js";
+} from './file-lock.js';

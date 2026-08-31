@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   ConfigError,
   binOverrides,
@@ -10,23 +10,26 @@ import {
   userConfigPath,
   writeConfigFile,
   type ConfigFile,
-} from "../config/index.js";
-import { PROVIDER_IDS, type ProviderId } from "../manifest/index.js";
+} from '../config/index.js';
+import { PROVIDER_IDS, type ProviderId } from '../manifest/index.js';
 import {
   BUILTIN_CATALOG,
   catalogToPersist,
   createDefaultRegistry,
   enumerateModels,
   mergeCatalog,
+  OPENCODE_PROVIDER,
   withoutBuiltinEntries,
   type Registry,
-} from "../providers/index.js";
-import { renderBanner } from "../ui/banner.js";
-import { createTheme } from "../ui/theme.js";
-import { UNIMPLEMENTED_COMMANDS, parseArgs } from "./args.js";
-import { doctor } from "./doctor.js";
-import { renderHelp } from "./help.js";
-import { runCommand, type CliIo } from "./run.js";
+} from '../providers/index.js';
+import { renderBanner } from '../ui/banner.js';
+import { createTheme } from '../ui/theme.js';
+import { parseArgs } from './args.js';
+import { doctor } from './doctor.js';
+import { renderHelp } from './help.js';
+import { runCommand, type CliIo } from './run.js';
+import { resumeCommand } from './resume.js';
+import { runsCommand } from './runs.js';
 
 /**
  * Command routing and exit codes (cli.md §Exit codes):
@@ -56,11 +59,11 @@ function shouldShowBanner(args: ReturnType<typeof parseArgs>): boolean {
 function version(): string {
   try {
     const pkg: unknown = JSON.parse(
-      readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
+      readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
     );
-    return String((pkg as { version?: string }).version ?? "0.0.0");
+    return String((pkg as { version?: string }).version ?? '0.0.0');
   } catch {
-    return "0.0.0";
+    return '0.0.0';
   }
 }
 
@@ -77,7 +80,7 @@ export async function main(options: MainOptions = {}): Promise<number> {
   };
 
   const args = parseArgs(argv);
-  const theme = createTheme(args.flags.noColor || env["NO_COLOR"] ? "never" : "auto");
+  const theme = createTheme(args.flags.noColor || env['NO_COLOR'] ? 'never' : 'auto');
 
   // The wordmark leads every human-facing run. Kept off stdout (and skipped
   // entirely for `--json` / `--version` / `--quiet`) so scripted callers get a
@@ -88,7 +91,7 @@ export async function main(options: MainOptions = {}): Promise<number> {
 
   if (args.errors.length > 0) {
     for (const error of args.errors) {
-      io.stderr.write(`${theme.status("fail")} ${theme.fail(error)}\n`);
+      io.stderr.write(`${theme.status('fail')} ${theme.fail(error)}\n`);
     }
     return 2;
   }
@@ -100,7 +103,7 @@ export async function main(options: MainOptions = {}): Promise<number> {
 
   try {
     switch (args.command) {
-      case "help": {
+      case 'help': {
         // Probed, not skipped: the version is half of what makes the provider
         // block a first-line sanity check, and `<bin> --version` costs ~20ms
         // per adapter with the probes running concurrently.
@@ -119,7 +122,7 @@ export async function main(options: MainOptions = {}): Promise<number> {
         return 0;
       }
 
-      case "doctor": {
+      case 'doctor': {
         // The config override is the first link of the resolution chain, so
         // `doctor` must consult it — otherwise it reports "not found" for a
         // provider the very next run would resolve.
@@ -134,29 +137,28 @@ export async function main(options: MainOptions = {}): Promise<number> {
         return report.exitCode;
       }
 
-      case "config":
+      case 'config':
         return await configCommand(args, { env, cwd, io, theme, registry });
 
-      case "models":
+      case 'models':
         return modelsCommand(args, { env, cwd, io, theme });
 
-      case "resume":
-      case "runs":
-        io.stderr.write(
-          `${theme.status("fail")} ${theme.fail(`\`baya ${args.command}\` is not available yet — it lands with run recovery (M2.8).`)}\n`,
-        );
-        return 2;
+      case 'runs':
+        return runsCommand({ cwd, io, theme, json: args.flags.json });
 
-      case "run":
-      case "plan":
+      case 'resume':
+        return await resumeCommand({ args, cwd, env, io, registry });
+
+      case 'run':
+      case 'plan':
         return await runCommand({ args, cwd, env, io, registry });
     }
   } catch (err) {
     if (err instanceof ConfigError) {
-      io.stderr.write(`${theme.status("fail")} ${theme.fail(err.message)}\n`);
+      io.stderr.write(`${theme.status('fail')} ${theme.fail(err.message)}\n`);
       return 2;
     }
-    io.stderr.write(`${theme.status("fail")} ${theme.fail((err as Error).message)}\n`);
+    io.stderr.write(`${theme.status('fail')} ${theme.fail((err as Error).message)}\n`);
     return 2;
   }
 }
@@ -184,8 +186,8 @@ function modelsCommand(
 
   const filter = args.modelsProvider;
   if (filter !== undefined && !(PROVIDER_IDS as readonly string[]).includes(filter)) {
-    const msg = `unknown provider: ${filter} — expected one of ${PROVIDER_IDS.join(", ")}`;
-    io.stderr.write(`${theme.status("fail")} ${theme.fail(msg)}\n`);
+    const msg = `unknown provider: ${filter} — expected one of ${PROVIDER_IDS.join(', ')}`;
+    io.stderr.write(`${theme.status('fail')} ${theme.fail(msg)}\n`);
     return 2;
   }
 
@@ -208,30 +210,44 @@ function modelsCommand(
     (id) => (effective[id] ?? []).length > 0,
   );
 
-  const lines = ["", `  ${theme.taskId("Models")}`];
+  const lines = ['', `  ${theme.taskId('Models')}`];
   if (providers.length === 0) {
-    lines.push("", `  ${theme.note("no models in the catalog")}`);
+    lines.push('', `  ${theme.note('no models in the catalog')}`);
   }
   for (const id of providers) {
     const models = effective[id] ?? [];
     const authoredIds = new Set((authored[id] ?? []).map((model) => model.id));
     const rows = models.map((model) => ({
       id: model.id,
-      aliases: model.aliases.join(", "),
+      aliases: model.aliases.join(', '),
       description: model.description,
-      tag: authoredIds.has(model.id) ? "user" : "built-in",
+      tag: authoredIds.has(model.id) ? 'user' : 'built-in',
     }));
     const idWidth = Math.max(...rows.map((row) => row.id.length));
     const aliasWidth = Math.max(0, ...rows.map((row) => row.aliases.length));
     const descWidth = Math.max(0, ...rows.map((row) => row.description.length));
-    lines.push("", `  ${theme.provider(id)}`);
+    lines.push('', `  ${theme.provider(id)}`);
     for (const row of rows) {
       const cells = `${row.id.padEnd(idWidth)}  ${row.aliases.padEnd(aliasWidth)}  ${row.description.padEnd(descWidth)}`;
       lines.push(`    ${cells}  ${theme.note(row.tag)}`);
     }
   }
-  lines.push("", `  ${theme.note("user config")}    ${loaded.userPath}`, "");
-  io.stdout.write(`${lines.join("\n")}\n`);
+  // `opencode` ships no built-in list — it is enumerated live and cached by
+  // `refresh-models`. Installing it after setup therefore leaves it with zero
+  // entries, and the loop above would drop it from the output entirely: the
+  // models look like they do not exist rather than like they were never read.
+  if (
+    (filter === undefined || filter === OPENCODE_PROVIDER) &&
+    (effective[OPENCODE_PROVIDER] ?? []).length === 0
+  ) {
+    lines.push(
+      '',
+      `  ${theme.provider(OPENCODE_PROVIDER)}`,
+      `    ${theme.note(`no models cached — run \`baya config refresh-models\` if ${OPENCODE_PROVIDER} is installed`)}`,
+    );
+  }
+  lines.push('', `  ${theme.note('user config')}    ${loaded.userPath}`, '');
+  io.stdout.write(`${lines.join('\n')}\n`);
   return 0;
 }
 
@@ -247,12 +263,12 @@ async function configCommand(
 ): Promise<number> {
   const { io, theme } = ctx;
 
-  if (args.configAction === "path") {
+  if (args.configAction === 'path') {
     io.stdout.write(`${userConfigPath(ctx.env)}\n`);
     return 0;
   }
 
-  if (args.configAction === "set") {
+  if (args.configAction === 'set') {
     const path = setConfigValue(
       args.configKey as string,
       args.configValue as string,
@@ -262,9 +278,9 @@ async function configCommand(
     return 0;
   }
 
-  if (args.configAction === "refresh-models") {
+  if (args.configAction === 'refresh-models') {
     const loaded = loadConfig({ cwd: ctx.cwd, env: ctx.env });
-    const oc = await ctx.registry.resolve("opencode", {
+    const oc = await ctx.registry.resolve('opencode', {
       binOverrides: binOverrides(loaded.config),
       env: ctx.env,
       probe: false,
@@ -287,13 +303,13 @@ async function configCommand(
     // included — not the file's now-smaller subset.
     const counts = Object.entries(mergeCatalog(BUILTIN_CATALOG, persisted))
       .map(([id, models]) => `${id} ${models.length}`)
-      .join(" · ");
-    let warning = "";
+      .join(' · ');
+    let warning = '';
     if (ids.length === 0) {
       warning = theme.warn(
         oc
-          ? "  (opencode listed no models — kept the stored entries)"
-          : "  (opencode not found — kept the stored entries)",
+          ? '  (opencode listed no models — kept the stored entries)'
+          : '  (opencode not found — kept the stored entries)',
       );
     }
     io.stderr.write(
@@ -307,29 +323,29 @@ async function configCommand(
   // codex?" has no answer short of reading four files.
   const loaded = loadConfig({ cwd: ctx.cwd, env: ctx.env });
   const rows: Array<[string, string]> = [
-    ["defaults.provider", String(loaded.config.defaults.provider)],
-    ["defaults.model", String(loaded.config.defaults.model)],
-    ["planner.provider", String(loaded.config.planner.provider)],
-    ["planner.model", String(loaded.config.planner.model)],
+    ['defaults.provider', String(loaded.config.defaults.provider)],
+    ['defaults.model', String(loaded.config.defaults.model)],
+    ['planner.provider', String(loaded.config.planner.provider)],
+    ['planner.model', String(loaded.config.planner.model)],
   ];
-  const lines = ["", `  ${theme.taskId("Config")}`];
+  const lines = ['', `  ${theme.taskId('Config')}`];
   for (const [key, value] of rows) {
     lines.push(
-      `    ${key.padEnd(18)} ${value.padEnd(12)} ${theme.note(`from ${loaded.sources[key] ?? "built-in"}`)}`,
+      `    ${key.padEnd(18)} ${value.padEnd(12)} ${theme.note(`from ${loaded.sources[key] ?? 'built-in'}`)}`,
     );
   }
   for (const [id, settings] of Object.entries(loaded.config.providers)) {
     for (const [key, value] of Object.entries(settings)) {
       const dotted = `providers.${id}.${key}`;
       lines.push(
-        `    ${dotted.padEnd(18)} ${String(value).padEnd(12)} ${theme.note(`from ${loaded.sources[dotted] ?? "built-in"}`)}`,
+        `    ${dotted.padEnd(18)} ${String(value).padEnd(12)} ${theme.note(`from ${loaded.sources[dotted] ?? 'built-in'}`)}`,
       );
     }
   }
   for (const [name, target] of Object.entries(loaded.config.modelAliases)) {
     const dotted = `modelAliases.${name}`;
     lines.push(
-      `    ${dotted.padEnd(18)} ${target.padEnd(12)} ${theme.note(`from ${loaded.sources[dotted] ?? "built-in"}`)}`,
+      `    ${dotted.padEnd(18)} ${target.padEnd(12)} ${theme.note(`from ${loaded.sources[dotted] ?? 'built-in'}`)}`,
     );
   }
   // The catalog a run resolves against — built-in lists plus the config's own
@@ -338,15 +354,13 @@ async function configCommand(
   const resolvable = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
   const catalogCounts = Object.entries(resolvable)
     .map(([id, models]) => `${id}:${models.length}`)
-    .join(" ");
+    .join(' ');
   if (catalogCounts) {
     lines.push(
-      `    ${"modelCatalog".padEnd(18)} ${theme.note(`${catalogCounts} — \`baya config refresh-models\` to update`)}`,
+      `    ${'modelCatalog'.padEnd(18)} ${theme.note(`${catalogCounts} — \`baya config refresh-models\` to update`)}`,
     );
   }
-  lines.push("", `  ${theme.note("user config")}    ${loaded.userPath}`, "");
-  io.stdout.write(`${lines.join("\n")}\n`);
+  lines.push('', `  ${theme.note('user config')}    ${loaded.userPath}`, '');
+  io.stdout.write(`${lines.join('\n')}\n`);
   return 0;
 }
-
-export { UNIMPLEMENTED_COMMANDS };

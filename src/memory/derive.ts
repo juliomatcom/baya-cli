@@ -1,5 +1,5 @@
-import { isAbsolute, relative } from "node:path";
-import type { MemoryEntry, TaskObservations } from "./types.js";
+import { isAbsolute, relative } from 'node:path';
+import type { MemoryEntry, TaskObservations } from './types.js';
 
 /**
  * Observations -> facts. Pure, so the whole of it is testable against the
@@ -20,54 +20,54 @@ import type { MemoryEntry, TaskObservations } from "./types.js";
  * test run, a linter, an installer — where the exit code is the fact.
  */
 const EXPLORATION = new Set([
-  "awk",
-  "basename",
-  "cat",
-  "cd",
-  "diff",
-  "dirname",
-  "du",
-  "echo",
-  "file",
-  "find",
-  "grep",
-  "head",
-  "less",
-  "ls",
-  "printf",
-  "pwd",
-  "readlink",
-  "realpath",
-  "rg",
-  "sed",
-  "sort",
-  "stat",
-  "tail",
-  "tree",
-  "uniq",
-  "wc",
-  "which",
+  'awk',
+  'basename',
+  'cat',
+  'cd',
+  'diff',
+  'dirname',
+  'du',
+  'echo',
+  'file',
+  'find',
+  'grep',
+  'head',
+  'less',
+  'ls',
+  'printf',
+  'pwd',
+  'readlink',
+  'realpath',
+  'rg',
+  'sed',
+  'sort',
+  'stat',
+  'tail',
+  'tree',
+  'uniq',
+  'wc',
+  'which',
   // `git` is read-mostly in this context — status, log, diff. A task that
   // commits is not reporting a repo capability worth remembering either.
-  "git",
+  'git',
   // Shell and environment noise. These say nothing about the repository, so
   // their exit codes are not facts worth a later task's prompt space.
-  "chmod",
-  "cp",
-  "date",
-  "env",
-  "export",
-  "false",
-  "mkdir",
-  "mv",
-  "printenv",
-  "ps",
-  "rm",
-  "sleep",
-  "touch",
-  "true",
-  "uname",
-  "whoami",
+  'chmod',
+  'cp',
+  'date',
+  'env',
+  'export',
+  'false',
+  'mkdir',
+  'mv',
+  'printenv',
+  'ps',
+  'rm',
+  'sleep',
+  'touch',
+  'true',
+  'uname',
+  'whoami',
 ]);
 
 /**
@@ -77,41 +77,41 @@ const EXPLORATION = new Set([
  * needed" when this list was not here.
  */
 const FILE_EXTENSIONS = new Set([
-  "bash",
-  "cfg",
-  "cjs",
-  "css",
-  "csv",
-  "env",
-  "go",
-  "html",
-  "ini",
-  "java",
-  "js",
-  "json",
-  "jsx",
-  "lock",
-  "md",
-  "mjs",
-  "php",
-  "py",
-  "rb",
-  "rs",
-  "scss",
-  "sh",
-  "sql",
-  "toml",
-  "ts",
-  "tsx",
-  "txt",
-  "xml",
-  "yaml",
-  "yml",
-  "zsh",
+  'bash',
+  'cfg',
+  'cjs',
+  'css',
+  'csv',
+  'env',
+  'go',
+  'html',
+  'ini',
+  'java',
+  'js',
+  'json',
+  'jsx',
+  'lock',
+  'md',
+  'mjs',
+  'php',
+  'py',
+  'rb',
+  'rs',
+  'scss',
+  'sh',
+  'sql',
+  'toml',
+  'ts',
+  'tsx',
+  'txt',
+  'xml',
+  'yaml',
+  'yml',
+  'zsh',
 ]);
 
 /** Directories whose contents are noise: Baya's own artifacts and vendored code. */
-const IGNORED_PATH_SEGMENTS = [".baya/", "node_modules/", ".git/", "dist/", "coverage/"];
+const IGNORED_PATH_SEGMENTS = ['.baya/', 'node_modules/', '.git/', 'dist/', 'coverage/'];
 
 /**
  * `codex` hands back every command already wrapped for a login shell
@@ -127,18 +127,18 @@ export function normalizeCommand(raw: string): string {
   if ((first === "'" || first === '"') && text.endsWith(first) && text.length > 1) {
     text = text.slice(1, -1);
   }
-  return text.replace(/\s+/g, " ").trim();
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 /** The program being run, without its directory. */
 function head(command: string): string {
-  const token = command.split(/\s+/, 1)[0] ?? "";
-  const base = token.split("/").pop() ?? token;
+  const token = command.split(/\s+/, 1)[0] ?? '';
+  const base = token.split('/').pop() ?? token;
   return base.toLowerCase();
 }
 
 export function isCapabilityCommand(command: string): boolean {
-  if (command === "") return false;
+  if (command === '') return false;
   return !EXPLORATION.has(head(command));
 }
 
@@ -156,8 +156,8 @@ export function pathsIn(text: string): string[] {
   return found.filter((token) => {
     // A `/` settles it. Without one, the extension has to be one a file
     // actually uses — otherwise `console.log` reads as a path.
-    if (token.includes("/")) return true;
-    return FILE_EXTENSIONS.has(token.slice(token.lastIndexOf(".") + 1).toLowerCase());
+    if (token.includes('/')) return true;
+    return FILE_EXTENSIONS.has(token.slice(token.lastIndexOf('.') + 1).toLowerCase());
   });
 }
 
@@ -170,11 +170,11 @@ export function normalizePath(path: string, cwd: string): string | null {
   let value = path;
   if (isAbsolute(value)) {
     const rel = relative(cwd, value);
-    if (rel === "" || rel.startsWith("..")) return null;
+    if (rel === '' || rel.startsWith('..')) return null;
     value = rel;
   }
-  value = value.replace(/^\.\//, "");
-  if (value === "" || value.startsWith("..")) return null;
+  value = value.replace(/^\.\//, '');
+  if (value === '' || value.startsWith('..')) return null;
   const probe = `${value}/`;
   if (IGNORED_PATH_SEGMENTS.some((segment) => probe.includes(segment))) return null;
   return value;
@@ -209,7 +209,7 @@ export function deriveMemory(
 
   for (const { taskId, observations } of tasks) {
     for (const observation of observations) {
-      if (observation.kind === "command") {
+      if (observation.kind === 'command') {
         const command = normalizeCommand(observation.command);
         for (const raw of pathsIn(command)) {
           const path = normalizePath(raw, options.cwd);
@@ -229,7 +229,7 @@ export function deriveMemory(
       }
       const path = normalizePath(observation.path, options.cwd);
       if (!path) continue;
-      addSource(observation.kind === "write" ? writes : reads, path, taskId);
+      addSource(observation.kind === 'write' ? writes : reads, path, taskId);
     }
   }
 
@@ -240,7 +240,7 @@ export function deriveMemory(
   for (const [command, record] of commands) {
     if (record.failed && !record.ok) {
       entries.push({
-        kind: "command.deadend",
+        kind: 'command.deadend',
         key: `command:${command}`,
         value: command,
         sources: [...record.sources],
@@ -250,7 +250,7 @@ export function deriveMemory(
   for (const [command, record] of commands) {
     if (record.ok) {
       entries.push({
-        kind: "command.verified",
+        kind: 'command.verified',
         key: `command:${command}`,
         value: command,
         sources: [...record.sources],
@@ -259,7 +259,7 @@ export function deriveMemory(
   }
   for (const [path, sources] of writes) {
     entries.push({
-      kind: "file.changed",
+      kind: 'file.changed',
       key: `file:${path}`,
       value: path,
       sources: [...sources],
@@ -271,7 +271,7 @@ export function deriveMemory(
     if (writes.has(path)) continue;
     if (sources.size < hotThreshold) continue;
     entries.push({
-      kind: "file.hot",
+      kind: 'file.hot',
       key: `file:${path}`,
       value: path,
       sources: [...sources],
