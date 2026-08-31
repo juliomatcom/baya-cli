@@ -141,6 +141,13 @@ describe("splitSections", () => {
 });
 
 describe("linearFallback", () => {
+  it("plans nothing for a section the list already marks done", () => {
+    // The fallback has no model to read the marker for it, so a planner outage
+    // must not silently re-run — and re-pay for — finished work.
+    const manifest = linearFallback("# A — done\n\na\n\n# B\n\nb", source);
+    expect(manifest.tasks.map((task) => task.title)).toEqual(["B"]);
+  });
+
   it("chains every task to the one before it, in document order", () => {
     const manifest = linearFallback("# A\n\na\n\n# B\n\nb\n\n# C\n\nc", source);
     expect(manifest.tasks.map((task) => [task.id, task.depends_on])).toEqual([

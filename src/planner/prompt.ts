@@ -1,4 +1,5 @@
 import type { ProviderId, ValidationError } from "../manifest/index.js";
+import type { DoneMarker } from "./done.js";
 
 /**
  * The planning prompt. The task text is untrusted content (architecture.md
@@ -19,6 +20,12 @@ export interface PlannerPromptOptions {
    * `schema` note in `executor/prompt.ts` for why a **path** is never given.
    */
   schema?: string;
+  /**
+   * Lines the task list already marks as finished, found deterministically by
+   * `detectDoneMarkers`. Named in the prompt rather than left for the model to
+   * notice, because a missed marker re-runs and re-pays for landed work.
+   */
+  doneMarkers?: readonly DoneMarker[];
 }
 
 export function plannerPrompt(options: PlannerPromptOptions): string {
@@ -50,7 +57,19 @@ export function plannerPrompt(options: PlannerPromptOptions): string {
     "  explicit `provider` with a model that belongs to a different provider.",
     "- Order matters only through `depends_on`. Independent work should stay independent",
     "  so it can run in parallel.",
+    "- **Skip work the list marks as already done** — a ticked checkbox (`[x]`), a",
+    '  `[done]` / `(complete)` tag, a trailing "— done" / "| done", or a ✅. Emit no',
+    "  task for it. Other tasks may still depend on what it produced, so read it for",
+    "  context and never re-derive it as new work. A line that says work is *not*",
+    "  done is not a marker.",
     "",
+    ...(options.doneMarkers && options.doneMarkers.length > 0
+      ? [
+          "These lines are already marked done. Emit no task for any of them:",
+          ...options.doneMarkers.map((marker) => `  L${marker.line}: ${marker.text}`),
+          "",
+        ]
+      : []),
     // Never the schema **path**: an agent told where a schema lives will go and
     // read it, and the tool call costs a full context re-send for something the
     // CLI is already enforcing (`--output-schema`). See executor/prompt.ts.

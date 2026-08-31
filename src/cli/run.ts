@@ -402,6 +402,25 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       progress.stop();
       manifest = planned.manifest;
       planOrigin = planned.origin;
+
+      // Skipping is silent otherwise, and silence here reads as a planner bug:
+      // the user wrote N tasks and sees fewer.
+      if (planned.doneMarkers.length > 0 && !flags.quiet) {
+        const shown = planned.doneMarkers.slice(0, 5);
+        progress.write(
+          `\n  ${theme.note(`already done — not planned (${planned.doneMarkers.length})`)}\n` +
+            shown
+              .map(
+                (marker) =>
+                  `    ${theme.note(`L${marker.line}`)} ${theme.note(marker.text.slice(0, 90))}`,
+              )
+              .join("\n") +
+            (planned.doneMarkers.length > shown.length
+              ? `\n    ${theme.note(`+${planned.doneMarkers.length - shown.length} more`)}`
+              : "") +
+            "\n",
+        );
+      }
     }
 
     // ---- model gate: resolve every task-named model against the catalog

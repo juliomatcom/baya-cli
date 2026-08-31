@@ -10,9 +10,11 @@ import {
 } from "../manifest/index.js";
 import type { Logger } from "../log/index.js";
 import { stripAnsi } from "../log/index.js";
+import { detectDoneMarkers, type DoneMarker } from "./done.js";
 import { linearFallback } from "./fallback.js";
 import { plannerPrompt, repairPrompt } from "./prompt.js";
 
+export { detectDoneMarkers, isDoneLine, type DoneMarker } from "./done.js";
 export { linearFallback, slugify, splitSections } from "./fallback.js";
 export { plannerPrompt, repairPrompt } from "./prompt.js";
 export { runPlannerProvider, type RunPlannerProviderOptions } from "./provider.js";
@@ -78,6 +80,8 @@ export interface PlanResult {
   origin: "planner" | "fallback";
   attempts: number;
   warnings: string[];
+  /** Lines the task list marked as already done. No task is planned for these. */
+  doneMarkers: DoneMarker[];
 }
 
 const DEFAULT_MAX_REPAIRS = 2;
@@ -126,6 +130,14 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
   const maxRepairs = options.maxRepairs ?? DEFAULT_MAX_REPAIRS;
   const warnings: string[] = [];
 
+  const doneMarkers = detectDoneMarkers(options.taskText);
+  if (doneMarkers.length > 0) {
+    logger.info("plan.done_markers", {
+      count: doneMarkers.length,
+      lines: doneMarkers.map((marker) => marker.line),
+    });
+  }
+
   const base = plannerPrompt({
     taskText: options.taskText,
     sourcePath: source.path,
@@ -134,6 +146,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     defaultProvider: options.defaultProvider,
     schemaPath: options.schemaPath,
     ...(options.schema !== undefined ? { schema: options.schema } : {}),
+    ...(doneMarkers.length > 0 ? { doneMarkers } : {}),
   });
 
   let prompt = base;
@@ -166,6 +179,7 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
         origin: "planner",
         attempts: attempt + 1,
         warnings,
+        doneMarkers,
       };
     }
 
@@ -196,5 +210,11 @@ export async function plan(options: PlanOptions): Promise<PlanResult> {
     edges: Math.max(0, manifest.tasks.length - 1),
     origin: "fallback",
   });
-  return { manifest, origin: "fallback", attempts: maxRepairs + 1, warnings };
+  return {
+    manifest,
+    origin: "fallback",
+    attempts: maxRepairs + 1,
+    warnings,
+    doneMarkers,
+  };
 }

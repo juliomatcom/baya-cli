@@ -1,4 +1,5 @@
 import { MANIFEST_VERSION, type Manifest, type Task } from "../manifest/index.js";
+import { isDoneLine } from "./done.js";
 
 /**
  * The deterministic linear fallback (risk register: "Planner unreliability").
@@ -121,7 +122,11 @@ export function linearFallback(
   source: Manifest["source"],
   options: { maxTasks?: number } = {},
 ): Manifest {
-  const sections = splitSections(taskText).slice(0, options.maxTasks ?? 50);
+  // The fallback has no model to read a marker for it, so it drops marked
+  // sections itself — otherwise a planner outage silently re-runs finished work.
+  const sections = splitSections(taskText)
+    .filter((section) => !isDoneLine(section.title))
+    .slice(0, options.maxTasks ?? 50);
   const used = new Set<string>();
 
   const tasks: Task[] = sections.map((section, index) => {
