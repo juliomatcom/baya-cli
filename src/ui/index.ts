@@ -34,6 +34,12 @@ export {
 } from "./report.js";
 export { confirmPlan, type ConfirmOutcome, type ConfirmPlanOptions } from "./confirm.js";
 export {
+  buildRunChoices,
+  pickRun,
+  type PickRunOutcome,
+  type RunChoice,
+} from "./run-picker.js";
+export {
   planModelGate,
   resolveRunModel,
   runModelGate,

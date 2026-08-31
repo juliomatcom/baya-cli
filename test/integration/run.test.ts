@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { cpus } from "node:os";
 import { readLog, runCli, taskResult } from "../helpers/runCli.js";
 
 /**
@@ -202,7 +203,7 @@ describe("a two-task chain, end to end", () => {
     };
     expect(state.config_snapshot).toMatchObject({
       defaults: { provider: "codex", model: null },
-      max_parallel: 1,
+      max_parallel: Math.min(4, cpus().length),
       context_strategy: "link-only",
     });
     expect(state.source.sha256).toMatch(/^[0-9a-f]{64}$/);

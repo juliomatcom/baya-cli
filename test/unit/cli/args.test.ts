@@ -99,6 +99,13 @@ describe("flags", () => {
     expect(parseArgs(["tasks.md", "--max-tasks", "many"]).errors).toHaveLength(1);
   });
 
+  it("parses and validates --max-parallel", () => {
+    expect(parseArgs(["tasks.md", "--max-parallel", "3"]).flags.maxParallel).toBe(3);
+    expect(parseArgs(["tasks.md", "--max-parallel", "0"]).errors).toContain(
+      "--max-parallel must be a positive integer",
+    );
+  });
+
   it("reports a value flag with no value", () => {
     expect(parseArgs(["tasks.md", "--default-provider"]).errors[0]).toContain(
       "requires a value",
@@ -166,6 +173,25 @@ describe("memory and grouping flags", () => {
     );
     expect(parseArgs(["tasks.md", "--memory-budget", "-1"]).errors).toContain(
       "--memory-budget must be a non-negative integer",
+    );
+  });
+});
+
+describe("failure flags", () => {
+  it("defaults --on-error to continue", () => {
+    expect(parseArgs(["tasks.md"]).flags.onError).toBe("continue");
+  });
+
+  it("parses the supported --on-error values", () => {
+    expect(parseArgs(["tasks.md", "--on-error", "stop"]).flags.onError).toBe("stop");
+    expect(parseArgs(["tasks.md", "--on-error", "continue"]).flags.onError).toBe(
+      "continue",
+    );
+  });
+
+  it("rejects an unknown --on-error value", () => {
+    expect(parseArgs(["tasks.md", "--on-error", "pause"]).errors).toContain(
+      "--on-error must be continue or stop",
     );
   });
 });

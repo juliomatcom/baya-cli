@@ -34,7 +34,18 @@ export {
   type GroupCandidate,
   type ProjectedGroup,
 } from "./group.js";
+export { AdmissionState, type AdmissionConfig, type GroupAdmission } from "./budget.js";
+export { resumeReset, resumeTargets, type ResumeTargets } from "./resume.js";
 export {
+  RESUMABLE_STATUSES,
+  buildRunRow,
+  selectRuns,
+  type RunRow,
+  type RunRowStatus,
+  type RunRowTotals,
+} from "./runs.js";
+export {
+  DEFAULT_RETRIES,
   runSequential,
   type RunOutcome,
   type RunSequentialOptions,

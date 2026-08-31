@@ -23,10 +23,12 @@ import {
 } from "../providers/index.js";
 import { renderBanner } from "../ui/banner.js";
 import { createTheme } from "../ui/theme.js";
-import { UNIMPLEMENTED_COMMANDS, parseArgs } from "./args.js";
+import { parseArgs } from "./args.js";
 import { doctor } from "./doctor.js";
 import { renderHelp } from "./help.js";
 import { runCommand, type CliIo } from "./run.js";
+import { resumeCommand } from "./resume.js";
+import { runsCommand } from "./runs.js";
 
 /**
  * Command routing and exit codes (cli.md §Exit codes):
@@ -140,12 +142,11 @@ export async function main(options: MainOptions = {}): Promise<number> {
       case "models":
         return modelsCommand(args, { env, cwd, io, theme });
 
-      case "resume":
       case "runs":
-        io.stderr.write(
-          `${theme.status("fail")} ${theme.fail(`\`baya ${args.command}\` is not available yet — it lands with run recovery (M2.8).`)}\n`,
-        );
-        return 2;
+        return runsCommand({ cwd, io, theme, json: args.flags.json });
+
+      case "resume":
+        return await resumeCommand({ args, cwd, env, io, registry });
 
       case "run":
       case "plan":
@@ -348,5 +349,3 @@ async function configCommand(
   io.stdout.write(`${lines.join("\n")}\n`);
   return 0;
 }
-
-export { UNIMPLEMENTED_COMMANDS };

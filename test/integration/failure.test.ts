@@ -188,12 +188,47 @@ describe("a question with no escalation available yet", () => {
       },
     });
     const state = result.readJson(result.paths!.state) as {
+      status: string;
       tasks: Record<string, { state: string }>;
     };
     expect(state.tasks["build-ui"]?.state).toBe("parked");
     expect(state.tasks["write-tests"]?.state).toBe("skipped");
+    // A run that only parked — nothing failed — is recorded `paused`, which is
+    // what `baya resume` reads to know work is left.
+    expect(state.status).toBe("paused");
     expect(result.stderr).toContain("Which CSS framework?");
     expect(result.code).toBe(1);
+  });
+
+  it("still records `failed`, not `paused`, when a task fails alongside a parked one", async () => {
+    const result = await runCli(["./tasks.md", "--yes"], {
+      scenario: {
+        __planner__: {
+          final: {
+            tasks: [
+              { ...PLAN.tasks[0], depends_on: [] },
+              { ...PLAN.tasks[1], depends_on: [] },
+            ],
+          },
+        },
+        "build-ui": {
+          final: taskResult("needs_input", {
+            task_id: "build-ui",
+            summary: "",
+            question: { text: "Which auth?", options: null, default: null },
+          }),
+        },
+        "write-tests": {
+          final: taskResult("failed", {
+            task_id: "write-tests",
+            summary: "",
+            error: { message: "compile error", retryable: true },
+          }),
+        },
+      },
+    });
+    const state = result.readJson(result.paths!.state) as { status: string };
+    expect(state.status).toBe("failed");
   });
 });
 

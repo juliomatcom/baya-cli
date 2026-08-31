@@ -307,6 +307,68 @@ describe("baya models", () => {
   });
 });
 
+describe("baya runs", () => {
+  function seedRun(workspace: Workspace, id: string, stateJson: string): void {
+    const dir = join(workspace.cwd, ".baya", "runs", id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "state.json"), stateJson);
+  }
+
+  const paused = (id: string): string =>
+    JSON.stringify({
+      version: 1,
+      run_id: id,
+      status: "paused",
+      started_at: "2026-08-30T12:00:00.000Z",
+      source: { path: "tasks.md", sha256: "x" },
+      totals: { succeeded: 1, failed: 0, skipped: 0, parked: 1, pending: 0, running: 0 },
+    });
+
+  it("lists resumable and damaged runs newest first, hides completed ones", async () => {
+    const workspace = makeWorkspace({});
+    seedRun(workspace, "20260830T090000Z-aaa-1", paused("20260830T090000Z-aaa-1"));
+    seedRun(
+      workspace,
+      "20260830T100000Z-bbb-1",
+      JSON.stringify({ version: 1, run_id: "x", status: "completed", totals: {} }),
+    );
+    seedRun(workspace, "20260830T110000Z-ccc-1", '{"version":1,"status":"pau');
+
+    const result = await runCli(["runs"], { workspace });
+    expect(result.code).toBe(0);
+    const body = result.stdout;
+    expect(body).toContain("20260830T110000Z-ccc-1");
+    expect(body).toContain("damaged");
+    expect(body).toContain("20260830T090000Z-aaa-1");
+    expect(body).not.toContain("20260830T100000Z-bbb-1");
+    expect(body.indexOf("ccc-1")).toBeLessThan(body.indexOf("aaa-1"));
+  });
+
+  it("says so when there is nothing to resume", async () => {
+    const result = await runCli(["runs"], { workspace: makeWorkspace({}) });
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("no resumable runs");
+  });
+
+  it("emits the rows as clean JSON and suppresses the banner", async () => {
+    const workspace = makeWorkspace({ env: { FORCE_COLOR: "3", NO_COLOR: "" } });
+    seedRun(workspace, "20260830T090000Z-aaa-1", paused("20260830T090000Z-aaa-1"));
+
+    const result = await runCli(["runs", "--json"], { workspace });
+    expect(result.code).toBe(0);
+    const rows = JSON.parse(result.stdout) as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      run_id: "20260830T090000Z-aaa-1",
+      status: "paused",
+      source_path: "tasks.md",
+      resumable: true,
+    });
+    expect(result.stdout).not.toContain("[");
+    expect(result.stderr).not.toContain("▗▄▄▖");
+  });
+});
+
 describe("baya --help", () => {
   it("lists the providers with their resolution status", async () => {
     const result = await runCli(["--help"]);
@@ -378,10 +440,11 @@ describe("argument errors", () => {
     expect(result.stderr).toContain("unknown flag: --turbo");
   });
 
-  it("names commands that are not available yet instead of treating them as paths", async () => {
+  it("treats a command word as a command, never as a task-list path", async () => {
     const result = await runCli(["resume"]);
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain("not available yet");
+    expect(result.stderr).not.toContain("cannot read");
+    expect(result.stderr).toContain("baya runs");
   });
 
   it("reports a missing task list", async () => {

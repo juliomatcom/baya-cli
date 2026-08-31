@@ -84,7 +84,7 @@ Everything a provider CLI emits reaches the main process, surfaced at `info` —
 
 ### Teardown
 
-`signal.received` · `process.killed` (pgid, signal) · `process.escalated` (SIGTERM → SIGKILL) · `state.checkpointed` (`trace`) · `run.completed` (totals) · `run.failed` · `run.interrupted`
+`signal.received` · `process.killed` (pgid, signal) · `process.escalated` (SIGTERM → SIGKILL) · `state.checkpointed` (`trace`) · `run.completed` (totals) · `run.paused` (parked tasks remain, nothing failed) · `run.failed` · `run.interrupted`
 
 ### Recovery
 

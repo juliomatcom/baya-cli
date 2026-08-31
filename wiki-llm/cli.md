@@ -18,52 +18,52 @@ baya tasks.md --yes        # ≡ baya run tasks.md --yes
 
 ## Commands
 
-| Command               | Purpose                                                                                                                                                                                 | Status    |
-| :-------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------- |
-| `baya <file>`         | Default form. Alias for `run`.                                                                                                                                                          | v1        |
-| `baya run <file>`     | Plan, resolve models, confirm, execute.                                                                                                                                                 | v1        |
-| `baya plan <file>`    | Plan + render DAG; never executes. ≡ `run --dry-run`.                                                                                                                                   | v1        |
-| `baya doctor`         | Resolve every provider: path, version, capabilities. Reap stray process groups (gated on a stale lock).                                                                                 | v1        |
-| `baya config`         | Re-run the wizard. Subactions `--show` \| `path` \| `set <key> <value>` \| `refresh-models`. [config.md](config.md).                                                                    | v1        |
-| `baya models [id]`    | Print the effective catalog (`BUILTIN_CATALOG` + config `modelCatalog`) grouped by provider; each row tagged `built-in` / `user`. Optional provider filter; `--json` emits the catalog. | v1        |
-| `baya resume <runId>` | Re-execute unfinished nodes; `--provider <id>` re-runs elsewhere. No `runId` ⇒ pick from a list, never guess. [recovery.md](recovery.md).                                               | v1 — M2.8 |
-| `baya runs`           | List resumable runs + ids.                                                                                                                                                              | v1 — M2.8 |
+| Command               | Purpose                                                                                                                                                                                                                                                                                    | Status |
+| :-------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----- |
+| `baya <file>`         | Default form. Alias for `run`.                                                                                                                                                                                                                                                             | v1     |
+| `baya run <file>`     | Plan, resolve models, confirm, execute.                                                                                                                                                                                                                                                    | v1     |
+| `baya plan <file>`    | Plan + render DAG; never executes. ≡ `run --dry-run`.                                                                                                                                                                                                                                      | v1     |
+| `baya doctor`         | Resolve every provider: path, version, capabilities. Reap stray process groups (gated on a stale lock).                                                                                                                                                                                    | v1     |
+| `baya config`         | Re-run the wizard. Subactions `--show` \| `path` \| `set <key> <value>` \| `refresh-models`. [config.md](config.md).                                                                                                                                                                       | v1     |
+| `baya models [id]`    | Print the effective catalog (`BUILTIN_CATALOG` + config `modelCatalog`) grouped by provider; each row tagged `built-in` / `user`. Optional provider filter; `--json` emits the catalog.                                                                                                    | v1     |
+| `baya resume <runId>` | Re-execute the run's unfinished tasks **in its own run directory**; succeeded tasks are kept as context and never re-run. `--provider <id>` re-runs elsewhere. No `runId` ⇒ pick from a list, never guess; no TTY ⇒ exit `2`. Settings from `config_snapshot`. [recovery.md](recovery.md). | v1     |
+| `baya runs`           | List resumable runs — `running`/`paused`/`failed`/`interrupted`, newest first: id, source, start, status, totals. `--json` emits the rows. Unreadable `state.json` ⇒ a `damaged` row, never a crash.                                                                                       | v1     |
 
 Run `baya doctor` first on any new machine — provider binaries are frequently off `$PATH`.
 
 ## Flags (`run`)
 
-| Flag                      | Default       | Meaning                                                                                                                    |
-| :------------------------ | :------------ | :------------------------------------------------------------------------------------------------------------------------- |
-| `--planner-provider <id>` | _from config_ | Provider that parses the task list into a manifest.                                                                        |
-| `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default. Resolved against the catalog like a task's, so an alias works.                             |
-| `--default-provider <id>` | _from config_ | Fallback for tasks with no stated provider. **Bypasses the first-run wizard.**                                             |
-| `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default. Resolved against the catalog like a task's, so an alias works.                             |
-| `--dry-run`               | off           | Render the DAG (with resolved models) and exit `0`.                                                                        |
-| `--yes`                   | off           | Auto-confirm the plan gate; at the model gate takes a best match ≥ 0.85 else exits `2`. **Never answers a task question.** |
-| `--plan-out <f>`          | —             | Write the manifest (models resolved) and exit.                                                                             |
-| `--plan-in <f>`           | —             | Execute a manifest directly; skips planning. Still runs the model gate.                                                    |
-| `--max-parallel <n>`      | `min(4,cpus)` | Global concurrency budget. **M2.1** — sequential today.                                                                    |
-| `--isolation <mode>`      | `shared`      | `shared` only; `worktree` is `later`.                                                                                      |
-| `--on-error <mode>`       | `continue`    | `continue` (skip descendants) \| `stop`. **M2.3** — `continue` is current behavior.                                        |
-| `--retries <n>`           | `1`           | Transient failures only. **M2.5**.                                                                                         |
-| `--context-strategy <s>`  | `link-only`   | `link-only` \| `truncate`. `summarize` is `later`.                                                                         |
-| `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                                                         |
-| `--no-memory`             | off           | Do not pass what earlier tasks learned. Every task starts blind. The A/B control for measuring memory.                     |
-| `--memory-budget <n>`     | `1200`        | Chars of the `# Known about this workspace` block (~300 tokens).                                                           |
-| `--group-size <n>`        | `3`           | Max tasks per provider process (execution.md §Grouping). `1` gives every task its own process.                             |
-| `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                    |
-| `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                    |
-| `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from the task list.                                                                 |
-| `--json`                  | off           | Machine-readable run report or `models` catalog to stdout.                                                                 |
-| `--verbose`               | off           | Alias for `--log-level debug`.                                                                                             |
-| `--no-color`              | off           | Disable ANSI. `NO_COLOR` / `FORCE_COLOR` honored natively by chalk.                                                        |
-| `-v`, `-V`, `--version`   | —             | Print the release version (`package.json` of the installed package) to stdout and exit `0`. No banner.                     |
-| `--provider <id>`         | —             | **`resume` only** — re-run unfinished tasks elsewhere (answer to exhausted credits). **M2.8**.                             |
-| `--no-progress`           | off           | Disable the spinner. Auto-off for non-TTY / `--json` / `NO_COLOR`.                                                         |
-| `--log-level <l>`         | `info`        | `trace\|debug\|info\|warn\|error`. Display filter only; the log file always gets everything.                               |
-| `--quiet`                 | off           | Alias for `--log-level warn`. Suppresses live provider output + completion lines; notes and the final report still print.  |
-| `--edit`, `--no-cache`    | —             | `later`.                                                                                                                   |
+| Flag                      | Default       | Meaning                                                                                                                               |
+| :------------------------ | :------------ | :------------------------------------------------------------------------------------------------------------------------------------ |
+| `--planner-provider <id>` | _from config_ | Provider that parses the task list into a manifest.                                                                                   |
+| `--planner-model <m>`     | _unset_       | Unset ⇒ provider's own default. Resolved against the catalog like a task's, so an alias works.                                        |
+| `--default-provider <id>` | _from config_ | Fallback for tasks with no stated provider. **Bypasses the first-run wizard.**                                                        |
+| `--default-model <m>`     | _unset_       | Unset ⇒ provider's own default. Resolved against the catalog like a task's, so an alias works.                                        |
+| `--dry-run`               | off           | Render the DAG (with resolved models) and exit `0`.                                                                                   |
+| `--yes`                   | off           | Auto-confirm the plan gate; at the model gate takes a best match ≥ 0.85 else exits `2`. **Never answers a task question.**            |
+| `--plan-out <f>`          | —             | Write the manifest (models resolved) and exit.                                                                                        |
+| `--plan-in <f>`           | —             | Execute a manifest directly; skips planning. Still runs the model gate.                                                               |
+| `--max-parallel <n>`      | `min(4,cpus)` | Global concurrency budget. Per-provider caps apply on top (execution.md §Scheduler).                                                  |
+| `--isolation <mode>`      | `shared`      | `shared` only; `worktree` is `later`.                                                                                                 |
+| `--on-error <mode>`       | `continue`    | `continue` (skip descendants) \| `stop`; `stop` behavior is **M2.3**.                                                                 |
+| `--retries <n>`           | `1`           | Transient failures only. **M2.5**.                                                                                                    |
+| `--context-strategy <s>`  | `link-only`   | `link-only` \| `truncate`. `summarize` is `later`.                                                                                    |
+| `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                                                                    |
+| `--no-memory`             | off           | Do not pass what earlier tasks learned. Every task starts blind. The A/B control for measuring memory.                                |
+| `--memory-budget <n>`     | `1200`        | Chars of the `# Known about this workspace` block (~300 tokens).                                                                      |
+| `--group-size <n>`        | `3`           | Max tasks per provider process (execution.md §Grouping). `1` gives every task its own process.                                        |
+| `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                               |
+| `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                               |
+| `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from the task list.                                                                            |
+| `--json`                  | off           | Machine-readable run report, `models` catalog, or `runs` list to stdout.                                                              |
+| `--verbose`               | off           | Alias for `--log-level debug`.                                                                                                        |
+| `--no-color`              | off           | Disable ANSI. `NO_COLOR` / `FORCE_COLOR` honored natively by chalk.                                                                   |
+| `-v`, `-V`, `--version`   | —             | Print the release version (`package.json` of the installed package) to stdout and exit `0`. No banner.                                |
+| `--provider <id>`         | —             | **`resume` only** — re-run unfinished tasks elsewhere (answer to exhausted credits). Resets their `model` to that provider's default. |
+| `--no-progress`           | off           | Disable the spinner. Auto-off for non-TTY / `--json` / `NO_COLOR`.                                                                    |
+| `--log-level <l>`         | `info`        | `trace\|debug\|info\|warn\|error`. Display filter only; the log file always gets everything.                                          |
+| `--quiet`                 | off           | Alias for `--log-level warn`. Suppresses live provider output + completion lines; notes and the final report still print.             |
+| `--edit`, `--no-cache`    | —             | `later`.                                                                                                                              |
 
 Unannotated flags are implemented + covered by `test/unit/cli/args.test.ts`.
 
@@ -81,6 +81,8 @@ USAGE
   baya run|plan <file>            explicit form
   baya doctor                     check provider installs
   baya config [--show|path|set|refresh-models]
+  baya models [provider]          list the effective model catalog
+  baya runs                       list resumable runs
 
 PROVIDERS
   codex      ✓ codex-cli 0.148.0        ~/.local/bin/codex

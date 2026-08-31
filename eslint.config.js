@@ -42,6 +42,7 @@ export default tseslint.config(
       "src/config/wizard.ts",
       "src/ui/confirm.ts",
       "src/ui/model-gate.ts",
+      "src/ui/run-picker.ts",
       "test/unit/esm-spike.test.ts",
     ],
     rules: {

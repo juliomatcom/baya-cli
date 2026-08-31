@@ -5,7 +5,13 @@
 
 ## Scheduler
 
-Loop: compute ready-set (all `depends_on` `succeeded`) → **form a group** (§Grouping) → admit while **global budget** AND **per-provider budget** AND the **writer semaphore** allow → spawn one process for the group → on completion settle every member → re-evaluate. Terminates when nothing is `running`/`parked` and the ready-set is empty. Sequential today (parallel = M2.1).
+Loop, per pass: compute ready-set (all `depends_on` `succeeded`) → **form a group** (§Grouping) from the tasks still `pending` → offer it to the **global budget**, the **per-provider budget** and the **writer semaphore** → spawn every group admitted, holding each as a promise → wake on the first to settle → settle its members → offer again. Parallel: `src/executor/sequential.ts`.
+
+**Terminates when the ready-set is empty AND nothing is in flight.** On the ready-set alone a run whose last groups are slow exits while they are still out.
+
+State is re-read **per offer**, not per pass — a settle moves tasks out of `pending`, and a group formed from a stale pending set puts one task in two processes.
+
+A refused group is re-offered on a later pass; a refused writer holds readers back until it gets in (§Workspace isolation). Its id is released when regrouping retires it — a group that re-forms around a task that became ready meanwhile has a new leader, and the retired id would block readers for the rest of the run.
 
 The admitted unit is a **group**, not a task. Grouping decides what goes in a process; parallelism decides how many processes run at once. They compose — do not conflate them.
 
@@ -16,11 +22,15 @@ The admitted unit is a **group**, not a task. Grouping decides what goes in a pr
 
 Per-provider caps conservative — consumer subscriptions throttle. Raise via the user config once measured.
 
+Both budgets live in a pure in-memory state object, `src/executor/budget.ts` (`AdmissionState`): `admit(group)` on spawn, `release(id)` on settle, no clock, nothing on disk. A provider absent from the per-provider map is bounded by the global cap alone.
+
 ## Workspace isolation
 
 **v1 — `--isolation shared` (default).** `access:"read-only"` tasks run fully parallel. Any `access:"read-write"` task takes the **single-writer semaphore** — writers serialize against each other, readers continue.
 
-Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per directory ([recovery.md](recovery.md)) means no second process to coordinate with.
+Semaphore is **in-memory in the scheduler**, nothing on disk — one Baya per directory ([recovery.md](recovery.md)) means no second process to coordinate with. It lives with the count budgets in `src/executor/budget.ts` (`AdmissionState`, keyed on the group's `access`).
+
+**Writer fairness.** Once a `read-write` group has been offered and refused, no new `read-only` group is admitted until that writer gets its slot — a readers-only wait would otherwise starve it indefinitely. In-flight readers still finish; only new ones are held.
 
 **`later` — `--isolation worktree`.** `git worktree add .baya/wt/<id>` per writing task for true parallel writes + end-of-run merge/report. Deferred until write-parallelism is a measured bottleneck. A user-level worktree already covers "two task lists, one repo".
 

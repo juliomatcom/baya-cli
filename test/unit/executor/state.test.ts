@@ -30,6 +30,7 @@ function initialState(taskIds: string[]): RunState {
       memory: true,
       memory_budget: 1200,
       group_size: 6,
+      retries: 1,
     },
     totals: {
       succeeded: 0,
@@ -124,6 +125,13 @@ describe("StateStore", () => {
     s.transition("a", { state: "succeeded" });
     s.setStatus("completed");
     expect(seen).toEqual(["running", "completed"]);
+  });
+
+  it("accepts `paused` as a terminal run status", () => {
+    const { store: s } = store(["a"]);
+    s.setStatus("paused");
+    expect(() => RunStateSchema.parse(s.get())).not.toThrow();
+    expect(s.get().status).toBe("paused");
   });
 
   it("refuses a malformed state file rather than starting fresh", () => {

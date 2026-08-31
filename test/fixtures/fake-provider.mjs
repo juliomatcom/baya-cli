@@ -19,6 +19,12 @@
  *       accept), which is structurally different from running and reporting
  *       failure through the schema.
  *   "expect_file": "path that must exist and be non-empty",
+ *   "fail_attempts": 1,
+ *     — this task answers `status: "failed"` (retryable) and the process exits
+ *       1 for its first N invocations, then behaves normally. The only
+ *       attempt-aware knob: retries need a task that fails once and then does
+ *       not, and every other knob is the same on every invocation. The counter
+ *       lives beside the scenario file, keyed by task id.
  *   "writes_file": "path to append start/end markers to",
  *   "by_task": { "<taskId>": {scenario}, "__planner__": {...}, "default": {...} }
  * }
@@ -72,6 +78,51 @@ function taskIdFromOutputFile(outputFile) {
 /** The group prompt names every member: `Task id: <id>`, in execution order. */
 function taskIdsFromPrompt(prompt) {
   return [...prompt.matchAll(/^Task id: (\S+)$/gm)].map((match) => match[1]);
+}
+
+/**
+ * How many times this task has been invoked, counting this one. Persisted
+ * beside the scenario file because each invocation is a fresh process.
+ */
+function attemptNumber(taskId) {
+  const path = `${process.env.BAYA_FAKE_SCRIPT}.attempts`;
+  let counts = {};
+  try {
+    counts = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    counts = {};
+  }
+  const attempt = (counts[taskId] ?? 0) + 1;
+  counts[taskId] = attempt;
+  writeFileSync(path, JSON.stringify(counts));
+  return attempt;
+}
+
+/** `fail_attempts`: a transient failure for the first N invocations of a task. */
+function applyAttempts(taskId, scenario) {
+  if (!scenario.fail_attempts) return scenario;
+  const attempt = attemptNumber(taskId);
+  if (attempt > scenario.fail_attempts) return scenario;
+  return {
+    ...scenario,
+    exit_code: 1,
+    final: {
+      baya: "1",
+      kind: "task_result",
+      task_id: taskId,
+      status: "failed",
+      summary: "",
+      output: "",
+      notes: [],
+      question: null,
+      error: {
+        message: `fake-provider: transient failure on attempt ${attempt}`,
+        retryable: true,
+      },
+      artifacts: [],
+      files_changed: [],
+    },
+  };
 }
 
 function loadScenario(taskId) {
@@ -201,7 +252,7 @@ async function main() {
   const prompt =
     grouped || scenario.expect_stdin || scenario.reject_stdin ? await readStdin() : "";
   const taskIds = grouped ? taskIdsFromPrompt(prompt) : [leaderId];
-  const scenarios = taskIds.map((id) => loadScenario(id));
+  const scenarios = taskIds.map((id) => applyAttempts(id, loadScenario(id)));
 
   installSignalHandlers(scenario.on_signal ?? "exit");
   checkExpectFile(scenario.expect_file);

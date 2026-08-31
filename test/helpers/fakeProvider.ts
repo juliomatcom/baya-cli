@@ -20,6 +20,8 @@ export interface FakeProviderScenario {
   /** Exit 1 with nothing parseable when stdin carries this — a refused invocation. */
   reject_stdin?: string;
   expect_file?: string;
+  /** Fail (retryably) for this many invocations of the task, then behave normally. */
+  fail_attempts?: number;
   writes_file?: string;
   by_task?: Record<string, FakeProviderScenario>;
 }

@@ -22,18 +22,18 @@ export const COMMANDS = [
 ] as const;
 export type Command = (typeof COMMANDS)[number];
 
-/** Recognized so the error is useful, but not implemented until M2.8. */
-export const UNIMPLEMENTED_COMMANDS: ReadonlySet<string> = new Set(["resume", "runs"]);
-
 export interface RunFlags {
   plannerProvider?: string;
   plannerModel?: string;
   defaultProvider?: string;
   defaultModel?: string;
+  /** `resume --provider <id>`: re-run the unfinished tasks somewhere else. */
+  provider?: string;
   dryRun: boolean;
   yes: boolean;
   planOut?: string;
   planIn?: string;
+  maxParallel?: number;
   maxTasks?: number;
   contextStrategy?: "link-only" | "truncate";
   contextBudget?: number;
@@ -42,6 +42,9 @@ export interface RunFlags {
   memoryBudget?: number;
   /** `--group-size <n>`: max tasks per provider process. `1` = one each. */
   groupSize?: number;
+  /** `--retries <n>`: extra attempts after the first, transient failures only. */
+  retries?: number;
+  onError: "continue" | "stop";
   dangerouslyAllowAll: boolean;
   json: boolean;
   verbose: boolean;
@@ -61,6 +64,8 @@ export interface ParsedArgs {
   configValue?: string;
   /** Optional provider filter for `models`. */
   modelsProvider?: string;
+  /** The run `baya resume` continues. Absent ⇒ pick one (cli.md §Commands). */
+  runId?: string;
   flags: RunFlags;
   showVersion: boolean;
   errors: string[];
@@ -71,6 +76,7 @@ const VALUE_FLAGS = new Map<string, keyof RunFlags>([
   ["--planner-model", "plannerModel"],
   ["--default-provider", "defaultProvider"],
   ["--default-model", "defaultModel"],
+  ["--provider", "provider"],
   ["--plan-out", "planOut"],
   ["--plan-in", "planIn"],
 ]);
@@ -80,6 +86,7 @@ function emptyFlags(): RunFlags {
     dryRun: false,
     yes: false,
     noMemory: false,
+    onError: "continue",
     dangerouslyAllowAll: false,
     json: false,
     verbose: false,
@@ -174,6 +181,26 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
         }
         break;
       }
+      case "--max-parallel": {
+        const value = takeValue();
+        if (value !== undefined) {
+          const parsed = Number.parseInt(value, 10);
+          if (Number.isNaN(parsed) || parsed < 1)
+            errors.push(`--max-parallel must be a positive integer`);
+          else flags.maxParallel = parsed;
+        }
+        break;
+      }
+      case "--retries": {
+        const value = takeValue();
+        if (value !== undefined) {
+          const parsed = Number.parseInt(value, 10);
+          if (Number.isNaN(parsed) || parsed < 0)
+            errors.push(`--retries must be a non-negative integer`);
+          else flags.retries = parsed;
+        }
+        break;
+      }
       case "--group-size": {
         const value = takeValue();
         if (value !== undefined) {
@@ -211,6 +238,14 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
           errors.push(
             `--context-strategy must be link-only or truncate (summarize is not in v1)`,
           );
+        }
+        break;
+      }
+      case "--on-error": {
+        const value = takeValue();
+        if (value === "continue" || value === "stop") flags.onError = value;
+        else if (value !== undefined) {
+          errors.push(`--on-error must be continue or stop`);
         }
         break;
       }
@@ -273,6 +308,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   }
 
   if (command === "models" && rest[0] !== undefined) parsed.modelsProvider = rest[0];
+
+  if (command === "resume" && rest[0] !== undefined) parsed.runId = rest[0];
 
   // `plan` is exactly `run --dry-run` (cli.md §Commands).
   if (command === "plan") parsed.flags.dryRun = true;

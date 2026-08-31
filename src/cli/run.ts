@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpus } from "node:os";
 import { resolve as resolvePath } from "node:path";
 import {
   validateManifest,
@@ -31,6 +32,7 @@ import {
 } from "../providers/index.js";
 import {
   DEFAULT_GROUP_SIZE,
+  DEFAULT_RETRIES,
   StateStore,
   emptyTaskEntry,
   killGroup,
@@ -47,7 +49,6 @@ import {
   exitCodeFor,
   renderDag,
   renderReport,
-  formatElapsed,
   resolveRunModel,
   runModelGate,
   type Progress,
@@ -62,6 +63,7 @@ import {
 } from "../config/index.js";
 import type { ParsedArgs } from "./args.js";
 import { createInterruptHandler } from "./interrupt.js";
+import { createGroupSpinner } from "./spinner.js";
 
 /**
  * `baya run` — the walking skeleton's spine.
@@ -91,6 +93,7 @@ const MEMORY_BUDGET_DEFAULT = DEFAULT_MEMORY_BUDGET;
 export async function runCommand(options: RunCommandOptions): Promise<number> {
   const { args, cwd, env, io, registry } = options;
   const { flags } = args;
+  const maxParallel = flags.maxParallel ?? Math.min(4, cpus().length);
   const theme = createTheme(flags.noColor || env["NO_COLOR"] ? "never" : "auto");
 
   const progress: Progress = createProgress({
@@ -99,16 +102,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     json: flags.json,
     env,
   });
-  // Repaints the elapsed count on the spinner line. Declared out here, beside
-  // the progress instance it drives, so the `finally` can always clear it —
-  // an interval left running past a thrown error keeps repainting a line for
-  // a run that is over.
-  let ticker: NodeJS.Timeout | null = null;
-  const stopTicker = (): void => {
-    if (ticker === null) return;
-    clearInterval(ticker);
-    ticker = null;
-  };
+  const spinner = createGroupSpinner({ progress, theme });
+  const stopTicker = spinner.dispose;
 
   // Every persistent write funnels through progress so the spinner line is
   // cleared and repainted around it (conventions.md #16b).
@@ -493,13 +488,14 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       config_snapshot: {
         planner: { provider: plannerProvider, model: plannerModel },
         defaults: { provider: defaultProvider, model: defaultModel },
-        max_parallel: 1,
+        max_parallel: maxParallel,
         isolation: "shared",
         context_strategy: flags.contextStrategy ?? "link-only",
         context_budget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
         memory: !flags.noMemory,
         memory_budget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
         group_size: flags.groupSize ?? DEFAULT_GROUP_SIZE,
+        retries: flags.retries ?? DEFAULT_RETRIES,
       },
       totals: {
         succeeded: 0,
@@ -529,34 +525,6 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     const summaries = new Map<string, string>();
     const singleTask = manifest.tasks.length === 1;
 
-    // A live line for the whole time a process is out. `claude
-    // --output-format json` returns one object at the very end, so between the
-    // spawn and the result there is structurally nothing to print and a slow
-    // task is indistinguishable from a hung one. The elapsed count is the
-    // point — a spinner alone still leaves "how long has this been?"
-    // unanswered.
-    const spinGroup = (info: {
-      taskIds: string[];
-      provider: string;
-      model: string | null;
-    }): void => {
-      const lead = info.taskIds[0] ?? "";
-      const more =
-        info.taskIds.length > 1 ? theme.note(` +${info.taskIds.length - 1}`) : "";
-      const who = `${theme.provider(info.provider)}${info.model ? theme.note(` ${info.model}`) : ""}`;
-      const label = `${theme.taskId(lead)}${more} ${who}`;
-      const startedAt = Date.now();
-      const paint = (): void =>
-        progress.update(
-          `${label} ${theme.note(`· ${formatElapsed(Date.now() - startedAt)}`)}`,
-        );
-      stopTicker();
-      progress.start(`${label} ${theme.note("· 0s")}`);
-      ticker = setInterval(paint, 1000);
-      // Never hold the event loop open on account of a cosmetic line.
-      ticker.unref();
-    };
-
     await runSequential({
       manifest,
       cwd,
@@ -574,9 +542,12 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       memory: !flags.noMemory,
       memoryBudget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
       groupSize: flags.groupSize ?? DEFAULT_GROUP_SIZE,
+      maxParallel,
+      retries: flags.retries ?? DEFAULT_RETRIES,
+      onError: flags.onError,
       env,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
-      onGroupStarted: spinGroup,
+      onGroupStarted: spinner.onGroupStarted,
       onTaskSettled: (taskId, _state, result) => {
         summaries.set(taskId, result.summary);
         // Full output would bury everything in a multi-task run; it is printed
@@ -591,7 +562,10 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       },
     });
 
-    store.setStatus(store.get().totals.failed > 0 ? "failed" : "completed");
+    const finalTotals = store.get().totals;
+    store.setStatus(
+      finalTotals.failed > 0 ? "failed" : finalTotals.parked > 0 ? "paused" : "completed",
+    );
     const state = store.get() as RunState;
     const report = buildReport(state, manifest, {
       runDir: paths.runDir,
@@ -601,13 +575,20 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
 
     stopTicker();
 
-    logger.info(state.totals.failed > 0 ? "run.failed" : "run.completed", {
-      succeeded: state.totals.succeeded,
-      failed: state.totals.failed,
-      skipped: state.totals.skipped,
-      parked: state.totals.parked,
-      cost_usd: state.totals.cost_usd,
-    });
+    logger.info(
+      state.status === "failed"
+        ? "run.failed"
+        : state.status === "paused"
+          ? "run.paused"
+          : "run.completed",
+      {
+        succeeded: state.totals.succeeded,
+        failed: state.totals.failed,
+        skipped: state.totals.skipped,
+        parked: state.totals.parked,
+        cost_usd: state.totals.cost_usd,
+      },
+    );
 
     progress.stop();
     if (flags.json) {

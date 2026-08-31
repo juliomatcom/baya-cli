@@ -155,6 +155,11 @@ export function createEventRenderer(
       case "task.failed":
         return `${INDENT}${theme.status("fail")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${(duration === null ? "" : formatDuration(duration)).padStart(7)}  ${theme.fail(firstLine(str(line, "message")))}`;
 
+      case "task.retried": {
+        const wait = (num(line, "backoff_ms") ?? 0) / 1000;
+        return `${INDENT}${theme.status("warn")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${theme.warn(`${str(line, "kind")} — retrying in ${wait.toFixed(1)}s`)}`;
+      }
+
       case "task.parked":
         return `${INDENT}${theme.status("park")} ${theme.taskId(taskLabel(taskId))} ${theme.provider(provider.padEnd(9))} ${theme.park(firstLine(str(line, "question")))}`;
 
