@@ -166,9 +166,9 @@ Order: explicit config override → `$PATH` → known install locations (`~/.loc
 
 Each adapter declares an ordered preference; the executor uses the first supported:
 
-1. **`file`** — a native flag that *delivers the prompt* from a file. No
+1. **`file`** — a native flag that _delivers the prompt_ from a file. No
    provider in the current set has one. ⚠️ `opencode run -f <file>` was listed
-   here and is **not** an example: `-f` attaches a file *to* a message, and a
+   here and is **not** an example: `-f` attaches a file _to_ a message, and a
    run with no message exits 1 (`You must provide a message or a command`).
    Read a provider's help for which of the two a file flag is before claiming
    this rung.

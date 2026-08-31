@@ -155,17 +155,17 @@ was run end to end and returned a valid `task_result` — a probed flag surface
 is not enough, which is how `opencode` shipped for three days sending a prompt
 its CLI never read.
 
-| Provider                                                | Non-interactive | Schema enforcement        | Status                    |
-| :------------------------------------------------------ | :-------------- | :------------------------ | :------------------------ |
-| [`codex`](https://github.com/openai/codex)              | `codex exec`    | ✅ file in / file out     | ✅ verified 2026-08-28    |
-| [`claude`](https://claude.com/claude-code)              | `claude -p`     | ✅ inline `--json-schema` | ✅ verified 2026-08-28    |
-| [`opencode`](https://github.com/sst/opencode)           | `opencode run`  | ❌                        | ✅ verified 2026-08-31    |
-| [`copilot`](https://github.com/github/copilot-cli)      | `copilot -p`    | ❌                        | ⚠️ partial                |
-| [`gemini`](https://github.com/google-gemini/gemini-cli) | `gemini -p`     | ❌                        | deferred to v1.1          |
-| `grok`                                                  | —               | —                         | planned, unprobed         |
+| Provider                                                | Non-interactive | Schema enforcement        | Status                 |
+| :------------------------------------------------------ | :-------------- | :------------------------ | :--------------------- |
+| [`codex`](https://github.com/openai/codex)              | `codex exec`    | ✅ file in / file out     | ✅ verified 2026-08-28 |
+| [`claude`](https://claude.com/claude-code)              | `claude -p`     | ✅ inline `--json-schema` | ✅ verified 2026-08-28 |
+| [`opencode`](https://github.com/sst/opencode)           | `opencode run`  | ❌                        | ✅ verified 2026-08-31 |
+| [`copilot`](https://github.com/github/copilot-cli)      | `copilot -p`    | ❌                        | ⚠️ partial             |
+| [`gemini`](https://github.com/google-gemini/gemini-cli) | `gemini -p`     | ❌                        | deferred to v1.1       |
+| `grok`                                                  | —               | —                         | planned, unprobed      |
 
 `opencode` takes its prompt as the positional `[message..]` after a `--`
-separator; its `-f/--file` attaches a file *to* a message and does not carry
+separator; its `-f/--file` attaches a file _to_ a message and does not carry
 one. It has no permission mapping yet — `--dangerously-allow-all` and a task's
 `read-only` access are both no-ops there.
 

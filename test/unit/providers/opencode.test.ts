@@ -263,7 +263,9 @@ describe('opencodeAdapter.extractUsage', () => {
   });
 
   it('reports nothing when no usage lines are present', () => {
-    const events = opencodeAdapter.parseEvents('{"type":"step-start","sessionID":"ses_abc"}');
+    const events = opencodeAdapter.parseEvents(
+      '{"type":"step-start","sessionID":"ses_abc"}',
+    );
     expect(opencodeAdapter.extractUsage?.(events)).toEqual({});
   });
 });

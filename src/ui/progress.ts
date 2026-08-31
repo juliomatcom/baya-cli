@@ -81,7 +81,11 @@ export function createProgress(options: ProgressOptions = {}): Progress {
       // and the re-signal never fires, so the spinner running before the first
       // prompt — planning — cannot be interrupted at all. Baya installs its
       // own SIGINT teardown; it does not need ora holding stdin.
-      spinner ??= ora({ stream: stream as NodeJS.WriteStream, text, discardStdin: false });
+      spinner ??= ora({
+        stream: stream as NodeJS.WriteStream,
+        text,
+        discardStdin: false,
+      });
       spinner.text = text;
       spinner.start();
     },
