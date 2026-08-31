@@ -174,6 +174,8 @@ The set of live pids the handler signals is maintained by `onProcessSpawn`/`onPr
 
 ⚠️ The planner half was missing until 2026-08-31, and planning is the one phase where the set was therefore always empty. Ctrl+C then hit the "nothing in flight" fast path: baya exited 130 while its planner child — `detached:true`, so the terminal's SIGINT never reached its group — kept running orphaned and kept spending. Reproduced with `opencode` as planner, and pinned by `test/unit/planner/planner-pid.test.ts`. Any future provider spawn outside the scheduler must register the same pair.
 
+⚠️ **The signal has to arrive first.** `ora`'s default `discardStdin:true` runs `stdin-discarder`, which `setRawMode(true)`s the TTY and re-emits SIGINT from a `data` listener it only `resume()`s when stdin was already paused — and an untouched `process.stdin` reports `isPaused() === false`. Raw mode with no flowing listener eats Ctrl+C entirely. The first prompt (`@inquirer/prompts`) leaves stdin paused, so every spinner *after* the plan gate was fine; the **planning** spinner, the only one before a prompt, swallowed Ctrl+C until it stopped. Fixed by `discardStdin:false` in `src/ui/progress.ts` (`createProgress().start`) — baya installs its own SIGINT teardown and never needs ora holding stdin. Pinned by `test/unit/ui/progress.test.ts` ("never puts stdin into raw mode").
+
 A per-process **timeout** runs the same SIGTERM → grace → SIGKILL escalation inside `src/executor/spawn.ts` (`killGroup`, injectable timers).
 
 ## Run state
