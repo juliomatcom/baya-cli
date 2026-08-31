@@ -112,29 +112,30 @@ Every human-facing invocation opens with the `baya` wordmark (`src/ui/banner.ts`
 
 ## Plan gate
 
-The preview answers two questions before the user says yes: **what waits for what** (stages, from `topoLayers`) and **what shares a process** (groups, from `projectGroups`).
+The preview answers two questions before the user says yes: **what waits for what** — the DAG drawn as a tree (`src/ui/dag.ts`), each parent above its children — and **what shares a process** (groups, from `projectGroups`). Stage and process counts head the tree; `topoLayers` supplies the stage count only.
 
 ```
-  Run order · 3 stages · 10 tasks → 5 processes · no dependencies within a stage
+  Run order · 6 tasks · 3 stages · 3 processes
 
-  stage 1
-    · identify-luna     codex gpt-5.6-luna       Identify model as luna (group #1)
-    · identify-sonnet   claude claude-sonnet-5   Identify model as sonnet (group #2)
-  stage 2
-    · summarize         claude claude-sonnet-5   Summarize ← identify-sonnet (group #2)
-    ...
+  └─ build-app          claude claude-sonnet-5   Build the app  (group #1)
+     ├─ run-tests       claude claude-sonnet-5   Run the suite  (group #1)
+     │  └─ deploy-stg   codex                    Deploy staging  read-write  (group #2)
+     └─ lint-code       claude claude-sonnet-5   Lint the code  (group #1)
+        └─ deploy-stg   (shown above)
 
   · a group is one process worked through in order · projected from this plan, so a failure re-forms the groups after it
-  ! groups #2, #3 fill --group-size 3 — the process is committed before its first task, so one that dies partway skips the members it never reached
+  ! group #2 fills --group-size 3 — the process is committed before its first task, so one that dies partway skips the members it never reached
 ```
 
-| Element                 | Rule                                                                                                                                                                        |
-| :---------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Provider column         | The **resolved** provider, after model-alias routing. A pinned model is always shown — it is the likeliest thing to be wrong, and this is the last place to catch it.       |
-| `read-write`            | Badged; read-only is not. Attention belongs on the tasks that may act.                                                                                                      |
-| `(group #n)`            | The process the task is projected into, numbered in admission order. A group crossing stages is a collapsed chain. Omitted entirely when no group holds more than one task. |
-| `n tasks → m processes` | Header, when grouping packs anything. `m` is what the run will spawn.                                                                                                       |
-| Full-group warning      | One line when any group reaches `--group-size`; named while ≤ 3 are full, counted after that.                                                                               |
+| Element            | Rule                                                                                                                                                                        |
+| :----------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tree shape         | Roots (no `depends_on`) at the left margin; each dependent nested under the task it waits on. Children in manifest order, so the render is stable.                          |
+| `(shown above)`    | A task with more than one parent is drawn in full under the first and back-referenced under the rest. The repeat shows a dependency two branches share.                     |
+| Provider column    | The **resolved** provider, after model-alias routing. A pinned model is always shown — it is the likeliest thing to be wrong, and this is the last place to catch it.       |
+| `read-write`       | Badged; read-only is not. Attention belongs on the tasks that may act.                                                                                                      |
+| `(group #n)`       | The process the task is projected into, numbered in admission order. A group crossing stages is a collapsed chain. Omitted entirely when no group holds more than one task. |
+| Header counts      | `n tasks · n stages`, plus `· m processes` when grouping packs anything. `m` is what the run will spawn.                                                                    |
+| Full-group warning | One line when any group reaches `--group-size`; named while ≤ 3 are full, counted after that.                                                                               |
 
 **A projection, not a promise.** `projectGroups` replays the scheduler's own loop — same `readySet`, same `formGroup`, same seed rule — with every task pending, so it cannot drift from execution and is exact on the happy path. It is not a guarantee past the first group: a failed or parked task skips its descendants and re-forms every group after it. Never reimplement the rule here; import it.
 

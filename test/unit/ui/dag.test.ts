@@ -26,6 +26,12 @@ const manifest = (tasks: Task[]): Manifest => ({
   tasks,
 });
 
+/** The scaffold column of a task's row: the tree glyphs that precede its id. */
+const scaffoldOf = (out: string, id: string): string => {
+  const line = out.split('\n').find((row) => row.includes(id));
+  return line ? line.slice(0, line.indexOf(id)) : '';
+};
+
 describe('renderDag', () => {
   it('shows the resolved provider after model-alias routing', () => {
     const out = renderDag(
@@ -47,51 +53,63 @@ describe('renderDag', () => {
     expect(out).toContain('default');
   });
 
-  it('groups tasks into dependency stages', () => {
+  it('badges a read-write task and leaves read-only unbadged', () => {
+    const out = renderDag(
+      manifest([
+        task({ id: 'reader', access: 'read-only' }),
+        task({ id: 'writer', access: 'read-write' }),
+      ]),
+      theme,
+      'codex',
+    );
+    expect(scaffoldOf(out, 'writer')).not.toContain('read-write');
+    expect(out).toMatch(/writer.*read-write/);
+    expect(out).not.toMatch(/reader.*read-write/);
+  });
+
+  it('draws a dependent nested under the task it depends on', () => {
+    const out = renderDag(
+      manifest([task({ id: 'root' }), task({ id: 'leaf', depends_on: ['root'] })]),
+      theme,
+      'codex',
+    );
+    // `leaf` is indented past `root` and hangs off a tree connector.
+    expect(scaffoldOf(out, 'leaf').length).toBeGreaterThan(
+      scaffoldOf(out, 'root').length,
+    );
+    expect(scaffoldOf(out, 'leaf')).toMatch(/[├└]/);
+  });
+
+  it('prints a shared dependency once in full, then as a reference', () => {
+    const out = renderDag(
+      manifest([
+        task({ id: 'alpha' }),
+        task({ id: 'beta' }),
+        task({ id: 'shared', title: 'Shared step', depends_on: ['alpha', 'beta'] }),
+      ]),
+      theme,
+      'codex',
+    );
+    const sharedRows = out.split('\n').filter((row) => /[├└]─ shared\b/.test(row));
+    // Two appearances of `shared`: one under `alpha`, one under `beta`.
+    expect(sharedRows.length).toBe(2);
+    // One carries the full row, exactly one is the back-reference.
+    expect(sharedRows.filter((row) => row.includes('(shown above)')).length).toBe(1);
+    expect(sharedRows.filter((row) => row.includes('Shared step')).length).toBe(1);
+  });
+
+  it('heads the preview with the task and stage counts', () => {
     const out = renderDag(
       manifest([task({ id: 'a' }), task({ id: 'b', depends_on: ['a'] })]),
       theme,
       'codex',
     );
-    expect(out).toContain('stage 1');
-    expect(out).toContain('stage 2');
-    expect(out).toContain('← a');
-  });
-
-  it('heads the preview with the stage count', () => {
-    const out = renderDag(
-      manifest([task({ id: 'a' }), task({ id: 'b', depends_on: ['a'] })]),
-      theme,
-      'codex',
-    );
-    expect(out).toContain('Run order · 2 stages');
-  });
-
-  /**
-   * The line describes the **graph**, never execution: the executor is
-   * sequential until M2.1, and grouping puts a stage's tasks in one process to
-   * be worked through in order.
-   */
-  it('explains stage independence only when a stage holds more than one task', () => {
-    const parallel = renderDag(
-      manifest([task({ id: 'a' }), task({ id: 'b' })]),
-      theme,
-      'codex',
-    );
-    expect(parallel).toContain('no dependencies within a stage');
-
-    // A pure chain has one task per stage — there is no independence to explain.
-    const chain = renderDag(
-      manifest([task({ id: 'a' }), task({ id: 'b', depends_on: ['a'] })]),
-      theme,
-      'codex',
-    );
-    expect(chain).not.toContain('no dependencies within a stage');
+    expect(out).toContain('Run order · 2 tasks · 2 stages');
   });
 
   it("says 'stage', singular, for a one-stage plan", () => {
     const out = renderDag(manifest([task({ id: 'a' })]), theme, 'codex');
-    expect(out).toContain('Run order · 1 stage');
+    expect(out).toContain('1 task · 1 stage');
     expect(out).not.toContain('1 stages');
   });
 
@@ -107,7 +125,7 @@ describe('renderDag', () => {
     const groupsIn = (out: string): Map<string, string> => {
       const found = new Map<string, string>();
       for (const line of out.split('\n')) {
-        const match = line.match(/^\s+·\s+(\S+).*\(group (#\d+)\)/);
+        const match = line.match(/[├└]─ (\S+).*\(group (#\d+)\)/);
         if (match) found.set(match[1] as string, match[2] as string);
       }
       return found;
@@ -131,9 +149,9 @@ describe('renderDag', () => {
       expect(groups.get('b')).toBe(groups.get('a'));
     });
 
-    it('counts processes against tasks', () => {
+    it('counts the processes the run will spawn', () => {
       const out = renderDag(manifest([sonnet('a'), sonnet('b')]), theme, 'codex');
-      expect(out).toContain('2 tasks → 1 process');
+      expect(out).toContain('2 tasks · 1 stage · 1 process');
     });
 
     it('warns about a group that fills --group-size, naming it', () => {
