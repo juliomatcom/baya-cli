@@ -1,0 +1,16 @@
+#!/bin/sh
+# Blocks a commit that would fail CI's format gate. Mirrors ci.yml exactly:
+# `prettier --check .` over the whole tree, not just staged files.
+#
+# Installed by the `prepare` script (`git config core.hooksPath .githooks`),
+# so a fresh `npm install` wires it up with no extra step.
+#
+# Bypass for a work-in-progress commit: `git commit --no-verify`.
+
+if ! npm run --silent format:check; then
+  echo
+  echo "✗ pre-commit: files are not Prettier-formatted (this is what CI checks)."
+  echo "  Fix:    npm run format"
+  echo "  Skip:   git commit --no-verify"
+  exit 1
+fi

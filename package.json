@@ -23,6 +23,7 @@
     "provenance": true
   },
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "build": "tsc -p tsconfig.json",
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",

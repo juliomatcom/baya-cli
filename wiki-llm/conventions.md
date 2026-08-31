@@ -20,6 +20,7 @@
 | Progress       | **`ora` v9** (ESM). Used _only_ through `src/ui/progress.ts`.                                                                                                                                                                                               |
 | Package        | **`baya-cli`** on npm (`baya` itself is taken by an unrelated package)                                                                                                                                                                                      |
 | Bin            | `baya` → `dist/cli/index.js`                                                                                                                                                                                                                                |
+| Git hooks      | `.githooks/` (no husky). `prepare` script points `core.hooksPath` there on `npm install`. `pre-commit` runs `npm run format:check` and blocks on failure; `git commit --no-verify` bypasses.                                                                |
 
 > **Jest + ESM friction (settled M0.2):** needs `--experimental-vm-modules` (run tests via `npm test`, never bare `npx jest`); trips on `.js` extension resolution under `NodeNext`; `chalk` v6 is ESM-only and detonates first. Fix: `@swc/jest` + `extensionsToTreatAsEsm` + `moduleNameMapper` stripping `.js` from relative imports.
 
@@ -79,7 +80,7 @@ specs/001/     point-in-time refinement record
 - [ ] No network or real-provider I/O outside the contract tier.
 - [ ] Affected `wiki-llm/` page updated in the same commit, written to the `token-optimize` skill's rules inline (AGENTS.md §0); full skill run only for a new page or large rewrite; new page ⇒ `index.md` row.
 - [ ] No new comment except a true edge-case WHY the code cannot express; none that narrate an edit, mark a fix, or restate code (AGENTS.md §Code Comments).
-- [ ] Formatter run before commit.
+- [ ] Formatter run before commit (`pre-commit` hook enforces `format:check`; CI re-checks).
 
 ## Documentation split
 
