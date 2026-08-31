@@ -23,6 +23,12 @@ export interface ClassifyInput {
 }
 
 const QUOTA = /\b(quota|402|exhaust|out of (credit|token)|credit balance|billing)\b/i;
+// A named allowance (`session`/`usage`/`weekly`/`daily` limit) or any "limit …
+// resets …" phrasing is an exhausted budget that only time refills — `quota`,
+// not a rate limit. Guarded by `!RATE` below so an "OpenAI rate limit … resets"
+// message stays `rate_limit`; QUOTA is tested before RATE.
+const QUOTA_LIMIT =
+  /\b((session|usage|weekly|daily)\s+limit|limits?\b[\s\S]{0,60}\bresets?\b|\bresets?\b[\s\S]{0,60}\blimits?\b)/i;
 const RATE = /\b(rate.?limit|429|overloaded|too many requests)\b/i;
 const AUTH =
   /\b(401|403|unauthor|forbidden|authentication|api key|not logged in|login)\b/i;
@@ -78,7 +84,7 @@ export function classifyFailure(
     return { ...base, kind: "auth", retry: "never" };
   }
 
-  if (QUOTA.test(haystack)) {
+  if (QUOTA.test(haystack) || (QUOTA_LIMIT.test(haystack) && !RATE.test(haystack))) {
     return { ...base, kind: "quota", retry: "later" };
   }
 

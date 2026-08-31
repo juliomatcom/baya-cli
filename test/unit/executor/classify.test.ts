@@ -46,6 +46,45 @@ describe("classifyFailure", () => {
     expect(f).toMatchObject({ kind: "rate_limit", retry: "later" });
   });
 
+  // A session/usage/weekly/daily limit is an exhausted allowance that only a
+  // reset refills — `quota`, so it burns no attempts. The OpenAI rate-limit
+  // string beside it says "limit" four times and carries a "rate-limits" URL,
+  // but it is an ordinary per-minute throttle and must stay `rate_limit`.
+  it("a session limit is quota, an OpenAI rate limit beside it is not", () => {
+    expect(
+      classifyFailure(
+        {
+          ...base,
+          errorMessage: "You've hit your session limit · resets 12:30am (Europe/Madrid)",
+        },
+        at,
+      ),
+    ).toMatchObject({ kind: "quota", retry: "later" });
+
+    expect(
+      classifyFailure(
+        {
+          ...base,
+          errorMessage:
+            "Rate limit reached for gpt-5.6-luna in organization org-… on tokens per min (TPM): Limit 200000, Used 187001, Requested 92261. Please try again in 23.778s. Visit https://platform.openai.com/account/rate-limits to learn more.",
+        },
+        at,
+      ),
+    ).toMatchObject({ kind: "rate_limit", retry: "later" });
+  });
+
+  it("weekly and daily limits with reset phrasing are quota", () => {
+    for (const message of [
+      "You've reached your weekly limit. Your access resets on Monday.",
+      "Usage limit reached — limit resets at 00:00 UTC",
+    ]) {
+      expect(classifyFailure({ ...base, errorMessage: message }, at)).toMatchObject({
+        kind: "quota",
+        retry: "later",
+      });
+    }
+  });
+
   it("a permission denial never retries", () => {
     const f = classifyFailure(
       {
