@@ -1,3 +1,5 @@
+import { readySet, topoOrder, type GraphNode, type ReadyState } from "../graph/index.js";
+
 /**
  * Task grouping (execution.md §Grouping). Pure: no I/O, no clock.
  *
@@ -23,17 +25,18 @@
  * Max tasks per process.
  *
  * ⚠️ **Unmeasured.** Grouping's saving is the fixed per-spawn cost paid once
- * instead of N times, so the return curve is `(N-1)/N` — 50% of it at 2, 75%
- * at 4, 83% at 6, 88% at 8. Most of the win is early, and what grows with N is
+ * instead of N times, so the return curve is `(N-1)/N` — 50% of it at 2, 67%
+ * at 3, 75% at 4, 83% at 6. Most of the win is early, and what grows with N is
  * the risk: a longer prompt to conflate or skip a task in, a longer session to
  * drift or exhaust its context in, and more unreached members when a process
- * dies. 6 takes the knee of the curve and stops.
+ * dies. 3 takes two thirds of the saving and keeps the blast radius small
+ * enough to re-run by hand.
  *
  * Settle it with the data rather than by argument: `.baya/runs/*` already
  * records `cost_usd` and the cache-split token counts per run, so the same A/B
  * that `M6.6` specifies for `--no-memory` reads this too.
  */
-export const DEFAULT_GROUP_SIZE = 6;
+export const DEFAULT_GROUP_SIZE = 3;
 
 export interface GroupCandidate {
   id: string;
@@ -128,4 +131,57 @@ export function formGroup(input: FormGroupInput): string[] {
   // task admitted after it, and the prompt has to present them in an order
   // the agent can actually execute.
   return input.order.filter((id) => group.has(id));
+}
+
+export interface ProjectedGroup {
+  /** 1-based, in the order the scheduler would admit the groups. */
+  index: number;
+  /** Members in execution order — the same order `formGroup` returns. */
+  members: string[];
+}
+
+/**
+ * The groups this manifest *would* form, replaying the scheduler's loop with
+ * nothing yet run. Used by the plan gate so the user can see which tasks will
+ * share a process before answering the question.
+ *
+ * **A projection, not a promise.** The grouping key is static — provider,
+ * model, access and cwd all come from the manifest — and `formGroup` is pure,
+ * so identical inputs give identical groups. What is not static is the run:
+ * a failed or parked task skips its descendants, and every group after it
+ * differs from what was projected here. The first group is always exact.
+ *
+ * It replays rather than reimplements — same `readySet`, same `formGroup`,
+ * same seed rule (`ready[0]`, in manifest order) — so the preview cannot drift
+ * away from what the scheduler does.
+ */
+export function projectGroups(
+  nodes: readonly GraphNode[],
+  candidates: ReadonlyMap<string, GroupCandidate>,
+  cap: number,
+): ProjectedGroup[] {
+  const order = topoOrder(nodes);
+  const states = new Map<string, ReadyState>(nodes.map((node) => [node.id, "pending"]));
+  const idsIn = (state: ReadyState): Set<string> =>
+    new Set(order.filter((id) => states.get(id) === state));
+  const groups: ProjectedGroup[] = [];
+
+  for (;;) {
+    const ready = readySet(nodes, states);
+    if (ready.length === 0) break;
+    const members = formGroup({
+      seedId: ready[0] as string,
+      order,
+      candidates,
+      pending: idsIn("pending"),
+      succeeded: idsIn("succeeded"),
+      cap: Math.max(1, cap),
+    });
+    groups.push({ index: groups.length + 1, members });
+    // The happy path, which is what a preview can honestly show: every member
+    // succeeds, so the next pass sees exactly what the scheduler would.
+    for (const id of members) states.set(id, "succeeded");
+  }
+
+  return groups;
 }

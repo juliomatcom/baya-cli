@@ -94,4 +94,82 @@ describe("renderDag", () => {
     expect(out).toContain("Run order · 1 stage");
     expect(out).not.toContain("1 stages");
   });
+
+  /**
+   * Grouping is the other half of what the gate is asking about: which tasks
+   * share one process. The assertions are about *which tasks land together*,
+   * not about how the line reads.
+   */
+  describe("group projection", () => {
+    const sonnet = (id: string, deps: string[] = []): Task =>
+      task({ id, model: "claude-sonnet-5", depends_on: deps });
+
+    const groupsIn = (out: string): Map<string, string> => {
+      const found = new Map<string, string>();
+      for (const line of out.split("\n")) {
+        const match = line.match(/^\s+·\s+(\S+).*\(group (#\d+)\)/);
+        if (match) found.set(match[1] as string, match[2] as string);
+      }
+      return found;
+    };
+
+    it("puts tasks that share a process under one group number", () => {
+      const out = renderDag(
+        manifest([sonnet("a"), sonnet("b"), task({ id: "c", model: "luna" })]),
+        theme,
+        "codex",
+      );
+      const groups = groupsIn(out);
+      expect(groups.get("a")).toBe(groups.get("b"));
+      expect(groups.get("c")).not.toBe(groups.get("a"));
+    });
+
+    it("shows a chain collapsing across stages into one process", () => {
+      const groups = groupsIn(
+        renderDag(manifest([sonnet("a"), sonnet("b", ["a"])]), theme, "codex"),
+      );
+      expect(groups.get("b")).toBe(groups.get("a"));
+    });
+
+    it("counts processes against tasks", () => {
+      const out = renderDag(manifest([sonnet("a"), sonnet("b")]), theme, "codex");
+      expect(out).toContain("2 tasks → 1 process");
+    });
+
+    it("warns about a group that fills --group-size, naming it", () => {
+      const out = renderDag(
+        manifest([sonnet("a"), sonnet("b"), sonnet("c")]),
+        theme,
+        "codex",
+        { groupSize: 3 },
+      );
+      const groups = groupsIn(out);
+      expect(out).toContain(`group ${groups.get("a")} fills`);
+      expect(out).toContain("--group-size 3");
+    });
+
+    it("stays quiet when no group holds more than one task", () => {
+      const out = renderDag(manifest([sonnet("a"), sonnet("b")]), theme, "codex", {
+        groupSize: 1,
+      });
+      expect(out).not.toContain("group #");
+      expect(out).not.toContain("processes");
+    });
+
+    /**
+     * A task pinning the run's own model must not read as a separate process
+     * from one that pins nothing — that split would exist in the preview only.
+     */
+    it("keys against the run defaults, as the scheduler does", () => {
+      const groups = groupsIn(
+        renderDag(
+          manifest([task({ id: "a" }), task({ id: "b", model: "gpt-5.6-luna" })]),
+          theme,
+          "codex",
+          { defaultModel: "gpt-5.6-luna" },
+        ),
+      );
+      expect(groups.get("a")).toBe(groups.get("b"));
+    });
+  });
 });

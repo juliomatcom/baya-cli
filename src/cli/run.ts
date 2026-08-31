@@ -447,7 +447,13 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     io.stderr.write(
       `\n  ${theme.taskId("baya")} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ""}${planOrigin === "fallback" ? theme.warn(" · linear fallback") : ""}\n\n`,
     );
-    io.stderr.write(`${renderDag(manifest, theme, defaultProvider as ProviderId)}\n\n`);
+    io.stderr.write(
+      `${renderDag(manifest, theme, defaultProvider as ProviderId, {
+        defaultModel,
+        cwd,
+        groupSize: flags.groupSize ?? DEFAULT_GROUP_SIZE,
+      })}\n\n`,
+    );
 
     for (const note of modelGate.notes) {
       io.stderr.write(`  ${theme.note("resolved")} ${note}\n`);

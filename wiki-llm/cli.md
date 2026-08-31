@@ -51,7 +51,7 @@ Run `baya doctor` first on any new machine — provider binaries are frequently 
 | `--context-budget <n>`    | `12000`       | Total chars; per-edge cap is half.                                                                                         |
 | `--no-memory`             | off           | Do not pass what earlier tasks learned. Every task starts blind. The A/B control for measuring memory.                     |
 | `--memory-budget <n>`     | `1200`        | Chars of the `# Known about this workspace` block (~300 tokens).                                                           |
-| `--group-size <n>`        | `6`           | Max tasks per provider process (execution.md §Grouping). `1` gives every task its own process.                             |
+| `--group-size <n>`        | `3`           | Max tasks per provider process (execution.md §Grouping). `1` gives every task its own process.                             |
 | `--on-input <mode>`       | `ask`         | `ask` \| `fail` \| `skip` \| `default`. **M4.5** — `needs_input` parks + reports today.                                    |
 | `--max-tasks <n>`         | `50`          | Planner output ceiling.                                                                                                    |
 | `--dangerously-allow-all` | off           | Full permission bypass. Never inferred from the task list.                                                                 |
@@ -107,6 +107,34 @@ Non-TTY never prompts: one provider ⇒ used with a warning; several ⇒ exit `2
 ## Banner
 
 Every human-facing invocation opens with the `baya` wordmark (`src/ui/banner.ts`) on **stderr**. Suppressed for `--json`, `--version`, `--quiet`. Never on stdout — a piped `--json` payload and `$(baya config path)` stay clean.
+
+## Plan gate
+
+The preview answers two questions before the user says yes: **what waits for what** (stages, from `topoLayers`) and **what shares a process** (groups, from `projectGroups`).
+
+```
+  Run order · 3 stages · 10 tasks → 5 processes · no dependencies within a stage
+
+  stage 1
+    · identify-luna     codex gpt-5.6-luna       Identify model as luna (group #1)
+    · identify-sonnet   claude claude-sonnet-5   Identify model as sonnet (group #2)
+  stage 2
+    · summarize         claude claude-sonnet-5   Summarize ← identify-sonnet (group #2)
+    ...
+
+  · a group is one process worked through in order · projected from this plan, so a failure re-forms the groups after it
+  ! groups #2, #3 fill --group-size 3 — the process is committed before its first task, so one that dies partway skips the members it never reached
+```
+
+| Element                 | Rule                                                                                                                                                                        |
+| :---------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provider column         | The **resolved** provider, after model-alias routing. A pinned model is always shown — it is the likeliest thing to be wrong, and this is the last place to catch it.       |
+| `read-write`            | Badged; read-only is not. Attention belongs on the tasks that may act.                                                                                                      |
+| `(group #n)`            | The process the task is projected into, numbered in admission order. A group crossing stages is a collapsed chain. Omitted entirely when no group holds more than one task. |
+| `n tasks → m processes` | Header, when grouping packs anything. `m` is what the run will spawn.                                                                                                       |
+| Full-group warning      | One line when any group reaches `--group-size`; named while ≤ 3 are full, counted after that.                                                                               |
+
+**A projection, not a promise.** `projectGroups` replays the scheduler's own loop — same `readySet`, same `formGroup`, same seed rule — with every task pending, so it cannot drift from execution and is exact on the happy path. It is not a guarantee past the first group: a failed or parked task skips its descendants and re-forms every group after it. Never reimplement the rule here; import it.
 
 ## Run output
 
