@@ -63,7 +63,7 @@ import {
 } from '../config/index.js';
 import type { ParsedArgs } from './args.js';
 import { installInterruptHandlers } from './interrupt.js';
-import { createGroupSpinner } from './spinner.js';
+import { createGroupSpinner, startElapsedLine } from './spinner.js';
 
 /**
  * `baya run` — the walking skeleton's spine.
@@ -372,32 +372,50 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         return 2;
       }
 
-      progress.start(`planning with ${plannerProvider}…`);
-      const planned = await planTaskList({
-        taskText: read.taskText,
-        source: read.source,
-        runner: runPlannerProvider({
-          adapter: plannerAdapter,
-          bin: plannerResolved.bin,
-          cwd,
-          model: plannerModel,
-          schemaPath: planSchemaPath,
-          resultFile: `${paths.runDir}/plan-draft.json`,
-          runId,
+      // Planning is one provider call with nothing to stream, and on a slow
+      // model it is minutes of an unchanging line — the same problem the group
+      // spinner exists to solve, so it gets the same elapsed count.
+      const stopPlanningLine = startElapsedLine(
+        progress,
+        theme,
+        `planning with ${theme.provider(String(plannerProvider))}${
+          plannerModel ? theme.note(` ${plannerModel}`) : ''
+        }`,
+      );
+      let planned;
+      try {
+        planned = await planTaskList({
+          taskText: read.taskText,
+          source: read.source,
+          runner: runPlannerProvider({
+            adapter: plannerAdapter,
+            bin: plannerResolved.bin,
+            cwd,
+            model: plannerModel,
+            schemaPath: planSchemaPath,
+            resultFile: `${paths.runDir}/plan-draft.json`,
+            runId,
+            logger,
+            env,
+            // Planning is a provider spawn like any other, so Ctrl+C has to be
+            // able to reach it — see RunPlannerProviderOptions.onProcessSpawn.
+            onProcessSpawn: (pid) => activePids.add(pid),
+            onProcessExit: (pid) => activePids.delete(pid),
+          }),
           logger,
-          env,
-        }),
-        logger,
-        // Inlined only for a planner that enforces nothing. Naming a schema by
-        // path sends the agent to read it, which costs a whole context re-send.
-        ...(plannerAdapter.capabilities.structuredOutput === 'none'
-          ? { schema: readFileSync(planSchemaPath, 'utf8') }
-          : {}),
-        providers: registry.ids,
-        defaultProvider: defaultProvider as ProviderId,
-        schemaPath: planSchemaPath,
-        ...(flags.maxTasks !== undefined ? { maxTasks: flags.maxTasks } : {}),
-      });
+          // Inlined only for a planner that enforces nothing. Naming a schema by
+          // path sends the agent to read it, which costs a whole context re-send.
+          ...(plannerAdapter.capabilities.structuredOutput === 'none'
+            ? { schema: readFileSync(planSchemaPath, 'utf8') }
+            : {}),
+          providers: registry.ids,
+          defaultProvider: defaultProvider as ProviderId,
+          schemaPath: planSchemaPath,
+          ...(flags.maxTasks !== undefined ? { maxTasks: flags.maxTasks } : {}),
+        });
+      } finally {
+        stopPlanningLine();
+      }
       progress.stop();
       manifest = planned.manifest;
       planOrigin = planned.origin;

@@ -37,7 +37,7 @@
 
 - **`codex`** ✅ `~/.local/bin/codex` — `codex exec [PROMPT]`; prompt via positional, `-` , or **stdin**. `-m/--model`, `-C/--cd`, `--add-dir`, `-s/--sandbox {read-only,workspace-write,danger-full-access}`, `--json` (JSONL events), `-o/--output-last-message <FILE>`, `--output-schema <FILE>`, `--color never`, `--skip-git-repo-check`, `--ephemeral`. Resume: `codex exec resume [--last]`. ⚠️ `-p` = `--profile`.
 - **`gemini`** ✅ nvm bin — `gemini -p <prompt>` (headless); prompt also appended to stdin. `-m/--model`, `-o/--output-format {text,json,stream-json}`, `--approval-mode {default,auto_edit,yolo,plan}`, `-y/--yolo`, `--include-directories`, `-r/--resume`. Verified but **deferred to v1.1** (not in the named provider set).
-- **`opencode`** ✅ `~/.opencode/bin/opencode` — `opencode run [message..]`; `-m provider/model`, `--format {default,json}`, `-f/--file` (**native prompt-file attach**), `--agent`, `-c/--continue`, `-s/--session <id>`, `--fork`, `--dir`.
+- **`opencode`** ✅ `~/.opencode/bin/opencode` — `opencode run [message..]`; `-m provider/model`, `--format {default,json}`, `-f/--file` (attaches a file **to** a message — it does *not* carry the prompt), `--agent`, `-c/--continue`, `-s/--session <id>`, `--fork`, `--dir`.
 - **`claude`** ✅ live-probed 2026-08-28 (v2.1.251). `-p` + stdin; **`--json-schema` (inline only)** → `.structured_output`; `.session_id`; `--session-id` pre-assign; **no cwd flag**; blocks 3 s on inherited stdin.
 - **`copilot`** ⚠️ partially verified (v1.0.81) — flags and JSONL confirmed; **monthly quota exhausted**, so the success path is unverified. **argv-only prompt**; `--no-ask-user`; `result` event yields session id, exit code, and `filesModified`.
 

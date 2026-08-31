@@ -161,21 +161,23 @@ Adapter `src/providers/copilot.ts`, snapshot `test/unit/providers/copilot.test.t
 
 Unprobed: assistant text events, `result` usage fields, `--allow-all-tools` parse-vs-execution. Adapter written to documented flags + fake-stream unit tests. Run `BAYA_CONTRACT=1 npm run test:contract` post-quota; fill shapes above in the SAME commit.
 
-## opencode — ⚠️ partially verified 2026-08-28 (flags ✅, invalid local key); adapter M3.1 landed
+## opencode — ✅ verified live 2026-08-31 (flags + success path, opencode 1.18.25); adapter M3.1 landed
 
-`opencode run [message..]`. Prompt: positional, or `-f/--file` (native file attach — the only true file delivery in the set).
+`opencode run [message..]`. Prompt: **positional only**, after a `--` separator. ⚠️ `-f/--file` attaches a file **to** a message and does not carry one — `run -f prompt.md` with no positional exits 1 (`Error: You must provide a message or a command`). Without `--`, a prompt starting with `-` is parsed as a flag and the command prints help instead of running (yargs). Verified live 2026-08-31, opencode 1.18.25.
 
 Flags: `-m <provider/model>` (compound) · `--dir` · `--format {default,json}` · `-c/--continue` · `-s/--session <id>` · `--fork` · `--agent` · `--title` · `--share`.
 
 Events: JSONL `{type, timestamp, sessionID, …}`. Error `{"type":"error","error":{"name":…,"data":{"statusCode":401,"isRetryable":false}}}` — `isRetryable` boolean, cleanest retry signal in the set.
 
-⚠️ **Environment, not a bug:** this machine's opencode holds an invalid key (`"asd"`), every run 401s. Fix local auth before the contract test.
+Local auth fixed 2026-08-31 — a real run against `opencode/*-free` now completes end to end (`opencode zen` free tier, `cost: 0`).
 
-Capabilities: `promptDelivery ['file','argv']` · `structuredOutput 'none'` · `sessionId 'capture'` · `resume 'session'` · `observations 'none'` · `cwdFlag true` · `maxConcurrency 2`.
+Capabilities: `promptDelivery ['argv']` · `structuredOutput 'none'` · `sessionId 'capture'` · `resume 'session'` · `observations 'none'` · `cwdFlag true` · `maxConcurrency 2`.
 
-Adapter `src/providers/opencode.ts`, snapshot `test/unit/providers/opencode.test.ts`. Proves the abstraction against a **third** prompt-delivery shape (file `-f` vs codex/claude stdin). argv: `opencode run --format json --dir <cwd> [-m <provider/model>] -f <promptFile>`, `stdin:"ignore"`, prompt written to `<taskDir>/prompt.md` via `SpawnPlan.files`. `-m` passed verbatim. No schema ⇒ degradation ladder.
+Adapter `src/providers/opencode.ts`, snapshot `test/unit/providers/opencode.test.ts`. Proves the abstraction against a **third** prompt-delivery shape (argv positional vs codex/claude stdin). argv: `opencode run --format json --dir <cwd> [-m <provider/model>] -- <prompt>`, `stdin:"ignore"`. `prompt.md` is still written to `<taskDir>` via `SpawnPlan.files` as the record of what was sent, but nothing reads it back. `-m` passed verbatim. Nothing may follow the prompt — `message..` is variadic. No schema ⇒ degradation ladder. ⚠️ No permission mapping: `dangerouslyAllowAll` and `task.access` are both ignored (opencode's `--auto` is unwired), unlike codex `-s` and claude `--permission-mode`.
 
-⚠️ **UNVERIFIED (key):** success-path event shape. `readText` tries `text` / `content` / `part.{type:"text",text}` / `message.content`. Error shape known — `isRetryable` preserved by keeping the raw line as an `unknown` event beside the normalized `error` event, so `extractResult` + the M2.5 classifier both read it. `extractUsage` reads `tokens.{input,output}` + `cost` off `step-finish` lines.
+Success-path event shape verified live 2026-08-31 (opencode 1.18.25, `opencode/*-free` models). Assistant text: `{"type":"text","part":{"type":"text","text":…}}` — `readText`'s `part.{type:"text",text}` rung. Step framing: `{"type":"step_start"|"step_finish","sessionID":…,"part":{…}}` (top-level `type` uses `_`, `part.type` uses `-`), kept as `unknown`; `sessionID` is echoed on nearly every line. Error shape known — `isRetryable` preserved by keeping the raw line as an `unknown` event beside the normalized `error` event, so `extractResult` + the M2.5 classifier both read it.
+
+`extractUsage`: one `step_finish` line per step, `tokens` + `cost` nested **under `part`** (not top level — the pre-M3.1 adapter read the top level and always got `{}`). `part.tokens.input` is *fresh* input only; cache tokens are alongside under `part.tokens.cache.{read,write}` and `total = input + output + cache.read + cache.write + reasoning`. Folded to `input_tokens` gross (fresh + cache) with `cached_input_tokens` / `cache_write_input_tokens` split out, matching claude. A flat top-level `tokens`/`cost` is still read as a fallback.
 
 ## gemini — ✅ verified 2026-08-28 (help), deferred to v1.1
 

@@ -166,9 +166,15 @@ Order: explicit config override → `$PATH` → known install locations (`~/.loc
 
 Each adapter declares an ordered preference; the executor uses the first supported:
 
-1. **`file`** — a native prompt/attach flag (`opencode run -f <file>`).
+1. **`file`** — a native flag that *delivers the prompt* from a file. No
+   provider in the current set has one. ⚠️ `opencode run -f <file>` was listed
+   here and is **not** an example: `-f` attaches a file *to* a message, and a
+   run with no message exits 1 (`You must provide a message or a command`).
+   Read a provider's help for which of the two a file flag is before claiming
+   this rung.
 2. **`stdin`** — pipe the file (`codex exec - < request.json`; `gemini` appends stdin).
-3. **`argv`** — last resort only.
+3. **`argv`** — last resort, and the only shape `opencode` offers: the prompt
+   is its positional `[message..]`, passed after a `--` separator.
 
 `request.json` is always written to disk regardless of delivery path, so every run is reproducible and inspectable. This avoids `ARG_MAX`, shell-quoting hazards, and newline mangling.
 

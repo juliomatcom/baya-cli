@@ -28,6 +28,20 @@ export interface RunPlannerProviderOptions {
   logger: Logger;
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
+  /**
+   * The planner's process-group leader, reported so the CLI's interrupt
+   * teardown can reach it.
+   *
+   * Without this pair the planner is the one provider Ctrl+C cannot stop.
+   * Children spawn `detached: true`, so the terminal's SIGINT goes to baya's
+   * process group and never to the planner's; baya's handler then finds its
+   * live set empty, takes the "nothing in flight" fast path, and exits — while
+   * the planner keeps running, orphaned, still spending. Measured 2026-08-31:
+   * SIGINT during planning left `opencode run` alive with no parent.
+   */
+  onProcessSpawn?: (pid: number) => void;
+  /** Must fire on every exit path, or a stale pid is SIGKILLed after pid reuse. */
+  onProcessExit?: (pid: number) => void;
 }
 
 const PLANNER_TASK_ID = 'baya-planner';
@@ -75,14 +89,24 @@ export function runPlannerProvider(
     });
 
     const events: ProviderEvent[] = [];
-    const outcome = await runProcess({
-      plan,
-      ...(options.env ? { env: options.env } : {}),
-      timeoutMs: options.timeoutMs ?? 300_000,
-      onStdoutLine: (line) => {
-        events.push(...options.adapter.parseEvents(line));
-      },
-    });
+    let spawnedPid: number | null = null;
+    let outcome;
+    try {
+      outcome = await runProcess({
+        plan,
+        ...(options.env ? { env: options.env } : {}),
+        timeoutMs: options.timeoutMs ?? 300_000,
+        onSpawn: (pid) => {
+          spawnedPid = pid;
+          options.onProcessSpawn?.(pid);
+        },
+        onStdoutLine: (line) => {
+          events.push(...options.adapter.parseEvents(line));
+        },
+      });
+    } finally {
+      if (spawnedPid !== null) options.onProcessExit?.(spawnedPid);
+    }
 
     try {
       const contents = readFileSync(options.resultFile, 'utf8');

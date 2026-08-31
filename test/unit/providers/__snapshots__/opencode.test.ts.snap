@@ -10,8 +10,8 @@ exports[`opencodeAdapter.buildRun argv builds a resume around the captured sessi
   "/work",
   "-s",
   "ses_abc",
-  "-f",
-  "/work/.baya/runs/r1/tasks/gen-schema/prompt.md",
+  "--",
+  "use postgres",
 ]
 `;
 
@@ -23,7 +23,7 @@ exports[`opencodeAdapter.buildRun argv matches the recorded surface 1`] = `
   "json",
   "--dir",
   "/work",
-  "-f",
-  "/work/.baya/runs/r1/tasks/gen-schema/prompt.md",
+  "--",
+  "do the thing",
 ]
 `;

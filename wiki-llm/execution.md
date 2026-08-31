@@ -170,7 +170,9 @@ Nothing in flight ⇒ the grace window is skipped. **A second Ctrl+C during the 
 
 `installInterruptHandlers` registers SIGINT, SIGTERM, SIGHUP and `uncaughtException` on that one handler in both `src/cli/run.ts` and `src/cli/resume.ts`, and returns the unregister function called in `finally`. Every route runs the identical teardown; only the exit code differs: SIGINT `130`, SIGTERM `143`, SIGHUP `129`, `uncaughtException` `1` (logged as `run.crashed`). A crash therefore reaps its child process groups instead of orphaning them. Live pids are checkpointed so a later `baya doctor` can reap strays.
 
-The set of live pids the handler signals is maintained by the scheduler's `onProcessSpawn`/`onProcessExit` callbacks (`RunSequentialOptions`): add on spawn, remove the exact pid on settle, so parallel groups are all signalled and a settled or reused pid is never carried.
+The set of live pids the handler signals is maintained by `onProcessSpawn`/`onProcessExit` callbacks: add on spawn, remove the exact pid on settle, so parallel groups are all signalled and a settled or reused pid is never carried. **Two producers feed it** — the scheduler (`RunSequentialOptions`) and the planner (`RunPlannerProviderOptions`, `src/planner/provider.ts`).
+
+⚠️ The planner half was missing until 2026-08-31, and planning is the one phase where the set was therefore always empty. Ctrl+C then hit the "nothing in flight" fast path: baya exited 130 while its planner child — `detached:true`, so the terminal's SIGINT never reached its group — kept running orphaned and kept spending. Reproduced with `opencode` as planner, and pinned by `test/unit/planner/planner-pid.test.ts`. Any future provider spawn outside the scheduler must register the same pair.
 
 A per-process **timeout** runs the same SIGTERM → grace → SIGKILL escalation inside `src/executor/spawn.ts` (`killGroup`, injectable timers).
 

@@ -13,14 +13,28 @@ import type {
 export const OPENCODE_PROVIDER = 'opencode' as const;
 
 /**
- * opencode adapter (providers.md §opencode, flags verified live 2026-08-28;
- * **success path unverified** — the reference machine's opencode holds an
- * invalid provider key, so every run 401s).
+ * opencode adapter (providers.md §opencode; argv shape re-verified live
+ * 2026-08-31 against `opencode 1.18.25`).
  *
  * Its job in the sequence is to prove the abstraction against a *third*
  * invocation shape: codex delivers the prompt on stdin, claude on stdin, and
- * opencode by **file** (`-f`) — the only real file delivery in the set. If the
- * adapter interface fits all three, it fits.
+ * opencode on **argv** as a positional.
+ *
+ * ⚠️ It was written against `-f`, on the reading that `-f` delivers the prompt.
+ * It does not. `opencode run --help`: `-f, --file  file(s) to attach to
+ * message` — an *attachment*, and the message itself is the positional
+ * `[message..]`. So `run -f prompt.md` passes a file with no message and
+ * opencode exits 1 with `Error: You must provide a message or a command`
+ * before reaching a model. Every opencode task failed this way; the bug
+ * survived because this adapter's success path was never exercised live (the
+ * reference machine's opencode held an invalid provider key, so runs 401'd at
+ * a later stage and the argv was never in question).
+ *
+ * The `--` before the prompt is load-bearing, not decoration: opencode parses
+ * argv with yargs, so a prompt whose first character is `-` is read as an
+ * unknown flag and the command prints its help text and exits instead of
+ * running. Verified 2026-08-31. Nothing may follow the prompt — `message..`
+ * is variadic and would swallow it.
  *
  * No schema enforcement: the result is mined out of the assistant text via the
  * degradation ladder (protocol.md §4, rungs 2–3), then synthesized on failure.
@@ -115,7 +129,7 @@ export const opencodeAdapter: ProviderAdapter = {
   id: OPENCODE_PROVIDER,
 
   capabilities: {
-    promptDelivery: ['file', 'argv'],
+    promptDelivery: ['argv'],
     structuredOutput: 'none',
     events: 'jsonl',
     sessionId: 'capture',
@@ -133,23 +147,24 @@ export const opencodeAdapter: ProviderAdapter = {
   installHint: 'npm i -g opencode-ai',
 
   buildRun(input: BuildRunInput): SpawnPlan {
-    const file = promptFile(input);
     return {
-      argv: [input.bin, ...commonFlags(input), '-f', file],
+      argv: [input.bin, ...commonFlags(input), '--', input.prompt],
       cwd: input.cwd,
       stdin: 'ignore',
-      files: [{ path: file, contents: input.prompt }],
+      // Still written, though nothing reads it back: `prompt.md` in the task's
+      // run directory is the record of what was actually sent, and the run
+      // output points people at that directory.
+      files: [{ path: promptFile(input), contents: input.prompt }],
     };
   },
 
   /** `opencode run -s <sessionID>` — the id captured from the event stream. */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
-    const file = promptFile(input);
     return {
-      argv: [input.bin, ...commonFlags(input), '-s', sessionId, '-f', file],
+      argv: [input.bin, ...commonFlags(input), '-s', sessionId, '--', answer],
       cwd: input.cwd,
       stdin: 'ignore',
-      files: [{ path: file, contents: answer }],
+      files: [{ path: promptFile(input), contents: answer }],
     };
   },
 
@@ -225,30 +240,61 @@ export const opencodeAdapter: ProviderAdapter = {
   },
 
   extractUsage(events: ProviderEvent[]): ProviderUsage {
-    // `tokens`/`cost` land on a step-finish line kept as `unknown`; read them
-    // back out without widening the ProviderEvent union.
-    const out: ProviderUsage = {};
+    // opencode 1.18.25 emits one `step_finish` line per step, carrying
+    // `part.tokens` and `part.cost`; a flatter shape put both at the top level.
+    // Every such line is kept as an `unknown` event — read whichever holder is
+    // present and sum across steps, without widening the ProviderEvent union.
+    //
+    // `tokens` splits input three ways — `input` is *fresh* only, with cache
+    // reads/writes alongside under `tokens.cache`. The ProviderUsage contract
+    // wants `input_tokens` gross (fresh + cache), matching claude.ts.
+    const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
+    let fresh = 0;
+    let output = 0;
+    let cacheRead = 0;
+    let cacheWrite = 0;
+    let cost = 0;
+    let sawTokens = false;
+    let sawCost = false;
+
     for (const event of events) {
       if (event.t !== 'unknown') continue;
       const obj = parseLine(event.raw);
       if (!obj) continue;
-      const record = obj as Record<string, unknown>;
+      const holder =
+        obj.part !== null && typeof obj.part === 'object'
+          ? (obj.part as Record<string, unknown>)
+          : (obj as unknown as Record<string, unknown>);
       const tokens =
-        record['tokens'] !== null && typeof record['tokens'] === 'object'
-          ? (record['tokens'] as Record<string, unknown>)
+        holder['tokens'] !== null && typeof holder['tokens'] === 'object'
+          ? (holder['tokens'] as Record<string, unknown>)
           : null;
       if (tokens) {
-        if (typeof tokens['input'] === 'number') {
-          out.input_tokens = (out.input_tokens ?? 0) + (tokens['input'] as number);
-        }
-        if (typeof tokens['output'] === 'number') {
-          out.output_tokens = (out.output_tokens ?? 0) + (tokens['output'] as number);
-        }
+        const cache =
+          tokens['cache'] !== null && typeof tokens['cache'] === 'object'
+            ? (tokens['cache'] as Record<string, unknown>)
+            : {};
+        fresh += num(tokens['input']);
+        output += num(tokens['output']);
+        cacheRead += num(cache['read']);
+        cacheWrite += num(cache['write']);
+        sawTokens = true;
       }
-      if (typeof record['cost'] === 'number') {
-        out.cost_usd = (out.cost_usd ?? 0) + (record['cost'] as number);
+      if (typeof holder['cost'] === 'number') {
+        cost += holder['cost'] as number;
+        sawCost = true;
       }
     }
+
+    const out: ProviderUsage = {};
+    if (sawTokens) {
+      const grossInput = fresh + cacheRead + cacheWrite;
+      if (grossInput > 0) out.input_tokens = grossInput;
+      if (output > 0) out.output_tokens = output;
+      if (cacheRead > 0) out.cached_input_tokens = cacheRead;
+      if (cacheWrite > 0) out.cache_write_input_tokens = cacheWrite;
+    }
+    if (sawCost) out.cost_usd = cost;
     return out;
   },
 };
