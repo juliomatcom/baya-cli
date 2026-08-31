@@ -40,7 +40,7 @@ import {
 } from "../ui/index.js";
 import { createTheme } from "../ui/theme.js";
 import type { ParsedArgs } from "./args.js";
-import { createInterruptHandler } from "./interrupt.js";
+import { installInterruptHandlers } from "./interrupt.js";
 import type { CliIo } from "./run.js";
 import { readRunRows } from "./runs.js";
 import { createGroupSpinner } from "./spinner.js";
@@ -200,7 +200,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   let interrupted = false;
   let store: StateStore | null = null;
   const spinner = createGroupSpinner({ progress, theme });
-  const onSigint = createInterruptHandler({
+  const removeInterruptHandlers = installInterruptHandlers({
     progress,
     logger,
     activePids: () => activePids,
@@ -212,7 +212,6 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
     releaseLock: () => lock.release(),
     exit: (code) => process.exit(code),
   });
-  process.on("SIGINT", onSigint);
 
   try {
     logger.info("cli.invoked", { argv: process.argv.slice(2), cwd, run_id: runId });
@@ -285,6 +284,8 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
       priorResults,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
       onGroupStarted: spinner.onGroupStarted,
+      onProcessSpawn: (pid) => activePids.add(pid),
+      onProcessExit: (pid) => activePids.delete(pid),
       onTaskSettled: (taskId, _state, result) => {
         summaries.set(taskId, result.summary);
         if (flags.verbose && !flags.quiet && result.output.trim() !== "") {
@@ -325,7 +326,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
     }
     return interrupted ? 130 : exitCodeFor(finished);
   } finally {
-    process.removeListener("SIGINT", onSigint);
+    removeInterruptHandlers();
     spinner.dispose();
     progress.dispose();
     lock.release();

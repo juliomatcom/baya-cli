@@ -62,7 +62,7 @@ import {
   wizardDecision,
 } from "../config/index.js";
 import type { ParsedArgs } from "./args.js";
-import { createInterruptHandler } from "./interrupt.js";
+import { installInterruptHandlers } from "./interrupt.js";
 import { createGroupSpinner } from "./spinner.js";
 
 /**
@@ -288,7 +288,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   let interrupted = false;
   let store: StateStore | null = null;
 
-  const onSigint = createInterruptHandler({
+  const removeInterruptHandlers = installInterruptHandlers({
     progress,
     logger,
     activePids: () => activePids,
@@ -300,7 +300,6 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     releaseLock: () => lock.release(),
     exit: (code) => process.exit(code),
   });
-  process.on("SIGINT", onSigint);
 
   try {
     const schemaPath = writeTaskResultSchema(paths.schemaDir);
@@ -567,6 +566,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       env,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
       onGroupStarted: spinner.onGroupStarted,
+      onProcessSpawn: (pid) => activePids.add(pid),
+      onProcessExit: (pid) => activePids.delete(pid),
       onTaskSettled: (taskId, _state, result) => {
         summaries.set(taskId, result.summary);
         // Full output would bury everything in a multi-task run; it is printed
@@ -619,7 +620,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
 
     return interrupted ? 130 : exitCodeFor(state);
   } finally {
-    process.removeListener("SIGINT", onSigint);
+    removeInterruptHandlers();
     stopTicker();
     progress.dispose();
     lock.release();

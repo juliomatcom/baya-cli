@@ -21,6 +21,7 @@ export {
   runProcess,
   type RunProcessOptions,
   type SpawnResult,
+  type Timers,
 } from "./spawn.js";
 export { classifyFailure, type ClassifyInput } from "./classify.js";
 export { renderGroupPrompt, renderPrompt } from "./prompt.js";

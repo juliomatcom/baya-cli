@@ -13,8 +13,9 @@ import type { SpawnPlan } from "../providers/index.js";
  *
  * Children spawn `detached: true` so they lead their own process group:
  * agentic CLIs spawn their own subprocesses, and Node's `child_process` does
- * not kill grandchildren. Group teardown is M2.4's job; the group is
- * established here so it exists when that lands.
+ * not kill grandchildren. A timeout tears the whole group down — SIGTERM, a
+ * grace window, then SIGKILL to whatever is still alive — always through
+ * `killGroup`, so grandchildren go with it.
  */
 export interface SpawnResult {
   code: number | null;
@@ -29,12 +30,37 @@ export interface RunProcessOptions {
   plan: SpawnPlan;
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
+  /** SIGTERM→SIGKILL grace after a timeout (execution.md §Interrupts). */
+  killGraceMs?: number;
+  /**
+   * Timer injection point, so the SIGKILL escalation is testable without a
+   * real multi-second wait. Defaults to unref'd `setTimeout`/`clearTimeout`.
+   */
+  timers?: Timers;
   /** Complete lines only — partial-chunk buffering is handled here. */
   onStdoutLine?: (line: string) => void;
   onStderrLine?: (line: string) => void;
   /** Called before any output arrives, so a pid is checkpointed before it can be lost. */
   onSpawn?: (pid: number, pgid: number) => void;
 }
+
+/** The two timer calls `runProcess` makes, injectable for deterministic tests. */
+export interface Timers {
+  set(fn: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
+const REAL_TIMERS: Timers = {
+  set: (fn, ms) => {
+    const handle = setTimeout(fn, ms);
+    handle.unref();
+    return handle;
+  },
+  clear: (handle) => clearTimeout(handle as NodeJS.Timeout),
+};
+
+/** Matches the SIGINT grace in `src/cli/interrupt.ts` and execution.md §Interrupts. */
+const DEFAULT_KILL_GRACE_MS = 5_000;
 
 /** Splits a byte stream into complete lines; the tail is held until terminated. */
 export function createLineSplitter(onLine: (line: string) => void): {
@@ -89,14 +115,27 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
       options.onSpawn?.(child.pid, child.pid);
     }
 
+    const timers = options.timers ?? REAL_TIMERS;
+    const killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
+    let killTimer: unknown;
+
     const timer =
       options.timeoutMs !== undefined && options.timeoutMs > 0
-        ? setTimeout(() => {
+        ? timers.set(() => {
             timedOut = true;
             killGroup(child.pid, "SIGTERM");
+            // A provider that traps SIGTERM would hang the run past its
+            // deadline forever; escalate the whole group once the grace is up.
+            killTimer = timers.set(() => {
+              if (!settled) killGroup(child.pid, "SIGKILL");
+            }, killGraceMs);
           }, options.timeoutMs)
         : undefined;
-    timer?.unref();
+
+    const clearTimers = (): void => {
+      if (timer !== undefined) timers.clear(timer);
+      if (killTimer !== undefined) timers.clear(killTimer);
+    };
 
     child.stdout?.on("data", (chunk: Buffer) => {
       const text = stripAnsi(chunk.toString("utf8"));
@@ -112,14 +151,14 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
     child.on("error", (err) => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
+      clearTimers();
       reject(err);
     });
 
     child.on("close", (code, signal) => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
+      clearTimers();
       outSplitter.flush();
       errSplitter.flush();
       resolve({ code, signal, stdout, stderr, pid: child.pid, timedOut });

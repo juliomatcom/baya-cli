@@ -193,6 +193,9 @@ export function createEventRenderer(
       case "lock.reclaimed":
         return `${INDENT}${theme.status("warn")} ${theme.warn("reclaimed a stale lock from a crashed run")}`;
 
+      case "run.crashed":
+        return `${INDENT}${theme.status("fail")} ${theme.fail(`crashed: ${firstLine(str(line, "message"))}`)} — tearing down`;
+
       default:
         // Everything else — session ids, unknown events, checkpoints — is noise
         // at `info`. It reaches the terminal under --verbose via the fallback.
