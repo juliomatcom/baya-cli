@@ -1,6 +1,6 @@
 {
   "name": "baya-cli",
-  "version": "1.1.0",
+  "version": "1.5.0",
   "description": "Local multi-provider CLI orchestrator: a plain-text task list to LLM-planned JSON DAG to parallel dispatch across local agent CLIs.",
   "type": "module",
   "license": "MIT",
