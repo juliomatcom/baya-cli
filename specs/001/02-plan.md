@@ -13,11 +13,11 @@
 | M0 Foundation               |      8 |      8 | ████████        |
 | M1 Walking skeleton         |     20 |     20 | ████████        |
 | M3 Provider breadth         |      7 |      8 | ███████░        |
-| M2 Concurrency & resilience |      2 |     10 | ██░░░░░░        |
+| M2 Concurrency & resilience |      4 |     10 | ███░░░░░        |
 | M4 Escalation               |      0 |      6 | ░░░░░░░░        |
 | M6 Cost reduction           |      7 |     10 | ██████░░        |
 | M5 Hardening                |      — |      — | prose checklist |
-| **Total**                   | **44** | **62** |                 |
+| **Total**                   | **46** | **62** |                 |
 
 **Reprioritized 2026-08-29 — M3 before M2.** Baya's value proposition is "a different CLI per task"; shipping on `codex` alone is an MVP of the engine, not of the product. Breadth now leads; concurrency and resume widen it afterward. Task ids are unchanged — only the execution order moved. See **Execution order** below.
 
@@ -107,17 +107,37 @@ The milestone sections below are numbered by theme, not by build order. Since th
 
 |  ✓  | #     | Task                                                                                                                                         | Done when                                                                                                                                              |
 | :-: | :---- | :------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
-|  ☐  | M2.1  | Parallel scheduler: global + per-provider budgets, `--max-parallel`                                                                          | Integration: fan-out/fan-in; concurrency never exceeds budgets                                                                                         |
-|  ☐  | M2.2  | Single-writer serialization via an **in-memory scheduler semaphore** (no file lock — one Baya per directory); readers parallel               | Integration: two independent `writes: true` tasks never overlap; two readers do                                                                        |
+| ✅  | M2.1  | Parallel scheduler: global + per-provider budgets, `--max-parallel`                                                                          | Integration: fan-out/fan-in; concurrency never exceeds budgets                                                                                         |
+| ✅  | M2.2  | Single-writer serialization via an **in-memory scheduler semaphore** (no file lock — one Baya per directory); readers parallel               | Integration: two independent `writes: true` tasks never overlap; two readers do                                                                        |
 |  ☐  | M2.3  | Failure semantics: descendants ⇒ `skipped`, `--on-error`, exit `1`                                                                           | Integration: mid-graph failure; independent branch still succeeds                                                                                      |
 |  ☐  | M2.4  | **Signal teardown**: process groups, SIGTERM → 5 s → SIGKILL, double-Ctrl-C, `uncaughtException`                                             | Integration: fakes spawning grandchildren; assert **zero surviving pids via `ps`**, exit `130`                                                         |
 | ✅  | M2.5  | **Failure classifier** → normalized `failure.kind` + `retry: now\|later\|never` from real provider signals; timeouts; retries for `now` only | Unit: copilot `quota_exceeded`/402, opencode `isRetryable`/401, claude `permission_denials`, timeout, schema. **`quota` consumes zero retry attempts** |
-|  ☐  | M2.5b | **Provider exhaustion**: a `quota` failure stops scheduling for that provider only; other branches finish; run stays resumable               | Integration: two providers, one quota-fails, the other completes                                                                                       |
+|  ☐  | M2.5b | **Provider exhaustion**: a `quota` failure halts the **whole run** — stop admitting, drain what is in flight, report; run stays resumable. _Revised 2026-08-31: was "that provider only, other branches continue". A quota wall usually means the session or the account is done, and finishing half a graph elsewhere spends money to land somewhere no more resumable than stopping cleanly._ | Integration: two providers, one quota-fails; nothing further spawns on either; in-flight work finishes; never-started tasks `skipped` and resumable |
 | ✅  | M2.6  | Result degradation ladder (native → verbatim → fenced → synthesized failure)                                                                 | Unit: prose-wrapped, fenced, garbage each land correctly                                                                                               |
 |  ☐  | M2.7  | Live status UI + `--json` report + `--verbose` event stream, all through `theme`                                                             | Snapshot of report JSON; **`--json` parses cleanly with color forced on**; ANSI stripped from provider output                                          |
 
 | ☐ | M2.8 | **`baya resume <runId>` / `baya runs`**: re-run `failed`/`skipped`/`parked`/interrupted, keep `succeeded` outputs as context, `--provider` override, stale-source (`sha256`) guard, `--yes` non-interactive path. **No `runId` ⇒ picker, never an implicit choice**; non-TTY ⇒ exit `2` | Integration: interrupt → resume → completes; **no succeeded task re-runs**; stale source warns; second concurrent resume refused |
 | ☐ | M2.9 | **Recovery prompt** (`@inquirer/prompts`): run summary + failure detail + log path; **options ordered by `failure.kind`** — "different provider" first for `quota`/`auth`, plain retry first for `now` kinds | Pure `buildRecoveryChoices(state)` unit-tested per kind; no test opens a prompt |
+
+> **Concurrency is closed — decided 2026-08-31.** `M2.1` + `M2.2` landed and that is the whole
+> concurrency story for v1: **independent `read-only` tasks run at once; every `read-write` task
+> takes the single writer key and runs alone.** Parallel writers are not a missing flag, they are a
+> different feature — see below.
+>
+> Why writers do not parallelize: they share one working tree. Two agents editing it at once do not
+> usually collide on a file — they collide on the build. One runs the test suite while the other is
+> mid-edit and gets a failure that means nothing, costs real money, and does not reproduce. Also
+> `.git/index.lock`, `tsbuildinfo`, and every shared cache. `depends_on` cannot express this: the
+> interference is in the filesystem, not the graph. And there is nothing to fail fast on — Baya
+> cannot know what a provider will touch until it has touched it.
+>
+> Rejected: an `--isolation none` opt-out. It pays off as flaky failures, not as speed.
+>
+> **The one remaining concurrency item is worktree isolation** (`later`, own milestone — not M2).
+> Real parallel writers means one working tree per writer, and its cost is not `git worktree add`:
+> it is merging N branches back into the user's tree, and giving each tree its own `node_modules`.
+> The merge-back is a design question and must be settled before any code.
+
 
 ## M3 — Provider breadth
 
