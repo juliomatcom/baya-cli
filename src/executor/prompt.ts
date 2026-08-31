@@ -1,4 +1,4 @@
-import type { TaskRequest } from "../manifest/index.js";
+import type { TaskRequest } from '../manifest/index.js';
 
 /**
  * Renders the prompt an agent CLI actually receives. The `task_request` JSON
@@ -41,15 +41,15 @@ export function renderPrompt(
 
   lines.push(
     `You are executing one task in a Baya run (task id: ${request.task.id}).`,
-    "",
+    '',
     `# Task: ${request.task.title}`,
-    "",
+    '',
     request.task.instruction,
-    "",
+    '',
   );
 
   if (request.context.length > 0) {
-    lines.push("# Upstream results", "");
+    lines.push('# Upstream results', '');
     lines.push(...contextLines(request, new Set()));
   }
 
@@ -57,15 +57,15 @@ export function renderPrompt(
   lines.push(...WORKING_STYLE);
 
   lines.push(
-    "# Response contract",
-    "",
-    ...contractLines(options.schema, "a single JSON object"),
+    '# Response contract',
+    '',
+    ...contractLines(options.schema, 'a single JSON object'),
     ...FIELD_NOTES,
-    "",
+    '',
     `Deadline: ${request.constraints.max_runtime_s} seconds.`,
   );
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 /**
@@ -100,15 +100,15 @@ export function renderGroupPrompt(
 
   lines.push(
     `You are executing ${count} tasks in a Baya run, in the order given below.`,
-    "",
-    "Work through them one at a time and in order. They share this workspace and",
-    "this conversation, so a later task can build directly on what an earlier one",
-    "did rather than rediscovering it. They are still separate tasks: each has its",
-    "own instruction and needs its own entry in the response.",
-    "",
-    "If one task fails, keep going with the rest unless they depended on it, and",
+    '',
+    'Work through them one at a time and in order. They share this workspace and',
+    'this conversation, so a later task can build directly on what an earlier one',
+    'did rather than rediscovering it. They are still separate tasks: each has its',
+    'own instruction and needs its own entry in the response.',
+    '',
+    'If one task fails, keep going with the rest unless they depended on it, and',
     "report the failure in that task's own entry.",
-    "",
+    '',
   );
 
   lines.push(...workspaceLines(first, options.memory, true));
@@ -116,14 +116,14 @@ export function renderGroupPrompt(
   requests.forEach((request, index) => {
     lines.push(
       `# Task ${String(index + 1)} of ${count}: ${request.task.title}`,
-      "",
+      '',
       `Task id: ${request.task.id}`,
-      "",
+      '',
       request.task.instruction,
-      "",
+      '',
     );
     if (request.context.length > 0) {
-      lines.push(`## Upstream results for ${request.task.id}`, "");
+      lines.push(`## Upstream results for ${request.task.id}`, '');
       lines.push(...contextLines(request, inGroup));
     }
   });
@@ -131,24 +131,24 @@ export function renderGroupPrompt(
   lines.push(...WORKING_STYLE);
 
   lines.push(
-    "# Response contract",
-    "",
-    ...contractLines(options.schema, "a single JSON object"),
+    '# Response contract',
+    '',
+    ...contractLines(options.schema, 'a single JSON object'),
     `Its \`results\` array holds one object per task above — ${count} in total — each`,
     "carrying that task's own id in `task_id`:",
     ...ids.map((id) => `- ${id}`),
-    "",
-    "A task you could not finish still needs its entry, with `status` set to",
-    "`failed` or `needs_input`. Omitting it is reported as a failure anyway, and",
-    "without your account of why.",
-    "",
-    "Field notes, per entry:",
+    '',
+    'A task you could not finish still needs its entry, with `status` set to',
+    '`failed` or `needs_input`. Omitting it is reported as a failure anyway, and',
+    'without your account of why.',
+    '',
+    'Field notes, per entry:',
     ...FIELD_NOTES.slice(1),
-    "",
+    '',
     `Deadline: ${String(first.constraints.max_runtime_s)} seconds for all ${count} tasks.`,
   );
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 /**
@@ -167,14 +167,14 @@ export function renderGroupPrompt(
  * grouping is what attacks it.
  */
 const WORKING_STYLE = [
-  "# Working style",
-  "",
-  "Work without narration: no progress updates, no restating the task or your",
-  "plan, no account of what you just did. Your tool calls are already visible.",
-  "",
-  "This is about commentary, not about the response. `summary`, `output` and",
-  "`notes` below are the deliverable — say everything that belongs in them.",
-  "",
+  '# Working style',
+  '',
+  'Work without narration: no progress updates, no restating the task or your',
+  'plan, no account of what you just did. Your tool calls are already visible.',
+  '',
+  'This is about commentary, not about the response. `summary`, `output` and',
+  '`notes` below are the deliverable — say everything that belongs in them.',
+  '',
 ];
 
 /**
@@ -189,35 +189,35 @@ const WORKING_STYLE = [
  * magnitude cheaper, and the only way those adapters learn the envelope at all.
  */
 function contractLines(schema: string | undefined, shape: string): string[] {
-  const trimmed = schema?.trim() ?? "";
-  if (trimmed === "") {
+  const trimmed = schema?.trim() ?? '';
+  if (trimmed === '') {
     return [
       `Respond with ${shape} matching the \`task_result\` contract, which the CLI you`,
-      "are running in already enforces. Do not open or search for a schema file —",
-      "there is nothing in it that is not already being applied to your output.",
+      'are running in already enforces. Do not open or search for a schema file —',
+      'there is nothing in it that is not already being applied to your output.',
     ];
   }
   return [
     `Respond with ${shape} matching this schema. It is reproduced here in full, so`,
-    "do not open or search for a schema file:",
-    "",
-    "<schema>",
+    'do not open or search for a schema file:',
+    '',
+    '<schema>',
     trimmed,
-    "</schema>",
+    '</schema>',
   ];
 }
 
 const FIELD_NOTES = [
-  "Field notes:",
-  "- `summary`: one or two sentences. Its first line is what the user sees in the terminal.",
-  "- `output`: the full result as Markdown. Downstream tasks read this.",
-  "- `notes`: anything a human should know that is neither a failure nor a blocking",
-  "  question — caveats, risks, assumptions you had to make, follow-up work you noticed.",
-  "  Use `warn` for something likely wrong or risky, `action_required` for something only",
-  "  a human can do, `info` otherwise. Empty array if there is nothing to raise.",
-  "- If you cannot proceed without a human decision, set `status` to `needs_input` and",
-  "  fill `question.text` rather than guessing.",
-  "- On failure, set `status` to `failed` and fill `error.message` and `error.retryable`.",
+  'Field notes:',
+  '- `summary`: one or two sentences. Its first line is what the user sees in the terminal.',
+  '- `output`: the full result as Markdown. Downstream tasks read this.',
+  '- `notes`: anything a human should know that is neither a failure nor a blocking',
+  '  question — caveats, risks, assumptions you had to make, follow-up work you noticed.',
+  '  Use `warn` for something likely wrong or risky, `action_required` for something only',
+  '  a human can do, `info` otherwise. Empty array if there is nothing to raise.',
+  '- If you cannot proceed without a human decision, set `status` to `needs_input` and',
+  '  fill `question.text` rather than guessing.',
+  '- On failure, set `status` to `failed` and fill `error.message` and `error.retryable`.',
 ];
 
 function contextLines(request: TaskRequest, inGroup: ReadonlySet<string>): string[] {
@@ -228,13 +228,13 @@ function contextLines(request: TaskRequest, inGroup: ReadonlySet<string>): strin
     lines.push(`Full result: ${entry.result_path}`);
     lines.push(`Full output: ${entry.output_path}`);
     if (inGroup.has(entry.task_id)) {
-      lines.push("(You did this earlier in this same conversation — see above.)");
+      lines.push('(You did this earlier in this same conversation — see above.)');
     } else if (entry.inline !== null) {
-      lines.push("", "<upstream_output>", entry.inline, "</upstream_output>");
+      lines.push('', '<upstream_output>', entry.inline, '</upstream_output>');
     } else {
-      lines.push("(Output not inlined — read the file above if you need the detail.)");
+      lines.push('(Output not inlined — read the file above if you need the detail.)');
     }
-    lines.push("");
+    lines.push('');
   }
   return lines;
 }
@@ -245,17 +245,17 @@ function workspaceLines(
   plural: boolean,
 ): string[] {
   const lines = [
-    "# Workspace",
-    "",
+    '# Workspace',
+    '',
     `Working directory: ${request.workspace.cwd}`,
-    request.workspace.access === "read-write"
-      ? "You may create and modify files in this directory."
+    request.workspace.access === 'read-write'
+      ? 'You may create and modify files in this directory.'
       : plural
-        ? "These tasks are read-only. Do not modify any file."
-        : "This task is read-only. Do not modify any file.",
-    "",
+        ? 'These tasks are read-only. Do not modify any file.'
+        : 'This task is read-only. Do not modify any file.',
+    '',
   ];
-  const trimmed = memory?.trim() ?? "";
-  if (trimmed !== "") lines.push(trimmed, "");
+  const trimmed = memory?.trim() ?? '';
+  if (trimmed !== '') lines.push(trimmed, '');
   return lines;
 }

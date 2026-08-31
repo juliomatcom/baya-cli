@@ -1,8 +1,8 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { runProcess, type Timers } from "../../../src/executor/index.js";
-import { FAKE_PROVIDER } from "../../helpers/runCli.js";
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { runProcess, type Timers } from '../../../src/executor/index.js';
+import { FAKE_PROVIDER } from '../../helpers/runCli.js';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -32,7 +32,7 @@ function fakeTimers(): {
     },
     fireNext() {
       const entry = queue.find((e) => e.live);
-      if (!entry) throw new Error("no live timer to fire");
+      if (!entry) throw new Error('no live timer to fire');
       entry.live = false;
       entry.fn();
     },
@@ -41,25 +41,25 @@ function fakeTimers(): {
 }
 
 function scenarioFile(scenario: object): string {
-  const path = join(mkdtempSync(join(tmpdir(), "baya-spawn-")), "scenario.json");
+  const path = join(mkdtempSync(join(tmpdir(), 'baya-spawn-')), 'scenario.json');
   writeFileSync(path, JSON.stringify(scenario));
   return path;
 }
 
-const plan = (): { argv: string[]; cwd: string; stdin: "ignore" } => ({
+const plan = (): { argv: string[]; cwd: string; stdin: 'ignore' } => ({
   argv: [process.execPath, FAKE_PROVIDER],
   cwd: process.cwd(),
-  stdin: "ignore",
+  stdin: 'ignore',
 });
 
-describe("runProcess timeout escalation", () => {
-  it("escalates a SIGTERM-trapping process to SIGKILL after the grace window", async () => {
+describe('runProcess timeout escalation', () => {
+  it('escalates a SIGTERM-trapping process to SIGKILL after the grace window', async () => {
     const ft = fakeTimers();
     const promise = runProcess({
       plan: plan(),
       env: {
         ...process.env,
-        BAYA_FAKE_SCRIPT: scenarioFile({ hang_ms: 10_000, on_signal: "ignore" }),
+        BAYA_FAKE_SCRIPT: scenarioFile({ hang_ms: 10_000, on_signal: 'ignore' }),
       },
       timeoutMs: 1_000,
       killGraceMs: 2_000,
@@ -85,10 +85,10 @@ describe("runProcess timeout escalation", () => {
     ft.fireNext();
     const result = await promise;
     expect(result.timedOut).toBe(true);
-    expect(result.signal).toBe("SIGKILL");
+    expect(result.signal).toBe('SIGKILL');
   });
 
-  it("clears the deadline timer when the process exits on its own", async () => {
+  it('clears the deadline timer when the process exits on its own', async () => {
     const ft = fakeTimers();
     const result = await runProcess({
       plan: plan(),
@@ -96,11 +96,11 @@ describe("runProcess timeout escalation", () => {
         ...process.env,
         BAYA_FAKE_SCRIPT: scenarioFile({
           final: {
-            baya: "1",
-            kind: "task_result",
-            task_id: "t",
-            status: "ok",
-            summary: "done",
+            baya: '1',
+            kind: 'task_result',
+            task_id: 't',
+            status: 'ok',
+            summary: 'done',
           },
           exit_code: 0,
         }),

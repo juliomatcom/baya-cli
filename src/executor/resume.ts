@@ -1,4 +1,4 @@
-import type { RunState, TaskStateEntry } from "./state.js";
+import type { RunState, TaskStateEntry } from './state.js';
 
 /**
  * What a resume re-runs (recovery.md §Resume). Pure: it reads a checkpoint and
@@ -24,7 +24,7 @@ export function resumeTargets(
   const rerun: string[] = [];
   const keep: string[] = [];
   for (const id of taskIds) {
-    if (state.tasks[id]?.state === "succeeded") keep.push(id);
+    if (state.tasks[id]?.state === 'succeeded') keep.push(id);
     else rerun.push(id);
   }
   return { rerun, keep };
@@ -39,7 +39,7 @@ export function resumeTargets(
  */
 export function resumeReset(): Partial<TaskStateEntry> {
   return {
-    state: "pending",
+    state: 'pending',
     failure: null,
     blocked_by: null,
     pid: null,

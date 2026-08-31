@@ -1,17 +1,17 @@
-import { select } from "@inquirer/prompts";
+import { select } from '@inquirer/prompts';
 import {
   providerForModel,
   type Manifest,
   type ProviderId,
   type Task,
-} from "../manifest/index.js";
+} from '../manifest/index.js';
 import {
   OPENCODE_PROVIDER,
   resolveModel,
   type Catalog,
   type ResolvedModel,
-} from "../providers/index.js";
-import type { Theme } from "./theme.js";
+} from '../providers/index.js';
+import type { Theme } from './theme.js';
 
 /**
  * The model gate (M3.6). Every task that *names* a model is resolved against
@@ -44,8 +44,8 @@ export interface ModelGateOptions {
 }
 
 export type ModelGateOutcome =
-  | { decision: "ok"; manifest: Manifest; notes: string[] }
-  | { decision: "aborted"; message: string };
+  | { decision: 'ok'; manifest: Manifest; notes: string[] }
+  | { decision: 'aborted'; message: string };
 
 export interface TaskModelAsk {
   taskId: string;
@@ -97,7 +97,7 @@ export function planModelGate(
 
     if (match) {
       auto.set(task.id, { provider: match.provider, model: match.model });
-      if (match.model !== task.model || match.via === "user-alias") {
+      if (match.model !== task.model || match.via === 'user-alias') {
         notes.push(
           `${task.id}: "${task.model}" → ${match.provider} ${match.model} (${match.via})`,
         );
@@ -137,7 +137,7 @@ function applyRewrites(
 
 const pct = (score: number): string => `${Math.round(score * 100)}% match`;
 
-const EXIT = "__exit__";
+const EXIT = '__exit__';
 
 /**
  * The `select` payload for one unresolved task, built as pure data so the
@@ -178,11 +178,11 @@ export function buildModelAsk(
  * its ~190 model ids invisible to the gate until that command runs.
  */
 const MODEL_GATE_REMEDY = [
-  "  Fix the name in the task list, or:",
+  '  Fix the name in the task list, or:',
   `    baya config refresh-models              re-read \`${OPENCODE_PROVIDER} models\` into the catalog`,
-  "    baya models [provider]                  list what the catalog knows",
-  "    baya config set modelAliases.<name> <id>  teach it your own name",
-].join("\n");
+  '    baya models [provider]                  list what the catalog knows',
+  '    baya config set modelAliases.<name> <id>  teach it your own name',
+].join('\n');
 
 function unresolvedMessage(asks: TaskModelAsk[]): string {
   const lines = asks.map(
@@ -190,17 +190,17 @@ function unresolvedMessage(asks: TaskModelAsk[]): string {
       `  ${ask.taskId} wants "${ask.requested}"` +
       (ask.candidates[0]
         ? ` — closest is ${ask.candidates[0].provider} ${ask.candidates[0].model} (${pct(ask.candidates[0].score)})`
-        : " — no close match"),
+        : ' — no close match'),
   );
   return [
-    "the task list names models that could not be resolved:",
+    'the task list names models that could not be resolved:',
     ...lines,
-    "",
+    '',
     MODEL_GATE_REMEDY,
     "    --default-model <id>                    override the run's default",
-    "",
-    "  A named model is never silently replaced with the default.",
-  ].join("\n");
+    '',
+    '  A named model is never silently replaced with the default.',
+  ].join('\n');
 }
 
 export async function runModelGate(options: ModelGateOptions): Promise<ModelGateOutcome> {
@@ -215,7 +215,7 @@ export async function runModelGate(options: ModelGateOptions): Promise<ModelGate
   const notes = [...plan.notes];
 
   if (plan.asks.length === 0) {
-    return { decision: "ok", manifest: applyRewrites(options.manifest, rewrites), notes };
+    return { decision: 'ok', manifest: applyRewrites(options.manifest, rewrites), notes };
   }
 
   // Non-interactive: accept a best match only if we are confident; never default.
@@ -233,9 +233,9 @@ export async function runModelGate(options: ModelGateOptions): Promise<ModelGate
       }
     }
     if (stillUnresolved.length > 0) {
-      return { decision: "aborted", message: unresolvedMessage(stillUnresolved) };
+      return { decision: 'aborted', message: unresolvedMessage(stillUnresolved) };
     }
-    return { decision: "ok", manifest: applyRewrites(options.manifest, rewrites), notes };
+    return { decision: 'ok', manifest: applyRewrites(options.manifest, rewrites), notes };
   }
 
   // Interactive: one question per unresolved task.
@@ -244,7 +244,7 @@ export async function runModelGate(options: ModelGateOptions): Promise<ModelGate
     const answer = await select(buildModelAsk(ask, options.theme));
     if (answer === EXIT) {
       return {
-        decision: "aborted",
+        decision: 'aborted',
         message:
           `stopped at the model gate — ${ask.taskId} names "${ask.requested}".\n` +
           MODEL_GATE_REMEDY,
@@ -253,11 +253,11 @@ export async function runModelGate(options: ModelGateOptions): Promise<ModelGate
     const picked = JSON.parse(answer) as { provider: ProviderId; model: string | null };
     rewrites.set(ask.taskId, picked);
     notes.push(
-      `${ask.taskId}: "${ask.requested}" → ${picked.provider} ${picked.model ?? "(default)"}`,
+      `${ask.taskId}: "${ask.requested}" → ${picked.provider} ${picked.model ?? '(default)'}`,
     );
   }
 
-  return { decision: "ok", manifest: applyRewrites(options.manifest, rewrites), notes };
+  return { decision: 'ok', manifest: applyRewrites(options.manifest, rewrites), notes };
 }
 
 /**
@@ -290,7 +290,7 @@ export function resolveRunModel(
     label: string;
   },
 ): { model: string | null; note: string | null } {
-  if (requested === null || requested.trim() === "") {
+  if (requested === null || requested.trim() === '') {
     return { model: requested, note: null };
   }
 
@@ -307,12 +307,12 @@ export function resolveRunModel(
   const mismatch =
     match.provider !== options.provider
       ? ` — note this is a ${match.provider} model and the run is on ${options.provider}`
-      : "";
+      : '';
   return {
     model: match.model,
     note:
-      match.model === requested && match.via !== "user-alias"
-        ? mismatch === ""
+      match.model === requested && match.via !== 'user-alias'
+        ? mismatch === ''
           ? null
           : `${options.label} ${requested}${mismatch}`
         : `${options.label} "${requested}" → ${match.model} (${match.via})${mismatch}`,

@@ -55,9 +55,9 @@ import {
   readFileSync,
   statSync,
   writeFileSync,
-} from "node:fs";
-import { basename, dirname } from "node:path";
-import { spawn } from "node:child_process";
+} from 'node:fs';
+import { basename, dirname } from 'node:path';
+import { spawn } from 'node:child_process';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -70,14 +70,14 @@ function fail(message) {
 
 function outputFileFromArgv() {
   const argv = process.argv.slice(2);
-  const index = argv.indexOf("-o");
+  const index = argv.indexOf('-o');
   return index !== -1 && argv[index + 1] ? argv[index + 1] : null;
 }
 
 /** `.../tasks/<id>/result.json` -> `<id>`; the planner's draft has no task dir. */
 function taskIdFromOutputFile(outputFile) {
   if (!outputFile) return null;
-  if (basename(outputFile) === "plan-draft.json") return "__planner__";
+  if (basename(outputFile) === 'plan-draft.json') return '__planner__';
   return basename(dirname(outputFile));
 }
 
@@ -93,7 +93,7 @@ function taskIdsFromPrompt(prompt) {
  */
 function isClaudeInvocation() {
   const argv = process.argv.slice(2);
-  return outputFileFromArgv() === null && argv.includes("--output-format");
+  return outputFileFromArgv() === null && argv.includes('--output-format');
 }
 
 /** A lone-task prompt says `(task id: <id>)`; a group prompt lists `Task id:`. */
@@ -108,16 +108,16 @@ function taskIdsFromClaudePrompt(prompt) {
 function writeClaudeResult(final) {
   const result =
     final === undefined || final === null
-      ? ""
-      : typeof final === "string"
+      ? ''
+      : typeof final === 'string'
         ? final
         : JSON.stringify(final);
   process.stdout.write(
     `${JSON.stringify({
-      type: "result",
-      subtype: "success",
+      type: 'result',
+      subtype: 'success',
       is_error: false,
-      session_id: "fake-claude-session",
+      session_id: 'fake-claude-session',
       result,
     })}\n`,
   );
@@ -131,7 +131,7 @@ function attemptNumber(taskId) {
   const path = `${process.env.BAYA_FAKE_SCRIPT}.attempts`;
   let counts = {};
   try {
-    counts = JSON.parse(readFileSync(path, "utf8"));
+    counts = JSON.parse(readFileSync(path, 'utf8'));
   } catch {
     counts = {};
   }
@@ -150,12 +150,12 @@ function applyAttempts(taskId, scenario) {
     ...scenario,
     exit_code: 1,
     final: {
-      baya: "1",
-      kind: "task_result",
+      baya: '1',
+      kind: 'task_result',
       task_id: taskId,
-      status: "failed",
-      summary: "",
-      output: "",
+      status: 'failed',
+      summary: '',
+      output: '',
       notes: [],
       question: null,
       error: {
@@ -171,9 +171,9 @@ function applyAttempts(taskId, scenario) {
 function loadScenario(taskId) {
   const scenarioPath = process.env.BAYA_FAKE_SCRIPT;
   if (!scenarioPath) {
-    fail("BAYA_FAKE_SCRIPT env var not set");
+    fail('BAYA_FAKE_SCRIPT env var not set');
   }
-  const raw = JSON.parse(readFileSync(scenarioPath, "utf8"));
+  const raw = JSON.parse(readFileSync(scenarioPath, 'utf8'));
   if (!raw.by_task) return raw;
   const picked = (taskId && raw.by_task[taskId]) ?? raw.by_task.default;
   if (!picked) fail(`no scenario for task "${taskId}"`);
@@ -182,12 +182,12 @@ function loadScenario(taskId) {
 
 function installSignalHandlers(onSignalMode) {
   const handleSignal = (signal) => {
-    if (onSignalMode === "ignore") return;
+    if (onSignalMode === 'ignore') return;
     process.stderr.write(`fake-provider: received ${signal}, exiting\n`);
     process.exit(130);
   };
-  process.on("SIGINT", handleSignal);
-  process.on("SIGTERM", handleSignal);
+  process.on('SIGINT', handleSignal);
+  process.on('SIGTERM', handleSignal);
 }
 
 function checkExpectFile(expectFile) {
@@ -199,16 +199,16 @@ function checkExpectFile(expectFile) {
 async function readStdin() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
-  return Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 function checkExpectStdin(expectStdin, received) {
   if (!expectStdin) return;
   const ok =
-    typeof expectStdin === "string"
+    typeof expectStdin === 'string'
       ? received.includes(expectStdin)
       : received.length > 0;
-  if (!ok) fail("expect_stdin failed: stdin did not meet the expectation");
+  if (!ok) fail('expect_stdin failed: stdin did not meet the expectation');
 }
 
 /**
@@ -217,9 +217,9 @@ function checkExpectStdin(expectStdin, received) {
  * first so the writer never sees EPIPE.
  */
 function checkRejectStdin(rejectStdin, received) {
-  if (typeof rejectStdin !== "string" || rejectStdin === "") return;
+  if (typeof rejectStdin !== 'string' || rejectStdin === '') return;
   if (received.includes(rejectStdin)) {
-    process.stderr.write("fake-provider: refusing this invocation\n");
+    process.stderr.write('fake-provider: refusing this invocation\n');
     process.exit(1);
   }
 }
@@ -235,8 +235,8 @@ function writeFileMarker(writesFile, event) {
 function spawnGrandchild() {
   // Not detached: the grandchild stays in this process's group, the way a real
   // agentic CLI's subprocesses do, so `kill(-pgid)` reaps it with its parent.
-  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000);"], {
-    stdio: "ignore",
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000);'], {
+    stdio: 'ignore',
   });
   child.unref();
 }
@@ -244,7 +244,7 @@ function spawnGrandchild() {
 async function emitLines(emit) {
   for (const item of emit ?? []) {
     if (item.delay_ms) await sleep(item.delay_ms);
-    const stream = item.stream === "stderr" ? process.stderr : process.stdout;
+    const stream = item.stream === 'stderr' ? process.stderr : process.stdout;
     stream.write(`${item.line}\n`);
   }
 }
@@ -262,15 +262,15 @@ function finalFor(taskIds, scenarios, grouped) {
   taskIds.forEach((id, index) => {
     const final = scenarios[index].final;
     if (final === undefined || final === null) return;
-    if (typeof final === "string") return;
+    if (typeof final === 'string') return;
     results.push({ ...final, task_id: id });
   });
-  return { baya: "1", kind: "task_result_batch", results };
+  return { baya: '1', kind: 'task_result_batch', results };
 }
 
 function writeFinal(final, outputFile) {
   if (final === undefined || final === null) return;
-  const line = typeof final === "string" ? final : JSON.stringify(final);
+  const line = typeof final === 'string' ? final : JSON.stringify(final);
   if (outputFile) {
     mkdirSync(dirname(outputFile), { recursive: true });
     writeFileSync(outputFile, `${line}\n`);
@@ -280,8 +280,8 @@ function writeFinal(final, outputFile) {
 }
 
 async function main() {
-  if (process.argv.slice(2).join(" ") === "--version") {
-    process.stdout.write("fake-provider 1.0.0\n");
+  if (process.argv.slice(2).join(' ') === '--version') {
+    process.stdout.write('fake-provider 1.0.0\n');
     process.exit(0);
   }
 
@@ -293,7 +293,7 @@ async function main() {
   // it — a caller that leaves it open forever (the signal tests) must not block.
   let leaderId;
   let grouped;
-  let prompt = "";
+  let prompt = '';
   if (claude) {
     prompt = await readStdin();
     const ids = taskIdsFromClaudePrompt(prompt);
@@ -301,7 +301,7 @@ async function main() {
     leaderId = ids[0] ?? null;
   } else {
     leaderId = taskIdFromOutputFile(outputFile);
-    grouped = outputFile !== null && basename(outputFile) === "batch.json";
+    grouped = outputFile !== null && basename(outputFile) === 'batch.json';
   }
 
   const scenario = loadScenario(leaderId);
@@ -315,24 +315,24 @@ async function main() {
     : [leaderId];
   const scenarios = taskIds.map((id) => applyAttempts(id, loadScenario(id)));
 
-  installSignalHandlers(scenario.on_signal ?? "exit");
+  installSignalHandlers(scenario.on_signal ?? 'exit');
   checkExpectFile(scenario.expect_file);
   checkRejectStdin(scenario.reject_stdin, prompt);
   checkExpectStdin(scenario.expect_stdin, prompt);
 
-  writeFileMarker(scenario.writes_file, "start");
+  writeFileMarker(scenario.writes_file, 'start');
 
   if (scenario.spawn_child) spawnGrandchild();
 
   await emitLines(scenario.emit);
 
-  if (typeof scenario.stderr === "string" && scenario.stderr.length > 0) {
+  if (typeof scenario.stderr === 'string' && scenario.stderr.length > 0) {
     process.stderr.write(`${scenario.stderr}\n`);
   }
 
   if (scenario.hang_ms) await sleep(scenario.hang_ms);
 
-  writeFileMarker(scenario.writes_file, "end");
+  writeFileMarker(scenario.writes_file, 'end');
   const final = finalFor(taskIds, scenarios, grouped);
   if (claude) writeClaudeResult(final);
   else writeFinal(final, outputFile);

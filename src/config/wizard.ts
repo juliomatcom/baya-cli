@@ -1,12 +1,12 @@
-import { select, input } from "@inquirer/prompts";
-import type { ProviderId } from "../manifest/index.js";
+import { select, input } from '@inquirer/prompts';
+import type { ProviderId } from '../manifest/index.js';
 import {
   withoutBuiltinEntries,
   type Catalog,
   type CatalogModel,
-} from "../providers/catalog.js";
-import type { ProviderStatus } from "../providers/index.js";
-import { writeConfigFile } from "./load.js";
+} from '../providers/catalog.js';
+import type { ProviderStatus } from '../providers/index.js';
+import { writeConfigFile } from './load.js';
 
 /**
  * First-run setup (config.md §First-run wizard). Two questions, once, then the
@@ -26,8 +26,8 @@ export interface WizardChoice {
   disabled: false | string;
 }
 
-export const PROVIDER_DEFAULT_MODEL = "__provider_default__";
-export const MODEL_MANUAL_ENTRY = "__manual__";
+export const PROVIDER_DEFAULT_MODEL = '__provider_default__';
+export const MODEL_MANUAL_ENTRY = '__manual__';
 
 /**
  * Curated per-provider model lists (M3.5b), filled in as each adapter lands.
@@ -42,8 +42,8 @@ export const MODEL_MANUAL_ENTRY = "__manual__";
  */
 export const CURATED_MODELS: Record<string, string[]> = {
   codex: [],
-  claude: ["opus", "sonnet", "haiku"],
-  copilot: ["auto", "claude-sonnet-4.5", "gpt-5"],
+  claude: ['opus', 'sonnet', 'haiku'],
+  copilot: ['auto', 'claude-sonnet-4.5', 'gpt-5'],
   opencode: [],
 };
 
@@ -89,13 +89,13 @@ export function buildModelChoices(
   const source: Array<string | CatalogModel> =
     models.length > 0 ? models : (CURATED_MODELS[provider] ?? []);
   const entries = source.map((m) =>
-    typeof m === "string" ? { id: m, description: "" } : m,
+    typeof m === 'string' ? { id: m, description: '' } : m,
   );
   return [
     {
       value: PROVIDER_DEFAULT_MODEL,
-      name: "Provider default (recommended)",
-      description: "Let the CLI pick. Model ids churn; this never goes stale.",
+      name: 'Provider default (recommended)',
+      description: 'Let the CLI pick. Model ids churn; this never goes stale.',
       disabled: false,
     },
     ...entries.map((model) => ({
@@ -106,7 +106,7 @@ export function buildModelChoices(
     })),
     {
       value: MODEL_MANUAL_ENTRY,
-      name: "Enter a model name manually…",
+      name: 'Enter a model name manually…',
       disabled: false,
     },
   ];
@@ -125,24 +125,24 @@ export interface WizardContext {
 export type WizardDecision = { run: true } | { run: false; reason: string };
 
 /** Commands that cannot proceed without knowing which provider to use. */
-const PROVIDER_COMMANDS = new Set(["run", "plan"]);
+const PROVIDER_COMMANDS = new Set(['run', 'plan']);
 
 export function wizardDecision(ctx: WizardContext): WizardDecision {
   if (!PROVIDER_COMMANDS.has(ctx.command)) {
     return { run: false, reason: `command "${ctx.command}" does not need a provider` };
   }
-  if (ctx.userConfigExists) return { run: false, reason: "user config already exists" };
-  if (ctx.providerFlagGiven) return { run: false, reason: "--default-provider given" };
-  if (ctx.yes) return { run: false, reason: "--yes given" };
-  if (ctx.env["BAYA_NO_INPUT"] === "1") return { run: false, reason: "BAYA_NO_INPUT=1" };
-  if (ctx.env["CI"] === "true") return { run: false, reason: "CI=true" };
-  if (!ctx.stdinIsTty || !ctx.stdoutIsTty) return { run: false, reason: "not a TTY" };
+  if (ctx.userConfigExists) return { run: false, reason: 'user config already exists' };
+  if (ctx.providerFlagGiven) return { run: false, reason: '--default-provider given' };
+  if (ctx.yes) return { run: false, reason: '--yes given' };
+  if (ctx.env['BAYA_NO_INPUT'] === '1') return { run: false, reason: 'BAYA_NO_INPUT=1' };
+  if (ctx.env['CI'] === 'true') return { run: false, reason: 'CI=true' };
+  if (!ctx.stdinIsTty || !ctx.stdoutIsTty) return { run: false, reason: 'not a TTY' };
   return { run: true };
 }
 
 export type NonInteractiveOutcome =
-  | { kind: "use"; provider: ProviderId; warning: string }
-  | { kind: "error"; message: string };
+  | { kind: 'use'; provider: ProviderId; warning: string }
+  | { kind: 'error'; message: string };
 
 /**
  * What to do when the wizard is skipped and no provider is configured. A
@@ -155,23 +155,23 @@ export function nonInteractiveDefault(statuses: ProviderStatus[]): NonInteractiv
   if (detected.length === 0) {
     const hints = statuses
       .map((status) => `  ${status.id.padEnd(10)} ${status.adapter.installHint}`)
-      .join("\n");
+      .join('\n');
     return {
-      kind: "error",
+      kind: 'error',
       message: `no provider CLI found. Install one, then run \`baya doctor\`:\n${hints}`,
     };
   }
   const only = detected[0] as ProviderStatus;
   if (detected.length === 1) {
     return {
-      kind: "use",
+      kind: 'use',
       provider: only.id,
       warning: `no configured default provider; using the only one found: ${only.id}`,
     };
   }
   return {
-    kind: "error",
-    message: `several providers found (${detected.map((s) => s.id).join(", ")}). Pass --default-provider <id> or run \`baya config\`.`,
+    kind: 'error',
+    message: `several providers found (${detected.map((s) => s.id).join(', ')}). Pass --default-provider <id> or run \`baya config\`.`,
   };
 }
 
@@ -201,7 +201,7 @@ export interface RunWizardOptions {
 export async function runWizard(options: RunWizardOptions): Promise<WizardResult> {
   const providerChoices = buildProviderChoices(options.statuses);
   const provider = (await select({
-    message: "Default provider for Baya",
+    message: 'Default provider for Baya',
     choices: providerChoices,
   })) as ProviderId;
 
@@ -215,8 +215,8 @@ export async function runWizard(options: RunWizardOptions): Promise<WizardResult
 
   let model: string | null = null;
   if (picked === MODEL_MANUAL_ENTRY) {
-    const typed = (await input({ message: "Model name" })).trim();
-    model = typed === "" ? null : typed;
+    const typed = (await input({ message: 'Model name' })).trim();
+    model = typed === '' ? null : typed;
   } else if (picked !== PROVIDER_DEFAULT_MODEL) {
     model = picked;
   }

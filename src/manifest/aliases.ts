@@ -1,4 +1,4 @@
-import type { ProviderId, Task } from "./schemas.js";
+import type { ProviderId, Task } from './schemas.js';
 
 /**
  * Model-name → provider routing (M3.6).
@@ -21,12 +21,12 @@ interface AliasRule {
 }
 
 const RULES: readonly AliasRule[] = [
-  { provider: "claude", tokens: ["claude", "sonnet", "opus", "haiku"] },
-  { provider: "codex", tokens: ["codex", "gpt-", "gpt4", "gpt5", "o1-", "o3-", "o4-"] },
+  { provider: 'claude', tokens: ['claude', 'sonnet', 'opus', 'haiku'] },
+  { provider: 'codex', tokens: ['codex', 'gpt-', 'gpt4', 'gpt5', 'o1-', 'o3-', 'o4-'] },
 ];
 
 /** Verified but deferred to v1.1 (providers.md) — route to a clear error, not a guess. */
-const DEFERRED_TOKENS: readonly string[] = ["gemini", "bard"];
+const DEFERRED_TOKENS: readonly string[] = ['gemini', 'bard'];
 
 export function providerForModel(model: string | null): ProviderId | null {
   if (model === null) return null;
@@ -90,7 +90,7 @@ export function checkModelRouting(
     if (task.provider === null && inferred !== null && !allowlist.includes(inferred)) {
       issues.push({
         taskId: task.id,
-        message: `task "${task.id}" names model "${task.model}", which routes to "${inferred}" — not in the allowlist [${allowlist.join(", ")}].`,
+        message: `task "${task.id}" names model "${task.model}", which routes to "${inferred}" — not in the allowlist [${allowlist.join(', ')}].`,
       });
     }
   }

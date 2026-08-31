@@ -164,12 +164,12 @@ Each adapter maps its CLI's stream onto this union; the normalized stream persis
 
 ```ts
 type ProviderEvent =
-  | { t: "session"; id: string } // enables resume
-  | { t: "text"; text: string }
-  | { t: "tool"; name: string; input?: unknown } // display only
-  | { t: "final"; raw: string } // candidate result payload
-  | { t: "error"; kind: "rate_limit" | "auth" | "other"; message: string }
-  | { t: "unknown"; raw: string }; // never drop
+  | { t: 'session'; id: string } // enables resume
+  | { t: 'text'; text: string }
+  | { t: 'tool'; name: string; input?: unknown } // display only
+  | { t: 'final'; raw: string } // candidate result payload
+  | { t: 'error'; kind: 'rate_limit' | 'auth' | 'other'; message: string }
+  | { t: 'unknown'; raw: string }; // never drop
 ```
 
 - Unrecognized transport lines ⇒ `unknown`, never discarded — upstream CLIs add event types silently; drops make drift invisible.

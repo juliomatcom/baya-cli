@@ -1,8 +1,8 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-import { buildRunRow, runPaths, selectRuns, type RunRow } from "../executor/index.js";
-import type { Theme } from "../ui/theme.js";
-import type { CliIo } from "./run.js";
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { buildRunRow, runPaths, selectRuns, type RunRow } from '../executor/index.js';
+import type { Theme } from '../ui/theme.js';
+import type { CliIo } from './run.js';
 
 /**
  * `baya runs` (cli.md, recovery.md) — the resumable runs a `baya resume` can
@@ -23,7 +23,7 @@ export interface RunsCommandOptions {
  * resume`, whose picker offers exactly the rows this listing shows.
  */
 export function readRunRows(cwd: string): RunRow[] {
-  const runsDir = runPaths(cwd, "-").runsDir;
+  const runsDir = runPaths(cwd, '-').runsDir;
 
   let dirs: string[] = [];
   try {
@@ -38,7 +38,7 @@ export function readRunRows(cwd: string): RunRow[] {
     dirs.flatMap((id) => {
       let stateJson: string;
       try {
-        stateJson = readFileSync(join(runsDir, id, "state.json"), "utf8");
+        stateJson = readFileSync(join(runsDir, id, 'state.json'), 'utf8');
       } catch {
         return [];
       }
@@ -56,44 +56,44 @@ export function runsCommand(options: RunsCommandOptions): number {
     return 0;
   }
 
-  const lines = ["", `  ${theme.taskId("Runs")}`];
+  const lines = ['', `  ${theme.taskId('Runs')}`];
   if (rows.length === 0) {
-    lines.push("", `  ${theme.note("no resumable runs")}`, "");
-    io.stdout.write(`${lines.join("\n")}\n`);
+    lines.push('', `  ${theme.note('no resumable runs')}`, '');
+    io.stdout.write(`${lines.join('\n')}\n`);
     return 0;
   }
 
   const idWidth = Math.max(...rows.map((row) => row.run_id.length));
-  const srcWidth = Math.max(...rows.map((row) => (row.source_path ?? "—").length));
+  const srcWidth = Math.max(...rows.map((row) => (row.source_path ?? '—').length));
   for (const row of rows) {
     lines.push(
-      `    ${row.run_id.padEnd(idWidth)}  ${(row.source_path ?? "—").padEnd(srcWidth)}  ${started(row)}  ${status(row, theme)}  ${theme.note(totals(row))}`,
+      `    ${row.run_id.padEnd(idWidth)}  ${(row.source_path ?? '—').padEnd(srcWidth)}  ${started(row)}  ${status(row, theme)}  ${theme.note(totals(row))}`,
     );
   }
-  lines.push("", `  ${theme.note("baya resume <id>")}   re-run one`, "");
-  io.stdout.write(`${lines.join("\n")}\n`);
+  lines.push('', `  ${theme.note('baya resume <id>')}   re-run one`, '');
+  io.stdout.write(`${lines.join('\n')}\n`);
   return 0;
 }
 
 /** ISO to minutes — the second and the timezone marker add nothing to a glance. */
 function started(row: RunRow): string {
-  return row.started_at ? row.started_at.slice(0, 16).replace("T", " ") : "—".padEnd(16);
+  return row.started_at ? row.started_at.slice(0, 16).replace('T', ' ') : '—'.padEnd(16);
 }
 
 function status(row: RunRow, theme: Theme): string {
-  if (row.damaged) return theme.warn("damaged");
-  if (row.status === "failed") return theme.fail("failed");
-  if (row.status === "interrupted") return theme.warn("interrupted");
-  if (row.status === "paused") return theme.park("paused");
+  if (row.damaged) return theme.warn('damaged');
+  if (row.status === 'failed') return theme.fail('failed');
+  if (row.status === 'interrupted') return theme.warn('interrupted');
+  if (row.status === 'paused') return theme.park('paused');
   return theme.note(row.status);
 }
 
 function totals(row: RunRow): string {
-  if (row.totals === null) return "—";
+  if (row.totals === null) return '—';
   const parts: string[] = [`${row.totals.succeeded} ok`];
   if (row.totals.failed > 0) parts.push(`${row.totals.failed} failed`);
   if (row.totals.skipped > 0) parts.push(`${row.totals.skipped} skipped`);
   if (row.totals.parked > 0) parts.push(`${row.totals.parked} parked`);
   if (row.totals.pending > 0) parts.push(`${row.totals.pending} pending`);
-  return parts.join(" · ");
+  return parts.join(' · ');
 }

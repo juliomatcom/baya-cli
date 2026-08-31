@@ -4,14 +4,14 @@ import {
   readFileSync,
   readdirSync,
   writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { PassThrough } from "node:stream";
-import { fileURLToPath } from "node:url";
-import { main } from "../../src/cli/index.js";
-import { runPaths, type RunPaths } from "../../src/executor/index.js";
-import type { FakeProviderScenario } from "./fakeProvider.js";
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { PassThrough } from 'node:stream';
+import { fileURLToPath } from 'node:url';
+import { main } from '../../src/cli/index.js';
+import { runPaths, type RunPaths } from '../../src/executor/index.js';
+import type { FakeProviderScenario } from './fakeProvider.js';
 
 /**
  * Drives the real CLI end to end against `fake-provider.mjs`, which stands in
@@ -19,7 +19,7 @@ import type { FakeProviderScenario } from "./fakeProvider.js";
  * user would set. Zero network, zero cost, deterministic.
  */
 export const FAKE_PROVIDER = fileURLToPath(
-  new URL("../fixtures/fake-provider.mjs", import.meta.url),
+  new URL('../fixtures/fake-provider.mjs', import.meta.url),
 );
 
 export interface Workspace {
@@ -45,18 +45,18 @@ export interface CliOptions {
 }
 
 export function makeWorkspace(options: CliOptions = {}): Workspace {
-  const root = mkdtempSync(join(tmpdir(), "baya-run-"));
-  const cwd = join(root, "project");
-  const home = join(root, "home");
-  mkdirSync(join(cwd, ".baya"), { recursive: true });
+  const root = mkdtempSync(join(tmpdir(), 'baya-run-'));
+  const cwd = join(root, 'project');
+  const home = join(root, 'home');
+  mkdirSync(join(cwd, '.baya'), { recursive: true });
   mkdirSync(home, { recursive: true });
 
-  const tasksPath = join(cwd, options.taskFile ?? "tasks.md");
-  writeFileSync(tasksPath, options.taskList ?? "# Design the API\n\nDesign it.\n");
+  const tasksPath = join(cwd, options.taskFile ?? 'tasks.md');
+  writeFileSync(tasksPath, options.taskList ?? '# Design the API\n\nDesign it.\n');
 
-  const scenarioPath = join(root, "scenario.json");
+  const scenarioPath = join(root, 'scenario.json');
   const scenario =
-    options.scenario && "by_task" in options.scenario
+    options.scenario && 'by_task' in options.scenario
       ? options.scenario
       : options.scenario && !isScenario(options.scenario)
         ? { by_task: options.scenario }
@@ -66,13 +66,13 @@ export function makeWorkspace(options: CliOptions = {}): Workspace {
   // The user config, since that is the only config layer there is. The fake
   // provider is reached through its `providers.codex.bin` override — the same
   // override a real user would write.
-  mkdirSync(join(home, ".config", "baya"), { recursive: true });
+  mkdirSync(join(home, '.config', 'baya'), { recursive: true });
   writeFileSync(
-    join(home, ".config", "baya", "config.json"),
+    join(home, '.config', 'baya', 'config.json'),
     JSON.stringify({
       version: 1,
-      defaults: { provider: "codex", model: null },
-      planner: { provider: "codex", model: null },
+      defaults: { provider: 'codex', model: null },
+      planner: { provider: 'codex', model: null },
       providers: { codex: { bin: FAKE_PROVIDER } },
       ...options.config,
     }),
@@ -89,17 +89,17 @@ export function makeWorkspace(options: CliOptions = {}): Workspace {
       // override, never from this PATH.
       PATH: dirname(process.execPath),
       HOME: home,
-      XDG_CONFIG_HOME: join(home, ".config"),
+      XDG_CONFIG_HOME: join(home, '.config'),
       BAYA_FAKE_SCRIPT: scenarioPath,
-      BAYA_NO_INPUT: "1",
-      NO_COLOR: "1",
+      BAYA_NO_INPUT: '1',
+      NO_COLOR: '1',
       ...options.env,
     },
   };
 }
 
 function isScenario(value: object): value is FakeProviderScenario {
-  return "final" in value || "emit" in value || "exit_code" in value;
+  return 'final' in value || 'emit' in value || 'exit_code' in value;
 }
 
 export interface CliResult {
@@ -116,9 +116,9 @@ export interface CliResult {
 
 function capture(): { stream: NodeJS.WritableStream; text: () => string } {
   const stream = new PassThrough();
-  let buffer = "";
-  stream.on("data", (chunk: Buffer) => {
-    buffer += chunk.toString("utf8");
+  let buffer = '';
+  stream.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString('utf8');
   });
   return { stream, text: () => buffer };
 }
@@ -154,15 +154,15 @@ export async function runCli(
     workspace,
     runId,
     paths: runId === null ? null : runPaths(workspace.cwd, runId),
-    readJson: (path) => JSON.parse(readFileSync(path, "utf8")) as unknown,
-    readText: (path) => readFileSync(path, "utf8"),
+    readJson: (path) => JSON.parse(readFileSync(path, 'utf8')) as unknown,
+    readText: (path) => readFileSync(path, 'utf8'),
   };
 }
 
 export function runIds(cwd: string): string[] {
   try {
     // runIds are lexically sortable by design, so this needs no index.
-    return readdirSync(join(cwd, ".baya", "runs")).sort();
+    return readdirSync(join(cwd, '.baya', 'runs')).sort();
   } catch {
     return [];
   }
@@ -170,15 +170,15 @@ export function runIds(cwd: string): string[] {
 
 /** Every JSONL line the run recorded — the file always has the full stream. */
 export function readLog(paths: RunPaths): Array<Record<string, unknown>> {
-  return readFileSync(paths.log, "utf8")
-    .split("\n")
-    .filter((line) => line.trim() !== "")
+  return readFileSync(paths.log, 'utf8')
+    .split('\n')
+    .filter((line) => line.trim() !== '')
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 export function taskResult(
-  status: "ok" | "failed" | "needs_input",
+  status: 'ok' | 'failed' | 'needs_input',
   fields: object,
 ): object {
-  return { baya: "1", kind: "task_result", status, ...fields };
+  return { baya: '1', kind: 'task_result', status, ...fields };
 }

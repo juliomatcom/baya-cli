@@ -1,4 +1,4 @@
-import { confirm } from "@inquirer/prompts";
+import { confirm } from '@inquirer/prompts';
 
 /**
  * The plan gate (cli.md §Flags, `--yes`). The last point at which a run costs
@@ -17,26 +17,26 @@ export interface ConfirmPlanOptions {
 }
 
 export type ConfirmOutcome =
-  | { decision: "confirmed"; reason: "flag" | "answered" }
-  | { decision: "rejected" }
-  | { decision: "blocked"; message: string };
+  | { decision: 'confirmed'; reason: 'flag' | 'answered' }
+  | { decision: 'rejected' }
+  | { decision: 'blocked'; message: string };
 
 export async function confirmPlan(options: ConfirmPlanOptions): Promise<ConfirmOutcome> {
-  if (options.yes) return { decision: "confirmed", reason: "flag" };
+  if (options.yes) return { decision: 'confirmed', reason: 'flag' };
   if (!options.stdinIsTty) {
     return {
-      decision: "blocked",
+      decision: 'blocked',
       message:
-        "stdin is not a TTY, so the plan gate cannot be answered. Pass --yes to run unattended, or --dry-run to just see the plan.",
+        'stdin is not a TTY, so the plan gate cannot be answered. Pass --yes to run unattended, or --dry-run to just see the plan.',
     };
   }
 
   options.beforePrompt?.();
   const answer = await confirm({
-    message: options.message ?? "Run this plan?",
+    message: options.message ?? 'Run this plan?',
     default: true,
   });
   return answer
-    ? { decision: "confirmed", reason: "answered" }
-    : { decision: "rejected" };
+    ? { decision: 'confirmed', reason: 'answered' }
+    : { decision: 'rejected' };
 }

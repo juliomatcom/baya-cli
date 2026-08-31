@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 import {
   TaskResultSchema,
   validateManifest,
@@ -8,16 +8,16 @@ import {
   type Manifest,
   type ProviderId,
   type TaskResult,
-} from "../manifest/index.js";
+} from '../manifest/index.js';
 import {
   createLogger,
   resolveStderrLevel,
   type LogLine,
   type Logger,
-} from "../log/index.js";
-import { FileLock } from "../lock/index.js";
-import { binOverrides as binOverridesFrom, loadConfig } from "../config/index.js";
-import type { Registry } from "../providers/index.js";
+} from '../log/index.js';
+import { FileLock } from '../lock/index.js';
+import { binOverrides as binOverridesFrom, loadConfig } from '../config/index.js';
+import type { Registry } from '../providers/index.js';
 import {
   StateStore,
   killGroup,
@@ -28,7 +28,7 @@ import {
   runSequential,
   type RunPaths,
   type RunState,
-} from "../executor/index.js";
+} from '../executor/index.js';
 import {
   buildReport,
   createEventRenderer,
@@ -37,13 +37,13 @@ import {
   pickRun,
   renderReport,
   type Progress,
-} from "../ui/index.js";
-import { createTheme } from "../ui/theme.js";
-import type { ParsedArgs } from "./args.js";
-import { installInterruptHandlers } from "./interrupt.js";
-import type { CliIo } from "./run.js";
-import { readRunRows } from "./runs.js";
-import { createGroupSpinner } from "./spinner.js";
+} from '../ui/index.js';
+import { createTheme } from '../ui/theme.js';
+import type { ParsedArgs } from './args.js';
+import { installInterruptHandlers } from './interrupt.js';
+import type { CliIo } from './run.js';
+import { readRunRows } from './runs.js';
+import { createGroupSpinner } from './spinner.js';
 
 /**
  * `baya resume` (recovery.md §Resume) — finish a run that failed, parked, or
@@ -78,16 +78,16 @@ export interface ResumeCommandOptions {
 export async function resumeCommand(options: ResumeCommandOptions): Promise<number> {
   const { args, cwd, env, io, registry } = options;
   const { flags } = args;
-  const theme = createTheme(flags.noColor || env["NO_COLOR"] ? "never" : "auto");
+  const theme = createTheme(flags.noColor || env['NO_COLOR'] ? 'never' : 'auto');
   const fail = (message: string): number => {
-    io.stderr.write(`${theme.status("fail")} ${theme.fail(message)}\n`);
+    io.stderr.write(`${theme.status('fail')} ${theme.fail(message)}\n`);
     return 2;
   };
 
   const override = flags.provider;
   if (override !== undefined && !registry.has(override)) {
     return fail(
-      `unknown provider: ${override} — expected one of ${registry.ids.join(", ")}`,
+      `unknown provider: ${override} — expected one of ${registry.ids.join(', ')}`,
     );
   }
 
@@ -97,7 +97,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
       rows: readRunRows(cwd).filter((row) => row.resumable),
       stdinIsTty: io.stdinIsTty,
     });
-    if (picked.decision === "blocked") return fail(picked.message);
+    if (picked.decision === 'blocked') return fail(picked.message);
     runId = picked.runId;
   }
 
@@ -115,11 +115,11 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
 
   let manifest: Manifest;
   try {
-    const parsed: unknown = JSON.parse(readFileSync(state.manifest_path, "utf8"));
+    const parsed: unknown = JSON.parse(readFileSync(state.manifest_path, 'utf8'));
     const validated = validateManifest(parsed, { allowlist: registry.ids });
     if (!validated.ok) {
       return fail(
-        `cannot resume ${runId} — ${state.manifest_path}: ${validated.errors[0]?.message ?? "invalid manifest"}`,
+        `cannot resume ${runId} — ${state.manifest_path}: ${validated.errors[0]?.message ?? 'invalid manifest'}`,
       );
     }
     manifest = validated.manifest;
@@ -156,7 +156,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   });
   const stderrSink = {
     write(chunk: string | Uint8Array): boolean {
-      progress.write(String(chunk).replace(/\n$/, ""));
+      progress.write(String(chunk).replace(/\n$/, ''));
       return true;
     },
   } as unknown as NodeJS.WritableStream;
@@ -182,7 +182,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   if (!acquired.ok) {
     progress.dispose();
     const holder = acquired.holder;
-    logger.error("lock.refused", {
+    logger.error('lock.refused', {
       path: paths.lockFile,
       holder_pid: holder?.pid ?? null,
       holder_run: holder?.owner ?? null,
@@ -190,8 +190,8 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
     });
     io.stderr.write(
       holder
-        ? `${theme.status("fail")} ${theme.fail("another baya is already running in this directory")}\n    pid ${holder.pid} · run ${holder.owner} · started ${Math.round((Date.now() - holder.acquiredAt) / 1000)}s ago\n`
-        : `${theme.status("fail")} ${theme.fail(`unreadable lock file at ${paths.lockFile} — delete it by hand (see \`baya doctor\`)`)}\n`,
+        ? `${theme.status('fail')} ${theme.fail('another baya is already running in this directory')}\n    pid ${holder.pid} · run ${holder.owner} · started ${Math.round((Date.now() - holder.acquiredAt) / 1000)}s ago\n`
+        : `${theme.status('fail')} ${theme.fail(`unreadable lock file at ${paths.lockFile} — delete it by hand (see \`baya doctor\`)`)}\n`,
     );
     return 2;
   }
@@ -207,15 +207,15 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
     killGroup,
     checkpointInterrupted: () => {
       interrupted = true;
-      store?.setStatus("interrupted");
+      store?.setStatus('interrupted');
     },
     releaseLock: () => lock.release(),
     exit: (code) => process.exit(code),
   });
 
   try {
-    logger.info("cli.invoked", { argv: process.argv.slice(2), cwd, run_id: runId });
-    logger.info("run.resumed", {
+    logger.info('cli.invoked', { argv: process.argv.slice(2), cwd, run_id: runId });
+    logger.info('run.resumed', {
       run_id: runId,
       source: state.source.path,
       rerun: targets.rerun.length,
@@ -225,7 +225,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
 
     const drift = sourceDrift(state);
     if (drift !== null) {
-      logger.warn("resume.source.changed", { path: state.source.path, reason: drift });
+      logger.warn('resume.source.changed', { path: state.source.path, reason: drift });
       io.stderr.write(`  ${theme.warn(drift)}\n`);
     }
 
@@ -234,7 +234,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
     const batchSchemaPath = writeTaskResultBatchSchema(paths.schemaDir);
 
     store = new StateStore(paths.state, state, () =>
-      logger.trace("state.checkpointed", { path: paths.state }),
+      logger.trace('state.checkpointed', { path: paths.state }),
     );
     const rerunning = new Set(targets.rerun);
     for (const id of targets.rerun) {
@@ -245,7 +245,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
         ...(override ? { provider: override as ProviderId, model: null } : {}),
       });
     }
-    store.setStatus("running");
+    store.setStatus('running');
 
     const priorResults = readPriorResults(targets.keep, paths);
     const summaries = new Map<string, string>(
@@ -253,7 +253,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
     );
 
     io.stderr.write(
-      `\n  ${theme.taskId("baya resume")} · ${runId} · ${targets.rerun.length} to run · ${theme.note(`${targets.keep.length} kept`)}\n\n`,
+      `\n  ${theme.taskId('baya resume')} · ${runId} · ${targets.rerun.length} to run · ${theme.note(`${targets.keep.length} kept`)}\n\n`,
     );
 
     await runSequential({
@@ -272,7 +272,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
       // where this invocation names one explicitly.
       contextStrategy:
         flags.contextStrategy ??
-        (snapshot.context_strategy === "truncate" ? "truncate" : "link-only"),
+        (snapshot.context_strategy === 'truncate' ? 'truncate' : 'link-only'),
       contextBudget: flags.contextBudget ?? snapshot.context_budget,
       memory: flags.noMemory ? false : snapshot.memory,
       memoryBudget: flags.memoryBudget ?? snapshot.memory_budget,
@@ -288,7 +288,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
       onProcessExit: (pid) => activePids.delete(pid),
       onTaskSettled: (taskId, _state, result) => {
         summaries.set(taskId, result.summary);
-        if (flags.verbose && !flags.quiet && result.output.trim() !== "") {
+        if (flags.verbose && !flags.quiet && result.output.trim() !== '') {
           progress.write(`\n${result.output.trim()}\n`);
         }
       },
@@ -296,19 +296,19 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
 
     const totals = store.get().totals;
     store.setStatus(
-      totals.failed > 0 ? "failed" : totals.parked > 0 ? "paused" : "completed",
+      totals.failed > 0 ? 'failed' : totals.parked > 0 ? 'paused' : 'completed',
     );
     const finished = store.get() as RunState;
     const report = buildReport(finished, manifest, { runDir: paths.runDir, summaries });
-    writeFileSync(paths.report, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    writeFileSync(paths.report, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
     spinner.dispose();
     logger.info(
-      finished.status === "failed"
-        ? "run.failed"
-        : finished.status === "paused"
-          ? "run.paused"
-          : "run.completed",
+      finished.status === 'failed'
+        ? 'run.failed'
+        : finished.status === 'paused'
+          ? 'run.paused'
+          : 'run.completed',
       {
         succeeded: finished.totals.succeeded,
         failed: finished.totals.failed,
@@ -341,11 +341,11 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
 function sourceDrift(state: RunState): string | null {
   let text: string;
   try {
-    text = readFileSync(state.source.path, "utf8");
+    text = readFileSync(state.source.path, 'utf8');
   } catch {
     return `${state.source.path} is no longer readable — resuming the plan stored with the run`;
   }
-  const sha256 = createHash("sha256").update(text, "utf8").digest("hex");
+  const sha256 = createHash('sha256').update(text, 'utf8').digest('hex');
   if (sha256 === state.source.sha256) return null;
   return `${state.source.path} changed since this run was planned — resuming the stored plan, not the new text`;
 }
@@ -362,7 +362,7 @@ function readPriorResults(
   const results = new Map<string, TaskResult>();
   for (const id of keep) {
     try {
-      const parsed: unknown = JSON.parse(readFileSync(paths.result(id), "utf8"));
+      const parsed: unknown = JSON.parse(readFileSync(paths.result(id), 'utf8'));
       results.set(id, TaskResultSchema.parse(parsed));
     } catch {
       // The task succeeded — the checkpoint says so — but its result file is
@@ -377,12 +377,12 @@ function readPriorResults(
 
 function placeholderResult(taskId: string): TaskResult {
   return {
-    baya: "1",
-    kind: "task_result",
+    baya: '1',
+    kind: 'task_result',
     task_id: taskId,
-    status: "ok",
-    summary: "",
-    output: "",
+    status: 'ok',
+    summary: '',
+    output: '',
     notes: [],
     question: null,
     error: null,

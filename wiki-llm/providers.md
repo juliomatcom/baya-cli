@@ -45,22 +45,22 @@ interface ProviderAdapter {
   id: ProviderId;
   resolve(): Promise<{ bin: string; version: string } | null>;
   capabilities: {
-    promptDelivery: ("file" | "stdin" | "argv")[]; // ordered preference
-    structuredOutput: "schema-file" | "schema-inline" | "none";
-    events: "jsonl" | "json" | "none";
-    sessionId: "preassign" | "capture";
-    resume: "session" | "none";
-    observations: "events" | "none"; // execution.md §Memory
+    promptDelivery: ('file' | 'stdin' | 'argv')[]; // ordered preference
+    structuredOutput: 'schema-file' | 'schema-inline' | 'none';
+    events: 'jsonl' | 'json' | 'none';
+    sessionId: 'preassign' | 'capture';
+    resume: 'session' | 'none';
+    observations: 'events' | 'none'; // execution.md §Memory
     cwdFlag: boolean;
     modelFlag: boolean;
     maxConcurrency: number;
   };
-  buildRun(task, env): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
+  buildRun(task, env): { argv: string[]; cwd: string; stdin: 'pipe' | 'ignore' };
   buildResume(
     sessionId,
     answer,
     env,
-  ): { argv: string[]; cwd: string; stdin: "pipe" | "ignore" };
+  ): { argv: string[]; cwd: string; stdin: 'pipe' | 'ignore' };
   extractObservations?(ctx: ExtractContext): Observation[];
   parseEvents(chunk: string): ProviderEvent[]; // fed complete lines only
   extractResults(ctx: ExtractContext): TaskResult[]; // one per ctx.taskIds

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * `baya runs` (cli.md §Commands) — the resumable-run listing. Row construction
@@ -8,11 +8,11 @@ import { z } from "zod";
  * file is reported, never silently skipped or acted on).
  */
 
-export const RESUMABLE_STATUSES = ["running", "paused", "failed", "interrupted"] as const;
+export const RESUMABLE_STATUSES = ['running', 'paused', 'failed', 'interrupted'] as const;
 
-const KNOWN_STATUSES = new Set<string>([...RESUMABLE_STATUSES, "completed"]);
+const KNOWN_STATUSES = new Set<string>([...RESUMABLE_STATUSES, 'completed']);
 
-export type RunRowStatus = (typeof RESUMABLE_STATUSES)[number] | "completed" | "damaged";
+export type RunRowStatus = (typeof RESUMABLE_STATUSES)[number] | 'completed' | 'damaged';
 
 export interface RunRowTotals {
   succeeded: number;
@@ -46,12 +46,12 @@ const StoredRun = z
   .passthrough();
 
 const TOTAL_KEYS = [
-  "succeeded",
-  "failed",
-  "skipped",
-  "parked",
-  "pending",
-  "running",
+  'succeeded',
+  'failed',
+  'skipped',
+  'parked',
+  'pending',
+  'running',
 ] as const;
 
 export function buildRunRow(runId: string, stateJson: string): RunRow {
@@ -59,7 +59,7 @@ export function buildRunRow(runId: string, stateJson: string): RunRow {
     run_id: runId,
     source_path: null,
     started_at: null,
-    status: "damaged",
+    status: 'damaged',
     totals: null,
     damaged: true,
     resumable: false,
@@ -101,7 +101,7 @@ function toTotals(raw: Record<string, unknown> | undefined): RunRowTotals | null
   if (raw === undefined) return null;
   const totals = {} as RunRowTotals;
   for (const key of TOTAL_KEYS) {
-    totals[key] = typeof raw[key] === "number" ? (raw[key] as number) : 0;
+    totals[key] = typeof raw[key] === 'number' ? (raw[key] as number) : 0;
   }
   return totals;
 }

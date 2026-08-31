@@ -1,4 +1,4 @@
-import base from "./jest.config.js";
+import base from './jest.config.js';
 
 /**
  * The contract tier (providers.md §Drift policy #2, plan M3.7).
@@ -15,8 +15,8 @@ import base from "./jest.config.js";
 /** @type {import('jest').Config} */
 export default {
   ...base,
-  testPathIgnorePatterns: ["/node_modules/", "/dist/", "<rootDir>/test/fixtures/"],
-  testMatch: ["<rootDir>/test/contract/**/*.test.ts"],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/', '<rootDir>/test/fixtures/'],
+  testMatch: ['<rootDir>/test/contract/**/*.test.ts'],
   // Real model calls: minutes, not milliseconds.
   testTimeout: 180_000,
   collectCoverageFrom: [],

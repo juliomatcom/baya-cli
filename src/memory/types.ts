@@ -11,9 +11,9 @@
  * and nothing here can be hallucinated.
  */
 export type Observation =
-  | { kind: "command"; command: string; ok: boolean }
-  | { kind: "read"; path: string }
-  | { kind: "write"; path: string };
+  | { kind: 'command'; command: string; ok: boolean }
+  | { kind: 'read'; path: string }
+  | { kind: 'write'; path: string };
 
 /** Everything one finished task observed, tagged with who observed it. */
 export interface TaskObservations {
@@ -22,7 +22,7 @@ export interface TaskObservations {
 }
 
 export type MemoryKind =
-  "command.deadend" | "command.verified" | "file.changed" | "file.hot";
+  'command.deadend' | 'command.verified' | 'file.changed' | 'file.hot';
 
 /**
  * A fact, keyed. `key` is what makes this a store rather than an append-only

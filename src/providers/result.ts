@@ -3,8 +3,8 @@ import {
   TaskResultBatchSchema,
   TaskResultSchema,
   type TaskResult,
-} from "../manifest/index.js";
-import { stripAnsi } from "../log/index.js";
+} from '../manifest/index.js';
+import { stripAnsi } from '../log/index.js';
 
 /**
  * The degradation ladder (protocol.md §4), and the one place that knows a
@@ -22,7 +22,7 @@ import { stripAnsi } from "../log/index.js";
  */
 
 /** Which rung of the degradation ladder (protocol.md §4) produced a result. */
-export type ResultRung = "native" | "verbatim" | "fenced" | "synthesized";
+export type ResultRung = 'native' | 'verbatim' | 'fenced' | 'synthesized';
 
 export interface ParsedResults {
   results: TaskResult[];
@@ -42,11 +42,11 @@ export function synthesizeFailure(
 ): TaskResult[] {
   return taskIds.map((taskId) => ({
     baya: PROTOCOL_VERSION,
-    kind: "task_result" as const,
+    kind: 'task_result' as const,
     task_id: taskId,
-    status: "failed" as const,
-    summary: "",
-    output: "",
+    status: 'failed' as const,
+    summary: '',
+    output: '',
     notes: [],
     question: null,
     error: { message, retryable: options.retryable ?? true },
@@ -95,7 +95,7 @@ export function parseResultJson(
   } catch {
     return null;
   }
-  if (value === null || typeof value !== "object") return null;
+  if (value === null || typeof value !== 'object') return null;
 
   const only = taskIds.length === 1 ? taskIds[0] : null;
   if (only !== undefined && only !== null) {
@@ -121,10 +121,10 @@ export function lastJsonFence(text: string): string | null {
   const fence = /```[ \t]*([A-Za-z0-9_-]*)[ \t]*\r?\n([\s\S]*?)\r?\n?```/g;
   let last: string | null = null;
   for (const match of clean.matchAll(fence)) {
-    const lang = (match[1] ?? "").toLowerCase();
-    const body = (match[2] ?? "").trim();
-    if (lang !== "" && lang !== "json") continue;
-    if (!body.startsWith("{") || !body.endsWith("}")) continue;
+    const lang = (match[1] ?? '').toLowerCase();
+    const body = (match[2] ?? '').trim();
+    if (lang !== '' && lang !== 'json') continue;
+    if (!body.startsWith('{') || !body.endsWith('}')) continue;
     last = body;
   }
   return last;
@@ -145,15 +145,15 @@ export function extractResultFromText(
   text: string,
 ): ParsedResults | null {
   const trimmed = stripAnsi(text).trim();
-  if (trimmed === "") return null;
+  if (trimmed === '') return null;
 
   const verbatim = parseResultJson(taskIds, trimmed);
-  if (verbatim) return { results: verbatim, rung: "verbatim" };
+  if (verbatim) return { results: verbatim, rung: 'verbatim' };
 
   const fenced = lastJsonFence(trimmed);
   if (fenced !== null) {
     const parsed = parseResultJson(taskIds, fenced);
-    if (parsed) return { results: parsed, rung: "fenced" };
+    if (parsed) return { results: parsed, rung: 'fenced' };
   }
 
   return null;

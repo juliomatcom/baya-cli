@@ -1,7 +1,7 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, relative } from "node:path";
-import { z } from "zod";
-import { NoteSchema, ProviderIdSchema, SourceSchema } from "../manifest/index.js";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, relative } from 'node:path';
+import { z } from 'zod';
+import { NoteSchema, ProviderIdSchema, SourceSchema } from '../manifest/index.js';
 
 /**
  * `state.json` (recovery.md). Rewritten atomically after **every** transition
@@ -12,26 +12,26 @@ import { NoteSchema, ProviderIdSchema, SourceSchema } from "../manifest/index.js
 export const STATE_VERSION = 1;
 
 export const TASK_STATES = [
-  "pending",
-  "running",
-  "succeeded",
-  "failed",
-  "skipped",
-  "parked",
+  'pending',
+  'running',
+  'succeeded',
+  'failed',
+  'skipped',
+  'parked',
 ] as const;
 export const TaskStateSchema = z.enum(TASK_STATES);
 export type TaskState = z.infer<typeof TaskStateSchema>;
 
 export const FAILURE_KINDS = [
-  "quota",
-  "rate_limit",
-  "auth",
-  "network",
-  "timeout",
-  "permission",
-  "schema",
-  "crash",
-  "interrupted",
+  'quota',
+  'rate_limit',
+  'auth',
+  'network',
+  'timeout',
+  'permission',
+  'schema',
+  'crash',
+  'interrupted',
 ] as const;
 
 export const FailureSchema = z
@@ -40,7 +40,7 @@ export const FailureSchema = z
     message: z.string(),
     provider_code: z.string().nullable().default(null),
     status_code: z.number().nullable().default(null),
-    retry: z.enum(["now", "later", "never"]),
+    retry: z.enum(['now', 'later', 'never']),
     occurred_at: z.string(),
   })
   .strict();
@@ -118,7 +118,7 @@ export const RunStateSchema = z
   .object({
     version: z.literal(STATE_VERSION),
     run_id: z.string(),
-    status: z.enum(["running", "completed", "paused", "failed", "interrupted"]),
+    status: z.enum(['running', 'completed', 'paused', 'failed', 'interrupted']),
     started_at: z.string(),
     updated_at: z.string(),
     source: SourceSchema,
@@ -145,7 +145,7 @@ export const RunStateSchema = z
 export type RunState = z.infer<typeof RunStateSchema>;
 
 export function emptyTaskEntry(overrides: Partial<TaskStateEntry> = {}): TaskStateEntry {
-  return TaskStateEntrySchema.parse({ state: "pending", ...overrides });
+  return TaskStateEntrySchema.parse({ state: 'pending', ...overrides });
 }
 
 function recomputeTotals(state: RunState): void {
@@ -218,7 +218,7 @@ export class StateStore {
     });
   }
 
-  setStatus(status: RunState["status"]): void {
+  setStatus(status: RunState['status']): void {
     this.update((state) => {
       state.status = status;
     });
@@ -227,7 +227,7 @@ export class StateStore {
   checkpoint(): void {
     mkdirSync(dirname(this.path), { recursive: true });
     const tmp = `${this.path}.${process.pid}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(this.state, null, 2)}\n`, "utf8");
+    writeFileSync(tmp, `${JSON.stringify(this.state, null, 2)}\n`, 'utf8');
     renameSync(tmp, this.path);
     this.onCheckpoint?.(this.state);
   }
@@ -238,7 +238,7 @@ export class StateStore {
  * already spent. The caller reports the path and stops.
  */
 export function readState(path: string): RunState {
-  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
   return RunStateSchema.parse(parsed);
 }
 

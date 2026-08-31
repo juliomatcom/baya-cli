@@ -1,19 +1,19 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const FAKE_PROVIDER_PATH = fileURLToPath(
-  new URL("../fixtures/fake-provider.mjs", import.meta.url),
+  new URL('../fixtures/fake-provider.mjs', import.meta.url),
 );
 
 export interface FakeProviderScenario {
-  emit?: Array<{ delay_ms?: number; line: string; stream?: "stdout" | "stderr" }>;
+  emit?: Array<{ delay_ms?: number; line: string; stream?: 'stdout' | 'stderr' }>;
   stderr?: string;
   final?: unknown;
   exit_code?: number;
-  on_signal?: "exit" | "ignore";
+  on_signal?: 'exit' | 'ignore';
   hang_ms?: number;
   spawn_child?: boolean;
   expect_stdin?: boolean | string;
@@ -34,8 +34,8 @@ export interface FakeProviderResult {
 }
 
 function writeScenarioFile(scenario: FakeProviderScenario): string {
-  const dir = mkdtempSync(join(tmpdir(), "baya-fake-provider-"));
-  const scenarioPath = join(dir, "scenario.json");
+  const dir = mkdtempSync(join(tmpdir(), 'baya-fake-provider-'));
+  const scenarioPath = join(dir, 'scenario.json');
   writeFileSync(scenarioPath, JSON.stringify(scenario));
   return scenarioPath;
 }
@@ -47,7 +47,7 @@ export function spawnFakeProvider(
   const scenarioPath = writeScenarioFile(scenario);
   return spawn(process.execPath, [FAKE_PROVIDER_PATH], {
     env: { ...process.env, BAYA_FAKE_SCRIPT: scenarioPath },
-    stdio: ["pipe", "pipe", "pipe"],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 }
 
@@ -58,17 +58,17 @@ export function runFakeProvider(
 ): Promise<FakeProviderResult> {
   return new Promise((resolve, reject) => {
     const child = spawnFakeProvider(scenario);
-    let stdout = "";
-    let stderr = "";
+    let stdout = '';
+    let stderr = '';
 
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf8');
     });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
     });
-    child.on("error", reject);
-    child.on("close", (code, signal) => {
+    child.on('error', reject);
+    child.on('close', (code, signal) => {
       resolve({ stdout, stderr, code, signal });
     });
 

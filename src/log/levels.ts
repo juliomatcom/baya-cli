@@ -1,4 +1,4 @@
-export const LOG_LEVELS = ["trace", "debug", "info", "warn", "error"] as const;
+export const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
 const RANK: Record<LogLevel, number> = {
@@ -25,7 +25,7 @@ export interface LogLevelFlags {
  */
 export function resolveStderrLevel(flags: LogLevelFlags): LogLevel {
   if (flags.logLevel) return flags.logLevel;
-  if (flags.verbose) return "debug";
-  if (flags.quiet) return "warn";
-  return "info";
+  if (flags.verbose) return 'debug';
+  if (flags.quiet) return 'warn';
+  return 'info';
 }

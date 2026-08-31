@@ -1,14 +1,14 @@
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   writeTaskResultBatchSchema,
   writeTaskResultSchema,
   type Manifest,
-} from "../../src/manifest/index.js";
-import { createRegistry } from "../../src/providers/index.js";
-import { codexAdapter } from "../../src/providers/codex.js";
+} from '../../src/manifest/index.js';
+import { createRegistry } from '../../src/providers/index.js';
+import { codexAdapter } from '../../src/providers/codex.js';
 import {
   StateStore,
   emptyTaskEntry,
@@ -17,11 +17,11 @@ import {
   runPaths,
   runSequential,
   type RunState,
-} from "../../src/executor/index.js";
-import { SIGINT_EXIT_CODE, createInterruptHandler } from "../../src/cli/interrupt.js";
-import { createProgress } from "../../src/ui/progress.js";
-import { captureLogger } from "../helpers/logger.js";
-import { FAKE_PROVIDER } from "../helpers/runCli.js";
+} from '../../src/executor/index.js';
+import { SIGINT_EXIT_CODE, createInterruptHandler } from '../../src/cli/interrupt.js';
+import { createProgress } from '../../src/ui/progress.js';
+import { captureLogger } from '../helpers/logger.js';
+import { FAKE_PROVIDER } from '../helpers/runCli.js';
 
 /**
  * Case 4, testing.md: a long fake provider that spawns a grandchild and traps
@@ -36,14 +36,14 @@ const sleep = (ms: number): Promise<void> =>
 
 /** Every pid `ps` will show us, or null when `ps` is missing or errors. */
 function psPids(): Set<number> | null {
-  const result = spawnSync("ps", ["-A", "-o", "pid="]);
+  const result = spawnSync('ps', ['-A', '-o', 'pid=']);
   if (result.status !== 0 || result.stdout === null || result.stdout.length === 0) {
     return null;
   }
   return new Set(
     result.stdout
-      .toString("utf8")
-      .split("\n")
+      .toString('utf8')
+      .split('\n')
       .map((line) => Number(line.trim()))
       .filter((pid) => Number.isFinite(pid)),
   );
@@ -60,11 +60,11 @@ const PS_USABLE = psPids()?.has(process.pid) === true;
 
 /** Pids whose parent is `ppid`, via `ps` (portable across BSD/GNU). */
 function childPids(ppid: number): number[] {
-  const result = spawnSync("ps", ["-A", "-o", "pid=,ppid="]);
+  const result = spawnSync('ps', ['-A', '-o', 'pid=,ppid=']);
   return result.stdout
-    .toString("utf8")
+    .toString('utf8')
     .trim()
-    .split("\n")
+    .split('\n')
     .map((line) => line.trim().split(/\s+/).map(Number))
     .filter(([, parent]) => parent === ppid)
     .map(([pid]) => pid as number);
@@ -79,21 +79,21 @@ function alive(pid: number): boolean {
   }
 }
 
-const TASK_ID = "hang";
+const TASK_ID = 'hang';
 
 function manifest(): Manifest {
   return {
     version: 1,
-    source: { path: "tasks.md", sha256: "abc" },
+    source: { path: 'tasks.md', sha256: 'abc' },
     tasks: [
       {
         id: TASK_ID,
-        title: "Hang",
-        instruction: "hang",
-        provider: "codex",
+        title: 'Hang',
+        instruction: 'hang',
+        provider: 'codex',
         model: null,
         depends_on: [],
-        access: "read-only",
+        access: 'read-only',
         cwd: null,
       },
     ],
@@ -104,17 +104,17 @@ function initialState(runId: string): RunState {
   return {
     version: 1,
     run_id: runId,
-    status: "running",
-    started_at: "2026-08-31T00:00:00.000Z",
-    updated_at: "2026-08-31T00:00:00.000Z",
-    source: { path: "tasks.md", sha256: "abc" },
-    manifest_path: "manifest.json",
+    status: 'running',
+    started_at: '2026-08-31T00:00:00.000Z',
+    updated_at: '2026-08-31T00:00:00.000Z',
+    source: { path: 'tasks.md', sha256: 'abc' },
+    manifest_path: 'manifest.json',
     config_snapshot: {
-      planner: { provider: "codex", model: null },
-      defaults: { provider: "codex", model: null },
+      planner: { provider: 'codex', model: null },
+      defaults: { provider: 'codex', model: null },
       max_parallel: 2,
-      isolation: "shared",
-      context_strategy: "link-only",
+      isolation: 'shared',
+      context_strategy: 'link-only',
       context_budget: 12_000,
       memory: false,
       memory_budget: 1200,
@@ -141,19 +141,19 @@ function initialState(runId: string): RunState {
 (PS_USABLE ? describe : describe.skip)(
   "SIGINT process-tree teardown (needs a ps that lists this process's own pids)",
   () => {
-    it("SIGKILLs the provider group and its grandchild, then exits 130", async () => {
-      const cwd = mkdtempSync(join(tmpdir(), "baya-interrupt-"));
+    it('SIGKILLs the provider group and its grandchild, then exits 130', async () => {
+      const cwd = mkdtempSync(join(tmpdir(), 'baya-interrupt-'));
       const runId = makeRunId();
       const paths = runPaths(cwd, runId);
       mkdirSync(paths.runDir, { recursive: true });
       mkdirSync(paths.schemaDir, { recursive: true });
 
-      const scenarioPath = join(cwd, "scenario.json");
+      const scenarioPath = join(cwd, 'scenario.json');
       writeFileSync(
         scenarioPath,
         JSON.stringify({
           by_task: {
-            [TASK_ID]: { hang_ms: 30_000, spawn_child: true, on_signal: "ignore" },
+            [TASK_ID]: { hang_ms: 30_000, spawn_child: true, on_signal: 'ignore' },
           },
         }),
       );
@@ -171,7 +171,7 @@ function initialState(runId: string): RunState {
         store,
         schemaPath: writeTaskResultSchema(paths.schemaDir),
         batchSchemaPath: writeTaskResultBatchSchema(paths.schemaDir),
-        defaultProvider: "codex",
+        defaultProvider: 'codex',
         defaultModel: null,
         binOverrides: { codex: FAKE_PROVIDER },
         memory: false,
@@ -204,7 +204,7 @@ function initialState(runId: string): RunState {
         logger: captureLogger().logger,
         activePids: () => activePids,
         killGroup,
-        checkpointInterrupted: () => store.setStatus("interrupted"),
+        checkpointInterrupted: () => store.setStatus('interrupted'),
         releaseLock: () => undefined,
         exit: (code) => {
           exitCode = code;

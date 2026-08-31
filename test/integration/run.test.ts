@@ -1,6 +1,6 @@
-import { existsSync } from "node:fs";
-import { cpus } from "node:os";
-import { readLog, runCli, taskResult } from "../helpers/runCli.js";
+import { existsSync } from 'node:fs';
+import { cpus } from 'node:os';
+import { readLog, runCli, taskResult } from '../helpers/runCli.js';
 
 /**
  * The M1 exit criterion, offline: a two-task chain planned, confirmed, and
@@ -9,23 +9,23 @@ import { readLog, runCli, taskResult } from "../helpers/runCli.js";
 const PLAN = {
   tasks: [
     {
-      id: "design-api",
-      title: "Design the API",
-      instruction: "Design six endpoints.",
-      provider: "codex",
+      id: 'design-api',
+      title: 'Design the API',
+      instruction: 'Design six endpoints.',
+      provider: 'codex',
       model: null,
       depends_on: [],
-      access: "read-write",
+      access: 'read-write',
       cwd: null,
     },
     {
-      id: "gen-schema",
-      title: "Generate DB schema",
-      instruction: "Create the tables.",
-      provider: "codex",
+      id: 'gen-schema',
+      title: 'Generate DB schema',
+      instruction: 'Create the tables.',
+      provider: 'codex',
       model: null,
-      depends_on: ["design-api"],
-      access: "read-write",
+      depends_on: ['design-api'],
+      access: 'read-write',
       cwd: null,
     },
   ],
@@ -33,33 +33,33 @@ const PLAN = {
 
 const scenario = {
   __planner__: { final: PLAN },
-  "design-api": {
+  'design-api': {
     emit: [
       { line: '{"type":"thread.started","thread_id":"t-1"}' },
       {
         line: '{"type":"item.completed","item":{"type":"agent_message","text":"thinking"}}',
       },
     ],
-    final: taskResult("ok", {
-      task_id: "design-api",
-      summary: "Defined 6 REST endpoints and their error shapes.",
-      output: "## API\n\nsix endpoints",
+    final: taskResult('ok', {
+      task_id: 'design-api',
+      summary: 'Defined 6 REST endpoints and their error shapes.',
+      output: '## API\n\nsix endpoints',
     }),
   },
-  "gen-schema": {
+  'gen-schema': {
     emit: [{ line: '{"type":"thread.started","thread_id":"t-2"}' }],
-    final: taskResult("ok", {
-      task_id: "gen-schema",
-      summary: "Created 4 tables with FK constraints.",
-      output: "## Schema",
-      files_changed: ["migrations/001.sql"],
+    final: taskResult('ok', {
+      task_id: 'gen-schema',
+      summary: 'Created 4 tables with FK constraints.',
+      output: '## Schema',
+      files_changed: ['migrations/001.sql'],
     }),
   },
 };
 
-describe("a two-task chain, end to end", () => {
-  it("exits 0 and runs both tasks in dependency order", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+describe('a two-task chain, end to end', () => {
+  it('exits 0 and runs both tasks in dependency order', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
     expect(result.code).toBe(0);
 
     const state = result.readJson(result.paths!.state) as {
@@ -67,27 +67,27 @@ describe("a two-task chain, end to end", () => {
       totals: Record<string, number>;
       tasks: Record<string, { state: string; session_id: string | null }>;
     };
-    expect(state.status).toBe("completed");
+    expect(state.status).toBe('completed');
     expect(state.totals).toMatchObject({ succeeded: 2, failed: 0, skipped: 0 });
-    expect(state.tasks["design-api"]?.state).toBe("succeeded");
-    expect(state.tasks["gen-schema"]?.state).toBe("succeeded");
+    expect(state.tasks['design-api']?.state).toBe('succeeded');
+    expect(state.tasks['gen-schema']?.state).toBe('succeeded');
   });
 
   it("captures the provider's session id, which is what resume needs", async () => {
-    const result = await runCli(["./tasks.md", "--yes", "--group-size", "1"], {
+    const result = await runCli(['./tasks.md', '--yes', '--group-size', '1'], {
       scenario,
     });
     const state = result.readJson(result.paths!.state) as {
       tasks: Record<string, { session_id: string | null }>;
     };
-    expect(state.tasks["design-api"]?.session_id).toBe("t-1");
-    expect(state.tasks["gen-schema"]?.session_id).toBe("t-2");
+    expect(state.tasks['design-api']?.session_id).toBe('t-1');
+    expect(state.tasks['gen-schema']?.session_id).toBe('t-2');
   });
 
-  it("persists every artifact for both tasks", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+  it('persists every artifact for both tasks', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
     const paths = result.paths!;
-    for (const taskId of ["design-api", "gen-schema"]) {
+    for (const taskId of ['design-api', 'gen-schema']) {
       for (const artifact of [
         paths.request(taskId),
         paths.result(taskId),
@@ -102,9 +102,9 @@ describe("a two-task chain, end to end", () => {
     // One process, one event stream and one pair of stdio logs — in the group
     // leader's directory, which every member's `artifacts` points at.
     for (const artifact of [
-      paths.events("design-api"),
-      paths.stdout("design-api"),
-      paths.stderr("design-api"),
+      paths.events('design-api'),
+      paths.stdout('design-api'),
+      paths.stderr('design-api'),
     ]) {
       expect({ artifact, exists: existsSync(artifact) }).toEqual({
         artifact,
@@ -116,47 +116,47 @@ describe("a two-task chain, end to end", () => {
     expect(existsSync(paths.log)).toBe(true);
   });
 
-  it("emits the task_result JSON Schema the provider is held to", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+  it('emits the task_result JSON Schema the provider is held to', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
     expect(existsSync(`${result.paths!.schemaDir}/task_result.schema.json`)).toBe(true);
   });
 
-  it("feeds the upstream result downstream as context", async () => {
+  it('feeds the upstream result downstream as context', async () => {
     // `--group-size 1`: grouped, the upstream is the agent's own earlier work
     // and is pointed at rather than inlined (covered below). This is the
     // context bus itself, which is what carries a result across processes.
-    const result = await runCli(["./tasks.md", "--yes", "--group-size", "1"], {
+    const result = await runCli(['./tasks.md', '--yes', '--group-size', '1'], {
       scenario,
     });
-    const request = result.readJson(result.paths!.request("gen-schema")) as {
+    const request = result.readJson(result.paths!.request('gen-schema')) as {
       context: Array<{ task_id: string; summary: string; inline: string | null }>;
     };
     expect(request.context).toHaveLength(1);
     expect(request.context[0]).toMatchObject({
-      task_id: "design-api",
-      summary: "Defined 6 REST endpoints and their error shapes.",
-      inline: "## API\n\nsix endpoints",
+      task_id: 'design-api',
+      summary: 'Defined 6 REST endpoints and their error shapes.',
+      inline: '## API\n\nsix endpoints',
     });
   });
 
-  it("runs a chain as one process and stops re-inlining what is already in it", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+  it('runs a chain as one process and stops re-inlining what is already in it', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
     const state = result.readJson(result.paths!.state) as {
       tasks: Record<string, { group_id: string | null; session_id: string | null }>;
     };
     // Both tasks name the same group, and the group is named for its first task.
-    expect(state.tasks["design-api"]?.group_id).toBe("design-api");
-    expect(state.tasks["gen-schema"]?.group_id).toBe("design-api");
+    expect(state.tasks['design-api']?.group_id).toBe('design-api');
+    expect(state.tasks['gen-schema']?.group_id).toBe('design-api');
     // One process means one session, so both carry the same id.
-    expect(state.tasks["gen-schema"]?.session_id).toBe(
-      state.tasks["design-api"]?.session_id,
+    expect(state.tasks['gen-schema']?.session_id).toBe(
+      state.tasks['design-api']?.session_id,
     );
 
     // The upstream is the agent's own earlier work, so its text is not repeated.
-    const request = result.readJson(result.paths!.request("gen-schema")) as {
+    const request = result.readJson(result.paths!.request('gen-schema')) as {
       context: Array<{ task_id: string; inline: string | null }>;
     };
-    expect(request.context[0]).toMatchObject({ task_id: "design-api", inline: null });
+    expect(request.context[0]).toMatchObject({ task_id: 'design-api', inline: null });
   });
 
   /**
@@ -164,71 +164,71 @@ describe("a two-task chain, end to end", () => {
    * silently widen the read-only task's permissions — which is the one thing
    * task-level `access` exists to prevent.
    */
-  it("refuses to group a chain whose access level changes", async () => {
+  it('refuses to group a chain whose access level changes', async () => {
     const mixed = {
       ...scenario,
       __planner__: {
         final: {
           tasks: [
-            { ...PLAN.tasks[0], access: "read-only" },
-            { ...PLAN.tasks[1], access: "read-write" },
+            { ...PLAN.tasks[0], access: 'read-only' },
+            { ...PLAN.tasks[1], access: 'read-write' },
           ],
         },
       },
     };
-    const result = await runCli(["./tasks.md", "--yes"], { scenario: mixed });
+    const result = await runCli(['./tasks.md', '--yes'], { scenario: mixed });
     const state = result.readJson(result.paths!.state) as {
       tasks: Record<string, { group_id: string | null }>;
     };
-    expect(state.tasks["design-api"]?.group_id).toBeNull();
-    expect(state.tasks["gen-schema"]?.group_id).toBeNull();
+    expect(state.tasks['design-api']?.group_id).toBeNull();
+    expect(state.tasks['gen-schema']?.group_id).toBeNull();
   });
 
-  it("--group-size 1 gives every task its own process", async () => {
-    const result = await runCli(["./tasks.md", "--yes", "--group-size", "1"], {
+  it('--group-size 1 gives every task its own process', async () => {
+    const result = await runCli(['./tasks.md', '--yes', '--group-size', '1'], {
       scenario,
     });
     const state = result.readJson(result.paths!.state) as {
       tasks: Record<string, { group_id: string | null }>;
     };
-    expect(state.tasks["design-api"]?.group_id).toBeNull();
-    expect(state.tasks["gen-schema"]?.group_id).toBeNull();
+    expect(state.tasks['design-api']?.group_id).toBeNull();
+    expect(state.tasks['gen-schema']?.group_id).toBeNull();
   });
 
-  it("records the manifest and a config snapshot a resume could reproduce", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+  it('records the manifest and a config snapshot a resume could reproduce', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
     const state = result.readJson(result.paths!.state) as {
       config_snapshot: Record<string, unknown>;
       source: { sha256: string };
     };
     expect(state.config_snapshot).toMatchObject({
-      defaults: { provider: "codex", model: null },
+      defaults: { provider: 'codex', model: null },
       max_parallel: Math.min(4, cpus().length),
-      context_strategy: "link-only",
+      context_strategy: 'link-only',
     });
     expect(state.source.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 
-describe("the event vocabulary", () => {
-  it("records the full startup-to-teardown sequence in baya.jsonl", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
-    const events = readLog(result.paths!).map((line) => String(line["event"]));
+describe('the event vocabulary', () => {
+  it('records the full startup-to-teardown sequence in baya.jsonl', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
+    const events = readLog(result.paths!).map((line) => String(line['event']));
 
     const expected = [
-      "cli.invoked",
-      "source.read",
-      "plan.requested",
-      "plan.received",
-      "plan.validated",
-      "plan.confirmed",
-      "run.created",
-      "run.started",
-      "group.ready",
-      "group.request.written",
-      "task.spawned",
-      "task.succeeded",
-      "run.completed",
+      'cli.invoked',
+      'source.read',
+      'plan.requested',
+      'plan.received',
+      'plan.validated',
+      'plan.confirmed',
+      'run.created',
+      'run.started',
+      'group.ready',
+      'group.request.written',
+      'task.spawned',
+      'task.succeeded',
+      'run.completed',
     ];
     // Assert order, not adjacency: provider output interleaves between these.
     let cursor = -1;
@@ -239,75 +239,75 @@ describe("the event vocabulary", () => {
     }
   });
 
-  it("stamps every line with the run id, so concurrent logs stay distinguishable", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+  it('stamps every line with the run id, so concurrent logs stay distinguishable', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
     const lines = readLog(result.paths!);
-    expect(lines.every((line) => line["run_id"] === result.runId)).toBe(true);
+    expect(lines.every((line) => line['run_id'] === result.runId)).toBe(true);
   });
 
-  it("never inlines a prompt into a log line — only its byte count", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+  it('never inlines a prompt into a log line — only its byte count', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
     const spawned = readLog(result.paths!).find(
-      (line) => line["event"] === "task.spawned",
+      (line) => line['event'] === 'task.spawned',
     );
-    expect(spawned?.["prompt"]).toBeUndefined();
-    expect(spawned?.["prompt_bytes"]).toBeGreaterThan(0);
-    expect(spawned?.["request"]).toContain("request.json");
+    expect(spawned?.['prompt']).toBeUndefined();
+    expect(spawned?.['prompt_bytes']).toBeGreaterThan(0);
+    expect(spawned?.['request']).toContain('request.json');
   });
 
-  it("keeps the prompt out of argv, where untrusted markdown must never land", async () => {
-    const result = await runCli(["./tasks.md", "--yes"], { scenario });
+  it('keeps the prompt out of argv, where untrusted markdown must never land', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
     const spawned = readLog(result.paths!).find(
-      (line) => line["event"] === "task.spawned",
+      (line) => line['event'] === 'task.spawned',
     );
-    expect(spawned?.["delivery"]).toBe("stdin");
-    expect(JSON.stringify(spawned?.["argv"])).not.toContain("Design six endpoints");
+    expect(spawned?.['delivery']).toBe('stdin');
+    expect(JSON.stringify(spawned?.['argv'])).not.toContain('Design six endpoints');
   });
 });
 
-describe("--dry-run", () => {
-  it("renders the DAG, executes nothing, and exits 0", async () => {
-    const result = await runCli(["./tasks.md", "--dry-run"], { scenario });
+describe('--dry-run', () => {
+  it('renders the DAG, executes nothing, and exits 0', async () => {
+    const result = await runCli(['./tasks.md', '--dry-run'], { scenario });
     expect(result.code).toBe(0);
-    expect(result.stderr).toContain("design-api");
-    expect(result.stderr).toContain("gen-schema");
+    expect(result.stderr).toContain('design-api');
+    expect(result.stderr).toContain('gen-schema');
     expect(existsSync(result.paths!.state)).toBe(false);
   });
 
-  it("is what `baya plan` means", async () => {
-    const result = await runCli(["plan", "./tasks.md"], { scenario });
+  it('is what `baya plan` means', async () => {
+    const result = await runCli(['plan', './tasks.md'], { scenario });
     expect(result.code).toBe(0);
     expect(existsSync(result.paths!.state)).toBe(false);
   });
 });
 
-describe("the plan gate", () => {
-  it("refuses to hang when stdin is not a TTY and --yes was not passed", async () => {
-    const result = await runCli(["./tasks.md"], { scenario, stdinIsTty: false });
+describe('the plan gate', () => {
+  it('refuses to hang when stdin is not a TTY and --yes was not passed', async () => {
+    const result = await runCli(['./tasks.md'], { scenario, stdinIsTty: false });
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain("--yes");
+    expect(result.stderr).toContain('--yes');
   });
 });
 
-describe("task-list file format", () => {
-  it("plans and runs a plain-text (.txt) task list, not just Markdown", async () => {
-    const result = await runCli(["./TODO.txt", "--yes"], {
+describe('task-list file format', () => {
+  it('plans and runs a plain-text (.txt) task list, not just Markdown', async () => {
+    const result = await runCli(['./TODO.txt', '--yes'], {
       scenario,
-      taskFile: "TODO.txt",
-      taskList: "1 design the api\n2 generate the db schema from that design\n",
+      taskFile: 'TODO.txt',
+      taskList: '1 design the api\n2 generate the db schema from that design\n',
     });
     expect(result.code).toBe(0);
     const state = result.readJson(result.paths!.state) as { status: string };
-    expect(state.status).toBe("completed");
+    expect(state.status).toBe('completed');
   });
 
-  it("rejects a binary file with a clear message instead of feeding it to the planner", async () => {
-    const result = await runCli(["./tasks.bin", "--yes"], {
+  it('rejects a binary file with a clear message instead of feeding it to the planner', async () => {
+    const result = await runCli(['./tasks.bin', '--yes'], {
       scenario,
-      taskFile: "tasks.bin",
-      taskList: "PK\u0000\u0003\u0004 binary payload",
+      taskFile: 'tasks.bin',
+      taskList: 'PK\u0000\u0003\u0004 binary payload',
     });
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain("does not look like a text file");
+    expect(result.stderr).toContain('does not look like a text file');
   });
 });

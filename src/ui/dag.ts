@@ -3,15 +3,15 @@ import {
   type Manifest,
   type ProviderId,
   type Task,
-} from "../manifest/index.js";
-import { topoLayers } from "../graph/index.js";
+} from '../manifest/index.js';
+import { topoLayers } from '../graph/index.js';
 import {
   DEFAULT_GROUP_SIZE,
   groupKey,
   projectGroups,
   type GroupCandidate,
-} from "../executor/group.js";
-import type { Theme } from "./theme.js";
+} from '../executor/group.js';
+import type { Theme } from './theme.js';
 
 /** What the gate needs to key tasks the way the scheduler will. */
 export interface DagOptions {
@@ -67,7 +67,7 @@ export function renderDag(
   // The resolved provider, shown in the provider column and keyed on for
   // grouping — one function so the two can never disagree.
   const providerOf = (task: Task): string =>
-    defaultProvider ? routeProvider(task, defaultProvider) : (task.provider ?? "default");
+    defaultProvider ? routeProvider(task, defaultProvider) : (task.provider ?? 'default');
 
   // The scheduler's key, built from the same defaults it will use: a task that
   // pins the run's own model or cwd groups with one that pins nothing, and
@@ -84,7 +84,7 @@ export function renderDag(
           provider: providerOf(task),
           model: task.model ?? options.defaultModel ?? null,
           access: task.access,
-          cwd: task.cwd ?? options.cwd ?? "",
+          cwd: task.cwd ?? options.cwd ?? '',
         }),
       },
     ]),
@@ -113,16 +113,16 @@ export function renderDag(
   // share a process, and why one failing does not skip the others.
   const hasIndependent = layers.some((layer) => layer.length > 1);
   lines.push(
-    `  ${theme.taskId("Run order")} ${theme.note(
-      `· ${layers.length} ${layers.length === 1 ? "stage" : "stages"}${
+    `  ${theme.taskId('Run order')} ${theme.note(
+      `· ${layers.length} ${layers.length === 1 ? 'stage' : 'stages'}${
         packed
           ? ` · ${manifest.tasks.length} tasks → ${groups.length} ${
-              groups.length === 1 ? "process" : "processes"
+              groups.length === 1 ? 'process' : 'processes'
             }`
-          : ""
-      }${hasIndependent ? " · no dependencies within a stage" : ""}`,
+          : ''
+      }${hasIndependent ? ' · no dependencies within a stage' : ''}`,
     )}`,
-    "",
+    '',
   );
 
   layers.forEach((layer, index) => {
@@ -131,24 +131,24 @@ export function renderDag(
       const task = byId.get(id);
       if (!task) continue;
       const deps =
-        task.depends_on.length > 0 ? theme.note(` ← ${task.depends_on.join(", ")}`) : "";
+        task.depends_on.length > 0 ? theme.note(` ← ${task.depends_on.join(', ')}`) : '';
       // Only the tasks that may act are badged. Badging every read-only task
       // too would spend the reader's attention on the harmless majority.
-      const access = task.access === "read-write" ? theme.warn(" read-write") : "";
+      const access = task.access === 'read-write' ? theme.warn(' read-write') : '';
       const provider = providerOf(task);
       const label = task.model ? `${provider} ${task.model}` : provider;
-      const group = packed ? theme.note(` (group #${groupOf.get(id) ?? "?"})`) : "";
+      const group = packed ? theme.note(` (group #${groupOf.get(id) ?? '?'})`) : '';
       lines.push(
-        `    ${theme.status("pending")} ${theme.taskId(id.padEnd(16))} ${theme.provider(label.padEnd(18))} ${task.title}${access}${deps}${group}`,
+        `    ${theme.status('pending')} ${theme.taskId(id.padEnd(16))} ${theme.provider(label.padEnd(18))} ${task.title}${access}${deps}${group}`,
       );
     }
   });
 
   if (packed) {
     lines.push(
-      "",
+      '',
       `  ${theme.note(
-        "· a group is one process worked through in order · projected from this plan, so a failure re-forms the groups after it",
+        '· a group is one process worked through in order · projected from this plan, so a failure re-forms the groups after it',
       )}`,
     );
     // The one thing a large group costs that a small one doesn't: the
@@ -161,15 +161,15 @@ export function renderDag(
         full.length === 1
           ? `group #${full[0]?.index} fills`
           : full.length <= 3
-            ? `groups ${full.map((group) => `#${group.index}`).join(", ")} fill`
+            ? `groups ${full.map((group) => `#${group.index}`).join(', ')} fill`
             : `${full.length} groups fill`;
       lines.push(
-        `  ${theme.status("warn")} ${theme.warn(
+        `  ${theme.status('warn')} ${theme.warn(
           `${which} --group-size ${cap} — the process is committed before its first task, so one that dies partway skips the members it never reached`,
         )}`,
       );
     }
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }

@@ -1,5 +1,5 @@
-import { select } from "@inquirer/prompts";
-import type { RunRow } from "../executor/index.js";
+import { select } from '@inquirer/prompts';
+import type { RunRow } from '../executor/index.js';
 
 /**
  * The `baya resume` run picker (recovery.md §Resume).
@@ -25,14 +25,14 @@ export function buildRunChoices(rows: readonly RunRow[]): RunChoice[] {
       : null;
     return {
       value: row.run_id,
-      name: `${row.run_id}  ${row.source_path ?? "—"}  ${row.status}  ${left === null ? "unknown" : `${left} left`}`,
-      description: `${totals?.succeeded ?? 0} succeeded · started ${row.started_at ?? "—"}`,
+      name: `${row.run_id}  ${row.source_path ?? '—'}  ${row.status}  ${left === null ? 'unknown' : `${left} left`}`,
+      description: `${totals?.succeeded ?? 0} succeeded · started ${row.started_at ?? '—'}`,
     };
   });
 }
 
 export type PickRunOutcome =
-  { decision: "picked"; runId: string } | { decision: "blocked"; message: string };
+  { decision: 'picked'; runId: string } | { decision: 'blocked'; message: string };
 
 export async function pickRun(options: {
   rows: readonly RunRow[];
@@ -40,19 +40,19 @@ export async function pickRun(options: {
   beforePrompt?: () => void;
 }): Promise<PickRunOutcome> {
   if (options.rows.length === 0) {
-    return { decision: "blocked", message: "no resumable runs — `baya runs` lists them" };
+    return { decision: 'blocked', message: 'no resumable runs — `baya runs` lists them' };
   }
   if (!options.stdinIsTty) {
     return {
-      decision: "blocked",
+      decision: 'blocked',
       message:
-        "stdin is not a TTY, so there is nobody to pick a run: pass a run id (`baya runs` lists them).",
+        'stdin is not a TTY, so there is nobody to pick a run: pass a run id (`baya runs` lists them).',
     };
   }
   options.beforePrompt?.();
   const runId = await select({
-    message: "Resume which run?",
+    message: 'Resume which run?',
     choices: buildRunChoices(options.rows),
   });
-  return { decision: "picked", runId };
+  return { decision: 'picked', runId };
 }

@@ -1,5 +1,5 @@
-import { formatElapsed, type Progress } from "../ui/index.js";
-import type { Theme } from "../ui/theme.js";
+import { formatElapsed, type Progress } from '../ui/index.js';
+import type { Theme } from '../ui/theme.js';
 
 /**
  * The live line for a group's process, shared by `run` and `resume`.
@@ -37,10 +37,10 @@ export function createGroupSpinner(deps: {
   return {
     dispose,
     onGroupStarted: (info) => {
-      const lead = info.taskIds[0] ?? "";
+      const lead = info.taskIds[0] ?? '';
       const more =
-        info.taskIds.length > 1 ? theme.note(` +${info.taskIds.length - 1}`) : "";
-      const who = `${theme.provider(info.provider)}${info.model ? theme.note(` ${info.model}`) : ""}`;
+        info.taskIds.length > 1 ? theme.note(` +${info.taskIds.length - 1}`) : '';
+      const who = `${theme.provider(info.provider)}${info.model ? theme.note(` ${info.model}`) : ''}`;
       const label = `${theme.taskId(lead)}${more} ${who}`;
       const startedAt = Date.now();
       const paint = (): void =>
@@ -48,7 +48,7 @@ export function createGroupSpinner(deps: {
           `${label} ${theme.note(`· ${formatElapsed(Date.now() - startedAt)}`)}`,
         );
       dispose();
-      progress.start(`${label} ${theme.note("· 0s")}`);
+      progress.start(`${label} ${theme.note('· 0s')}`);
       ticker = setInterval(paint, 1000);
       // Never hold the event loop open on account of a cosmetic line.
       ticker.unref();

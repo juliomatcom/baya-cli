@@ -1,6 +1,6 @@
 ---
 name: token-optimize
-description: "Audit and compress repository configuration, agent files, or prompt documentation (e.g., AGENTS.md, specifications, task definitions) to maximize token efficiency. Strips prose and redundancies while locking down 100% of underlying technical constraints, requirements, and invariants."
+description: 'Audit and compress repository configuration, agent files, or prompt documentation (e.g., AGENTS.md, specifications, task definitions) to maximize token efficiency. Strips prose and redundancies while locking down 100% of underlying technical constraints, requirements, and invariants.'
 license: MIT
 allowed-tools: Read, Write, Edit, Bash
 ---

@@ -1,4 +1,4 @@
-import type { Access, ProviderId } from "../manifest/index.js";
+import type { Access, ProviderId } from '../manifest/index.js';
 
 /**
  * Parallel admission (execution.md §Scheduler, §Workspace isolation). Pure: no
@@ -74,7 +74,7 @@ export class AdmissionState {
   admit(group: GroupAdmission): boolean {
     if (this.inFlight.has(group.id)) return true;
     if (!this.hasRoom(group)) {
-      if (group.access === "read-write") this.waitingWriters.add(group.id);
+      if (group.access === 'read-write') this.waitingWriters.add(group.id);
       return false;
     }
     this.waitingWriters.delete(group.id);
@@ -93,14 +93,14 @@ export class AdmissionState {
     if (this.providerCount(group.provider) >= this.providerCap(group.provider)) {
       return false;
     }
-    if (group.access === "read-write") return !this.writerInFlight();
+    if (group.access === 'read-write') return !this.writerInFlight();
     // A read-only group yields to any writer already waiting on the semaphore.
     return this.waitingWriters.size === 0;
   }
 
   private writerInFlight(): boolean {
     for (const inFlight of this.inFlight.values()) {
-      if (inFlight.access === "read-write") return true;
+      if (inFlight.access === 'read-write') return true;
     }
     return false;
   }

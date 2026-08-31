@@ -20,7 +20,7 @@ const DONE_WORD = String.raw`(?:done|complete|completed)`;
 const CHECKBOX = /^\s{0,8}(?:[-*+]|\d+[.)])?\s*\[\s*(?:x|✓|✔)\s*\]/i;
 
 /** An explicit tag anywhere on the line: `[done]`, `(complete)`, `{done}`. */
-const TAGGED = new RegExp(String.raw`[[({]\s*${DONE_WORD}\s*[\])}]`, "i");
+const TAGGED = new RegExp(String.raw`[[({]\s*${DONE_WORD}\s*[\])}]`, 'i');
 
 /**
  * A trailing verdict after a separator: `— done`, `| done`, `· complete`,
@@ -28,7 +28,7 @@ const TAGGED = new RegExp(String.raw`[[({]\s*${DONE_WORD}\s*[\])}]`, "i");
  * "…is not done." has no separator before the word, and a rule that matched a
  * bare trailing "done" would mark half a spec's rules as finished.
  */
-const TRAILING = new RegExp(String.raw`[-–—|:·•>]\s*${DONE_WORD}\b[.!]?\s*$`, "i");
+const TRAILING = new RegExp(String.raw`[-–—|:·•>]\s*${DONE_WORD}\b[.!]?\s*$`, 'i');
 
 /** The tick emoji is unambiguous wherever it sits. */
 const TICK = /[✅☑]/u;
@@ -39,7 +39,7 @@ const TICK = /[✅☑]/u;
  */
 const NEGATED = new RegExp(
   String.raw`\b(?:not|never|isn't|isnt|aren't|arent|won't|wont|nowhere near)\s+(?:\w+\s+){0,2}${DONE_WORD}\b`,
-  "i",
+  'i',
 );
 
 export interface DoneMarker {
@@ -52,9 +52,9 @@ export interface DoneMarker {
 /** Every line the task list marks as already finished. */
 export function detectDoneMarkers(taskText: string): DoneMarker[] {
   const found: DoneMarker[] = [];
-  taskText.split("\n").forEach((raw, index) => {
+  taskText.split('\n').forEach((raw, index) => {
     const line = raw.trim();
-    if (line === "" || NEGATED.test(line)) return;
+    if (line === '' || NEGATED.test(line)) return;
     if (
       CHECKBOX.test(line) ||
       TAGGED.test(line) ||
@@ -70,7 +70,7 @@ export function detectDoneMarkers(taskText: string): DoneMarker[] {
 /** True when this line is one the list marks as done. */
 export function isDoneLine(line: string): boolean {
   const trimmed = line.trim();
-  if (trimmed === "" || NEGATED.test(trimmed)) return false;
+  if (trimmed === '' || NEGATED.test(trimmed)) return false;
   return (
     CHECKBOX.test(trimmed) ||
     TAGGED.test(trimmed) ||

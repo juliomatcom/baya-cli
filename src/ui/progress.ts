@@ -1,4 +1,4 @@
-import ora, { type Ora } from "ora";
+import ora, { type Ora } from 'ora';
 
 /**
  * The single owner of the spinner line (conventions.md #16b). Every persistent
@@ -8,7 +8,7 @@ import ora, { type Ora } from "ora";
  * The spinner is stderr-only, always — stdout carries the `--json` report and
  * nothing else, so `baya … --json | jq` stays valid (cli.md §Color rule 2).
  */
-const SHOW_CURSOR = "\u001B[?25h";
+const SHOW_CURSOR = '\u001B[?25h';
 
 export interface ProgressOptions {
   stream?: NodeJS.WriteStream | NodeJS.WritableStream;
@@ -53,7 +53,7 @@ export function createProgress(options: ProgressOptions = {}): Progress {
   const enabled =
     options.disabled !== true &&
     options.json !== true &&
-    !(env["NO_COLOR"] !== undefined && env["NO_COLOR"] !== "") &&
+    !(env['NO_COLOR'] !== undefined && env['NO_COLOR'] !== '') &&
     isTty(stream);
 
   let spinner: Ora | null = null;
@@ -66,7 +66,7 @@ export function createProgress(options: ProgressOptions = {}): Progress {
     restoreCursor(stream);
   };
   if (enabled && options.installExitGuard !== false) {
-    process.once("exit", guard);
+    process.once('exit', guard);
   }
 
   return {
@@ -85,7 +85,7 @@ export function createProgress(options: ProgressOptions = {}): Progress {
     },
 
     write(line: string): void {
-      const payload = line.endsWith("\n") ? line : `${line}\n`;
+      const payload = line.endsWith('\n') ? line : `${line}\n`;
       if (!enabled || disposed || !spinner?.isSpinning) {
         stream.write(payload);
         return;
@@ -109,7 +109,7 @@ export function createProgress(options: ProgressOptions = {}): Progress {
       disposed = true;
       spinner?.stop();
       restoreCursor(stream);
-      process.removeListener("exit", guard);
+      process.removeListener('exit', guard);
     },
   };
 }

@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import {
   PROTOCOL_VERSION,
   TaskResultSchema,
@@ -10,7 +10,7 @@ import {
   type Task,
   type TaskRequest,
   type TaskResult,
-} from "../../src/manifest/index.js";
+} from '../../src/manifest/index.js';
 import {
   claudeAdapter,
   codexAdapter,
@@ -18,8 +18,8 @@ import {
   opencodeAdapter,
   resolveBinary,
   type ProviderAdapter,
-} from "../../src/providers/index.js";
-import { runProcess } from "../../src/executor/spawn.js";
+} from '../../src/providers/index.js';
+import { runProcess } from '../../src/executor/spawn.js';
 
 /** A process returns one result per task; these adapters are exercised with one. */
 const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
@@ -33,14 +33,14 @@ const one = (results: TaskResult[]): TaskResult => results[0] as TaskResult;
  * completeness gate.
  */
 
-const RUN = process.env["BAYA_CONTRACT"] === "1";
+const RUN = process.env['BAYA_CONTRACT'] === '1';
 const describeContract = RUN ? describe : describe.skip;
 
 const PROMPT = [
-  "Return only a JSON object matching the task_result schema you were given.",
+  'Return only a JSON object matching the task_result schema you were given.',
   'Set status to "ok", summary to "contract check passed", output to an empty string,',
-  "and every other array to []. Do not run any tools. Do not write any files.",
-].join(" ");
+  'and every other array to []. Do not run any tools. Do not write any files.',
+].join(' ');
 
 interface Case {
   id: ProviderId;
@@ -48,20 +48,20 @@ interface Case {
 }
 
 const CASES: Case[] = [
-  { id: "codex", adapter: codexAdapter },
-  { id: "claude", adapter: claudeAdapter },
-  { id: "opencode", adapter: opencodeAdapter },
-  { id: "copilot", adapter: copilotAdapter },
+  { id: 'codex', adapter: codexAdapter },
+  { id: 'claude', adapter: claudeAdapter },
+  { id: 'opencode', adapter: opencodeAdapter },
+  { id: 'copilot', adapter: copilotAdapter },
 ];
 
-describeContract("provider contract", () => {
+describeContract('provider contract', () => {
   let dir: string;
   let schemaPath: string;
   let schemaContents: string;
 
   beforeAll(() => {
-    dir = mkdtempSync(join(tmpdir(), "baya-contract-"));
-    schemaPath = writeTaskResultSchema(join(dir, ".baya", "schema"));
+    dir = mkdtempSync(join(tmpdir(), 'baya-contract-'));
+    schemaPath = writeTaskResultSchema(join(dir, '.baya', 'schema'));
     schemaContents = JSON.stringify(taskResultJsonSchema());
   });
 
@@ -78,21 +78,21 @@ describeContract("provider contract", () => {
       async () => {
         const bin = (found as { bin: string }).bin;
         const task: Task = {
-          id: "contract-check",
-          title: "Contract check",
+          id: 'contract-check',
+          title: 'Contract check',
           instruction: PROMPT,
           provider: id,
           model: null,
           depends_on: [],
-          access: "read-only",
+          access: 'read-only',
           cwd: null,
         };
         const request: TaskRequest = {
           baya: PROTOCOL_VERSION,
-          kind: "task_request",
-          run_id: "contract",
+          kind: 'task_request',
+          run_id: 'contract',
           task: { id: task.id, title: task.title, instruction: task.instruction },
-          workspace: { cwd: dir, access: "read-only", isolation: "shared" },
+          workspace: { cwd: dir, access: 'read-only', isolation: 'shared' },
           context: [],
           response_contract: { schema_path: schemaPath },
           constraints: { max_runtime_s: 150 },
@@ -113,10 +113,10 @@ describeContract("provider contract", () => {
 
         for (const file of plan.files ?? []) {
           mkdirSync(dirname(file.path), { recursive: true });
-          writeFileSync(file.path, file.contents, "utf8");
+          writeFileSync(file.path, file.contents, 'utf8');
         }
 
-        const events: Parameters<typeof adapter.extractResults>[0]["events"] = [];
+        const events: Parameters<typeof adapter.extractResults>[0]['events'] = [];
         const outcome = await runProcess({
           plan,
           timeoutMs: 150_000,
@@ -125,7 +125,7 @@ describeContract("provider contract", () => {
 
         let resultFileContents: string | null = null;
         try {
-          resultFileContents = readFileSync(resultFile, "utf8");
+          resultFileContents = readFileSync(resultFile, 'utf8');
         } catch {
           resultFileContents = null;
         }
@@ -143,7 +143,7 @@ describeContract("provider contract", () => {
         // The contract is structural: whatever the provider did, the adapter
         // must hand back something that parses as a task_result for this id.
         expect(TaskResultSchema.safeParse(result).success).toBe(true);
-        expect(result.task_id).toBe("contract-check");
+        expect(result.task_id).toBe('contract-check');
         // eslint-disable-next-line no-console
         console.log(`[contract] ${id}: status=${result.status} — ${result.summary}`);
       },

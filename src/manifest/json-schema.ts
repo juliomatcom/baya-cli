@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync, renameSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync, writeFileSync, renameSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   ACCESS_LEVELS,
   NOTE_SEVERITIES,
@@ -7,7 +7,7 @@ import {
   PROVIDER_IDS,
   TASK_ID_PATTERN,
   TASK_STATUSES,
-} from "./schemas.js";
+} from './schemas.js';
 
 /**
  * The `task_result` contract as JSON Schema, written to `.baya/schema/` at
@@ -19,90 +19,90 @@ import {
  * `json-schema.test.ts` asserts the property set matches the zod shape, so the
  * two cannot diverge unnoticed.
  */
-export const TASK_RESULT_SCHEMA_FILENAME = "task_result.schema.json";
-export const TASK_RESULT_BATCH_SCHEMA_FILENAME = "task_result_batch.schema.json";
-export const PLAN_DRAFT_SCHEMA_FILENAME = "plan_draft.schema.json";
+export const TASK_RESULT_SCHEMA_FILENAME = 'task_result.schema.json';
+export const TASK_RESULT_BATCH_SCHEMA_FILENAME = 'task_result_batch.schema.json';
+export const PLAN_DRAFT_SCHEMA_FILENAME = 'plan_draft.schema.json';
 
 export function taskResultJsonSchema(): Record<string, unknown> {
   return {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    title: "baya task_result",
-    type: "object",
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    title: 'baya task_result',
+    type: 'object',
     additionalProperties: false,
     required: [
-      "baya",
-      "kind",
-      "task_id",
-      "status",
-      "summary",
-      "output",
-      "notes",
-      "question",
-      "error",
-      "artifacts",
-      "files_changed",
+      'baya',
+      'kind',
+      'task_id',
+      'status',
+      'summary',
+      'output',
+      'notes',
+      'question',
+      'error',
+      'artifacts',
+      'files_changed',
     ],
     properties: {
-      baya: { type: "string", const: PROTOCOL_VERSION },
-      kind: { type: "string", const: "task_result" },
-      task_id: { type: "string" },
-      status: { type: "string", enum: [...TASK_STATUSES] },
+      baya: { type: 'string', const: PROTOCOL_VERSION },
+      kind: { type: 'string', const: 'task_result' },
+      task_id: { type: 'string' },
+      status: { type: 'string', enum: [...TASK_STATUSES] },
       summary: {
-        type: "string",
+        type: 'string',
         description:
-          "One or two sentences on what was done. Shown in the terminal; keep the first line under 120 characters.",
+          'One or two sentences on what was done. Shown in the terminal; keep the first line under 120 characters.',
       },
       output: {
-        type: "string",
-        description: "The full result as Markdown. Downstream tasks read this.",
+        type: 'string',
+        description: 'The full result as Markdown. Downstream tasks read this.',
       },
       notes: {
-        type: "array",
+        type: 'array',
         description:
-          "Anything a human should know that is neither a failure nor a blocking question: caveats, risks, assumptions you had to make, follow-up work you noticed. Empty array when there is nothing to raise.",
+          'Anything a human should know that is neither a failure nor a blocking question: caveats, risks, assumptions you had to make, follow-up work you noticed. Empty array when there is nothing to raise.',
         items: {
-          type: "object",
+          type: 'object',
           additionalProperties: false,
-          required: ["severity", "message"],
+          required: ['severity', 'message'],
           properties: {
-            severity: { type: "string", enum: [...NOTE_SEVERITIES] },
-            message: { type: "string" },
+            severity: { type: 'string', enum: [...NOTE_SEVERITIES] },
+            message: { type: 'string' },
           },
         },
       },
       question: {
-        type: ["object", "null"],
+        type: ['object', 'null'],
         additionalProperties: false,
-        required: ["text", "options", "default"],
+        required: ['text', 'options', 'default'],
         properties: {
-          text: { type: "string" },
-          options: { type: ["array", "null"], items: { type: "string" } },
-          default: { type: ["string", "null"] },
+          text: { type: 'string' },
+          options: { type: ['array', 'null'], items: { type: 'string' } },
+          default: { type: ['string', 'null'] },
         },
       },
       error: {
-        type: ["object", "null"],
+        type: ['object', 'null'],
         additionalProperties: false,
-        required: ["message", "retryable"],
+        required: ['message', 'retryable'],
         properties: {
-          message: { type: "string" },
-          retryable: { type: "boolean" },
+          message: { type: 'string' },
+          retryable: { type: 'boolean' },
         },
       },
       artifacts: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "object",
+          type: 'object',
           additionalProperties: false,
-          required: ["path", "kind", "description"],
+          required: ['path', 'kind', 'description'],
           properties: {
-            path: { type: "string" },
-            kind: { type: "string" },
-            description: { type: ["string", "null"] },
+            path: { type: 'string' },
+            kind: { type: 'string' },
+            description: { type: ['string', 'null'] },
           },
         },
       },
-      files_changed: { type: "array", items: { type: "string" } },
+      files_changed: { type: 'array', items: { type: 'string' } },
     },
   };
 }
@@ -124,15 +124,15 @@ export function taskResultBatchJsonSchema(): Record<string, unknown> {
   void _title;
   return {
     $schema,
-    title: "baya task_result_batch",
-    type: "object",
+    title: 'baya task_result_batch',
+    type: 'object',
     additionalProperties: false,
-    required: ["baya", "kind", "results"],
+    required: ['baya', 'kind', 'results'],
     properties: {
-      baya: { type: "string", const: PROTOCOL_VERSION },
-      kind: { type: "string", const: "task_result_batch" },
+      baya: { type: 'string', const: PROTOCOL_VERSION },
+      kind: { type: 'string', const: 'task_result_batch' },
       results: {
-        type: "array",
+        type: 'array',
         description:
           "One object per task you were given, each with that task's own id in `task_id`. A task you did not complete still needs an entry, with status 'failed' or 'needs_input'.",
         items: item,
@@ -146,7 +146,7 @@ export function writeTaskResultBatchSchema(schemaDir: string): string {
   const target = join(schemaDir, TASK_RESULT_BATCH_SCHEMA_FILENAME);
   mkdirSync(dirname(target), { recursive: true });
   const tmp = `${target}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(taskResultBatchJsonSchema(), null, 2)}\n`, "utf8");
+  writeFileSync(tmp, `${JSON.stringify(taskResultBatchJsonSchema(), null, 2)}\n`, 'utf8');
   renameSync(tmp, target);
   return target;
 }
@@ -156,7 +156,7 @@ export function writeTaskResultSchema(schemaDir: string): string {
   const target = join(schemaDir, TASK_RESULT_SCHEMA_FILENAME);
   mkdirSync(dirname(target), { recursive: true });
   const tmp = `${target}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(taskResultJsonSchema(), null, 2)}\n`, "utf8");
+  writeFileSync(tmp, `${JSON.stringify(taskResultJsonSchema(), null, 2)}\n`, 'utf8');
   renameSync(tmp, target);
   return target;
 }
@@ -170,60 +170,60 @@ export function writeTaskResultSchema(schemaDir: string): string {
  */
 export function planDraftJsonSchema(): Record<string, unknown> {
   return {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    title: "baya plan draft",
-    type: "object",
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    title: 'baya plan draft',
+    type: 'object',
     additionalProperties: false,
-    required: ["tasks"],
+    required: ['tasks'],
     properties: {
       tasks: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "object",
+          type: 'object',
           additionalProperties: false,
           required: [
-            "id",
-            "title",
-            "instruction",
-            "provider",
-            "model",
-            "depends_on",
-            "access",
-            "cwd",
+            'id',
+            'title',
+            'instruction',
+            'provider',
+            'model',
+            'depends_on',
+            'access',
+            'cwd',
           ],
           properties: {
             id: {
-              type: "string",
+              type: 'string',
               pattern: TASK_ID_PATTERN.source,
-              description: "kebab-case, unique across the plan",
+              description: 'kebab-case, unique across the plan',
             },
-            title: { type: "string" },
+            title: { type: 'string' },
             instruction: {
-              type: "string",
+              type: 'string',
               description:
-                "A full, self-contained prompt. Upstream results arrive separately as context; do not restate them here.",
+                'A full, self-contained prompt. Upstream results arrive separately as context; do not restate them here.',
             },
             provider: {
-              type: ["string", "null"],
+              type: ['string', 'null'],
               enum: [...PROVIDER_IDS, null],
               description: "null means use the run's default provider",
             },
             model: {
-              type: ["string", "null"],
-              description: "null means provider default",
+              type: ['string', 'null'],
+              description: 'null means provider default',
             },
             depends_on: {
-              type: "array",
-              items: { type: "string" },
-              description: "Task ids that must succeed first. Must be acyclic.",
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Task ids that must succeed first. Must be acyclic.',
             },
             access: {
-              type: "string",
+              type: 'string',
               enum: [...ACCESS_LEVELS],
               description:
-                "read-write if the task modifies the workspace OR runs anything that writes as a side effect (a test suite, a build, a linter, an install). read-only only for pure reading.",
+                'read-write if the task modifies the workspace OR runs anything that writes as a side effect (a test suite, a build, a linter, an install). read-only only for pure reading.',
             },
-            cwd: { type: ["string", "null"] },
+            cwd: { type: ['string', 'null'] },
           },
         },
       },
@@ -236,7 +236,7 @@ export function writePlanDraftSchema(schemaDir: string): string {
   const target = join(schemaDir, PLAN_DRAFT_SCHEMA_FILENAME);
   mkdirSync(dirname(target), { recursive: true });
   const tmp = `${target}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(planDraftJsonSchema(), null, 2)}\n`, "utf8");
+  writeFileSync(tmp, `${JSON.stringify(planDraftJsonSchema(), null, 2)}\n`, 'utf8');
   renameSync(tmp, target);
   return target;
 }

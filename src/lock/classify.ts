@@ -22,7 +22,7 @@ export interface ClassifyContext {
   isAlive: (pid: number) => boolean;
 }
 
-export type LockVerdict = "live" | "stale";
+export type LockVerdict = 'live' | 'stale';
 
 /** Heartbeat age past which we consult the holder's pid. */
 export const DEFAULT_STALE_AFTER_MS = 30_000;
@@ -46,22 +46,22 @@ export function classifyLock(
 
   // A heartbeat from the future means clock skew. Treat it as live: waiting
   // costs time, whereas guessing wrong corrupts a working tree.
-  if (age < 0) return "live";
-  if (age < staleAfterMs) return "live";
+  if (age < 0) return 'live';
+  if (age < staleAfterMs) return 'live';
 
-  return ctx.isAlive(info.pid) ? "live" : "stale";
+  return ctx.isAlive(info.pid) ? 'live' : 'stale';
 }
 
 /** Structural validation of a parsed lock file. Unknown shapes are not trusted. */
 export function isLockInfo(value: unknown): value is LockInfo {
-  if (value === null || typeof value !== "object") return false;
+  if (value === null || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v["token"] === "string" &&
-    typeof v["pid"] === "number" &&
-    typeof v["host"] === "string" &&
-    typeof v["owner"] === "string" &&
-    typeof v["acquiredAt"] === "number" &&
-    typeof v["heartbeatAt"] === "number"
+    typeof v['token'] === 'string' &&
+    typeof v['pid'] === 'number' &&
+    typeof v['host'] === 'string' &&
+    typeof v['owner'] === 'string' &&
+    typeof v['acquiredAt'] === 'number' &&
+    typeof v['heartbeatAt'] === 'number'
   );
 }

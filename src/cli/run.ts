@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { cpus } from "node:os";
-import { resolve as resolvePath } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpus } from 'node:os';
+import { resolve as resolvePath } from 'node:path';
 import {
   validateManifest,
   writePlanDraftSchema,
@@ -8,28 +8,28 @@ import {
   writeTaskResultSchema,
   type Manifest,
   type ProviderId,
-} from "../manifest/index.js";
+} from '../manifest/index.js';
 import {
   createLogger,
   resolveStderrLevel,
   type LogLine,
   type Logger,
-} from "../log/index.js";
-import { FileLock } from "../lock/index.js";
-import { DEFAULT_MEMORY_BUDGET } from "../memory/index.js";
+} from '../log/index.js';
+import { FileLock } from '../lock/index.js';
+import { DEFAULT_MEMORY_BUDGET } from '../memory/index.js';
 import {
   checkTaskText,
   plan as planTaskList,
   readSource,
   runPlannerProvider,
-} from "../planner/index.js";
+} from '../planner/index.js';
 import {
   BUILTIN_CATALOG,
   enumerateModels,
   mergeCatalog,
   opencodeCatalog,
   type Registry,
-} from "../providers/index.js";
+} from '../providers/index.js';
 import {
   DEFAULT_GROUP_SIZE,
   DEFAULT_RETRIES,
@@ -40,7 +40,7 @@ import {
   runPaths,
   runSequential,
   type RunState,
-} from "../executor/index.js";
+} from '../executor/index.js';
 import {
   buildReport,
   confirmPlan,
@@ -52,18 +52,18 @@ import {
   resolveRunModel,
   runModelGate,
   type Progress,
-} from "../ui/index.js";
-import { createTheme } from "../ui/theme.js";
+} from '../ui/index.js';
+import { createTheme } from '../ui/theme.js';
 import {
   binOverrides as binOverridesFrom,
   loadConfig,
   nonInteractiveDefault,
   runWizard,
   wizardDecision,
-} from "../config/index.js";
-import type { ParsedArgs } from "./args.js";
-import { installInterruptHandlers } from "./interrupt.js";
-import { createGroupSpinner } from "./spinner.js";
+} from '../config/index.js';
+import type { ParsedArgs } from './args.js';
+import { installInterruptHandlers } from './interrupt.js';
+import { createGroupSpinner } from './spinner.js';
 
 /**
  * `baya run` — the walking skeleton's spine.
@@ -94,7 +94,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   const { args, cwd, env, io, registry } = options;
   const { flags } = args;
   const maxParallel = flags.maxParallel ?? Math.min(4, cpus().length);
-  const theme = createTheme(flags.noColor || env["NO_COLOR"] ? "never" : "auto");
+  const theme = createTheme(flags.noColor || env['NO_COLOR'] ? 'never' : 'auto');
 
   const progress: Progress = createProgress({
     stream: io.stderr,
@@ -109,7 +109,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   // cleared and repainted around it (conventions.md #16b).
   const stderrSink = {
     write(chunk: string | Uint8Array): boolean {
-      progress.write(String(chunk).replace(/\n$/, ""));
+      progress.write(String(chunk).replace(/\n$/, ''));
       return true;
     },
   } as unknown as NodeJS.WritableStream;
@@ -138,7 +138,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
 
   if (defaultProvider === null) {
     const decision = wizardDecision({
-      command: flags.dryRun ? "plan" : "run",
+      command: flags.dryRun ? 'plan' : 'run',
       userConfigExists: loaded.userConfigExists,
       stdinIsTty: io.stdinIsTty,
       stdoutIsTty: io.stdoutIsTty,
@@ -152,7 +152,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       // Build the catalog once: hardcoded lists + whatever `opencode models`
       // returns. The wizard shows it and caches it into the user config so
       // later runs resolve model names without any probe.
-      const opencodeBin = statuses.find((s) => s.id === "opencode")?.resolved?.bin;
+      const opencodeBin = statuses.find((s) => s.id === 'opencode')?.resolved?.bin;
       const opencodeIds = opencodeBin ? await enumerateModels(opencodeBin) : [];
       const wizardCatalog = mergeCatalog(
         BUILTIN_CATALOG,
@@ -170,8 +170,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       io.stderr.write(`  saved defaults to ${result.configPath}\n`);
     } else {
       const outcome = nonInteractiveDefault(statuses);
-      if (outcome.kind === "error") {
-        io.stderr.write(`${theme.status("fail")} ${outcome.message}\n`);
+      if (outcome.kind === 'error') {
+        io.stderr.write(`${theme.status('fail')} ${outcome.message}\n`);
         return 2;
       }
       defaultProvider = outcome.provider;
@@ -189,7 +189,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   const modelNotes: string[] = [];
   for (const [label, provider, current, apply] of [
     [
-      "--default-model",
+      '--default-model',
       defaultProvider,
       defaultModel,
       (m: string | null) => {
@@ -197,7 +197,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       },
     ],
     [
-      "--planner-model",
+      '--planner-model',
       plannerProvider,
       plannerModel,
       (m: string | null) => {
@@ -237,30 +237,30 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     },
   });
 
-  logger.info("cli.invoked", { argv: process.argv.slice(2), cwd, run_id: runId });
+  logger.info('cli.invoked', { argv: process.argv.slice(2), cwd, run_id: runId });
   // The one line that answers "which agent, which model?" without --verbose.
-  logger.info("run.agent", {
+  logger.info('run.agent', {
     provider: defaultProvider,
     model: defaultModel,
     planner_provider: plannerProvider,
     planner_model: plannerModel,
   });
-  logger.debug("config.loaded", {
+  logger.debug('config.loaded', {
     sources: loaded.sources,
     user_config: loaded.userPath,
   });
-  for (const note of modelNotes) logger.info("run.model.resolved", { detail: note });
+  for (const note of modelNotes) logger.info('run.model.resolved', { detail: note });
   for (const warning of startupWarnings)
-    logger.warn("config.default.inferred", { message: warning });
+    logger.warn('config.default.inferred', { message: warning });
   for (const status of statuses) {
     if (status.resolved) {
-      logger.debug("provider.resolved", {
+      logger.debug('provider.resolved', {
         provider: status.id,
         bin: status.resolved.bin,
         source: status.resolved.source,
       });
     } else {
-      logger.debug("provider.missing", { provider: status.id });
+      logger.debug('provider.missing', { provider: status.id });
     }
   }
 
@@ -269,7 +269,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   if (!acquired.ok) {
     progress.dispose();
     const holder = acquired.holder;
-    logger.error("lock.refused", {
+    logger.error('lock.refused', {
       path: paths.lockFile,
       holder_pid: holder?.pid ?? null,
       holder_run: holder?.owner ?? null,
@@ -277,12 +277,12 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     });
     io.stderr.write(
       holder
-        ? `${theme.status("fail")} ${theme.fail("another baya is already running in this directory")}\n    pid ${holder.pid} · run ${holder.owner} · started ${Math.round((Date.now() - holder.acquiredAt) / 1000)}s ago\n`
-        : `${theme.status("fail")} ${theme.fail(`unreadable lock file at ${paths.lockFile} — delete it by hand (see \`baya doctor\`)`)}\n`,
+        ? `${theme.status('fail')} ${theme.fail('another baya is already running in this directory')}\n    pid ${holder.pid} · run ${holder.owner} · started ${Math.round((Date.now() - holder.acquiredAt) / 1000)}s ago\n`
+        : `${theme.status('fail')} ${theme.fail(`unreadable lock file at ${paths.lockFile} — delete it by hand (see \`baya doctor\`)`)}\n`,
     );
     return 2;
   }
-  logger.debug("lock.acquired", { path: paths.lockFile });
+  logger.debug('lock.acquired', { path: paths.lockFile });
 
   const activePids = new Set<number>();
   let interrupted = false;
@@ -295,7 +295,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     killGroup,
     checkpointInterrupted: () => {
       interrupted = true;
-      store?.setStatus("interrupted");
+      store?.setStatus('interrupted');
     },
     releaseLock: () => lock.release(),
     exit: (code) => process.exit(code),
@@ -308,11 +308,11 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
 
     // ---- plan
     let manifest: Manifest;
-    let planOrigin: "planner" | "fallback" | "file" = "planner";
+    let planOrigin: 'planner' | 'fallback' | 'file' = 'planner';
 
     if (flags.planIn) {
       const parsed: unknown = JSON.parse(
-        readFileSync(resolvePath(cwd, flags.planIn), "utf8"),
+        readFileSync(resolvePath(cwd, flags.planIn), 'utf8'),
       );
       const validated = validateManifest(parsed, {
         allowlist: registry.ids,
@@ -320,18 +320,18 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       });
       if (!validated.ok) {
         for (const error of validated.errors) {
-          logger.error("plan.validation.failed", { message: error.message });
-          io.stderr.write(`${theme.status("fail")} ${theme.fail(error.message)}\n`);
+          logger.error('plan.validation.failed', { message: error.message });
+          io.stderr.write(`${theme.status('fail')} ${theme.fail(error.message)}\n`);
         }
         return 2;
       }
       manifest = validated.manifest;
-      planOrigin = "file";
-      logger.info("plan.validated", { tasks: manifest.tasks.length, origin: "plan-in" });
+      planOrigin = 'file';
+      logger.info('plan.validated', { tasks: manifest.tasks.length, origin: 'plan-in' });
     } else {
       if (args.file === null) {
         io.stderr.write(
-          `${theme.status("fail")} ${theme.fail("no task list given. Try `baya ./tasks.md`.")}\n`,
+          `${theme.status('fail')} ${theme.fail('no task list given. Try `baya ./tasks.md`.')}\n`,
         );
         return 2;
       }
@@ -341,19 +341,19 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         read = readSource(sourcePath);
       } catch {
         io.stderr.write(
-          `${theme.status("fail")} ${theme.fail(`cannot read ${sourcePath}`)}\n`,
+          `${theme.status('fail')} ${theme.fail(`cannot read ${sourcePath}`)}\n`,
         );
         return 2;
       }
       const contentProblem = checkTaskText(read.taskText, sourcePath);
       if (contentProblem !== null) {
-        logger.error("source.unusable", { path: sourcePath, reason: contentProblem });
-        io.stderr.write(`${theme.status("fail")} ${theme.fail(contentProblem)}\n`);
+        logger.error('source.unusable', { path: sourcePath, reason: contentProblem });
+        io.stderr.write(`${theme.status('fail')} ${theme.fail(contentProblem)}\n`);
         return 2;
       }
-      logger.info("source.read", {
+      logger.info('source.read', {
         path: sourcePath,
-        bytes: Buffer.byteLength(read.taskText, "utf8"),
+        bytes: Buffer.byteLength(read.taskText, 'utf8'),
         sha256: read.source.sha256,
       });
 
@@ -367,7 +367,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         : null;
       if (!plannerAdapter || !plannerResolved) {
         io.stderr.write(
-          `${theme.status("fail")} ${theme.fail(`planner provider "${String(plannerProvider)}" is not available — run \`baya doctor\``)}\n`,
+          `${theme.status('fail')} ${theme.fail(`planner provider "${String(plannerProvider)}" is not available — run \`baya doctor\``)}\n`,
         );
         return 2;
       }
@@ -390,8 +390,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         logger,
         // Inlined only for a planner that enforces nothing. Naming a schema by
         // path sends the agent to read it, which costs a whole context re-send.
-        ...(plannerAdapter.capabilities.structuredOutput === "none"
-          ? { schema: readFileSync(planSchemaPath, "utf8") }
+        ...(plannerAdapter.capabilities.structuredOutput === 'none'
+          ? { schema: readFileSync(planSchemaPath, 'utf8') }
           : {}),
         providers: registry.ids,
         defaultProvider: defaultProvider as ProviderId,
@@ -413,11 +413,11 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
                 (marker) =>
                   `    ${theme.note(`L${marker.line}`)} ${theme.note(marker.text.slice(0, 90))}`,
               )
-              .join("\n") +
+              .join('\n') +
             (planned.doneMarkers.length > shown.length
               ? `\n    ${theme.note(`+${planned.doneMarkers.length - shown.length} more`)}`
-              : "") +
-            "\n",
+              : '') +
+            '\n',
         );
       }
     }
@@ -435,22 +435,22 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       theme,
       beforePrompt: () => progress.stop(),
     });
-    if (modelGate.decision === "aborted") {
+    if (modelGate.decision === 'aborted') {
       progress.stop();
-      logger.warn("plan.model.unresolved", { message: modelGate.message });
-      io.stderr.write(`${theme.status("fail")} ${theme.fail(modelGate.message)}\n`);
+      logger.warn('plan.model.unresolved', { message: modelGate.message });
+      io.stderr.write(`${theme.status('fail')} ${theme.fail(modelGate.message)}\n`);
       return 2;
     }
     manifest = modelGate.manifest;
     for (const note of modelGate.notes) {
-      logger.info("plan.model.resolved", { detail: note });
+      logger.info('plan.model.resolved', { detail: note });
     }
 
-    writeFileSync(paths.manifest, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    writeFileSync(paths.manifest, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
     if (flags.planOut) {
       const target = resolvePath(cwd, flags.planOut);
-      writeFileSync(target, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+      writeFileSync(target, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
       io.stderr.write(`  wrote ${target}\n`);
       return 0;
     }
@@ -458,7 +458,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- the gate
     progress.stop();
     io.stderr.write(
-      `\n  ${theme.taskId("baya")} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ""}${planOrigin === "fallback" ? theme.warn(" · linear fallback") : ""}\n\n`,
+      `\n  ${theme.taskId('baya')} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ''}${planOrigin === 'fallback' ? theme.warn(' · linear fallback') : ''}\n\n`,
     );
     io.stderr.write(
       `${renderDag(manifest, theme, defaultProvider as ProviderId, {
@@ -469,12 +469,12 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     );
 
     for (const note of modelGate.notes) {
-      io.stderr.write(`  ${theme.note("resolved")} ${note}\n`);
+      io.stderr.write(`  ${theme.note('resolved')} ${note}\n`);
     }
-    if (modelGate.notes.length > 0) io.stderr.write("\n");
+    if (modelGate.notes.length > 0) io.stderr.write('\n');
 
     if (flags.dryRun) {
-      logger.info("run.completed", { dry_run: true, tasks: manifest.tasks.length });
+      logger.info('run.completed', { dry_run: true, tasks: manifest.tasks.length });
       return 0;
     }
 
@@ -483,22 +483,22 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       stdinIsTty: io.stdinIsTty,
       beforePrompt: () => progress.stop(),
     });
-    if (gate.decision === "blocked") {
-      logger.warn("plan.rejected", { reason: "non-tty" });
-      io.stderr.write(`${theme.status("fail")} ${theme.fail(gate.message)}\n`);
+    if (gate.decision === 'blocked') {
+      logger.warn('plan.rejected', { reason: 'non-tty' });
+      io.stderr.write(`${theme.status('fail')} ${theme.fail(gate.message)}\n`);
       return 2;
     }
-    if (gate.decision === "rejected") {
-      logger.info("plan.rejected", { reason: "declined" });
+    if (gate.decision === 'rejected') {
+      logger.info('plan.rejected', { reason: 'declined' });
       return 0;
     }
-    logger.info("plan.confirmed", { tasks: manifest.tasks.length });
+    logger.info('plan.confirmed', { tasks: manifest.tasks.length });
 
     // ---- execute
     const initialState: RunState = {
       version: 1,
       run_id: runId,
-      status: "running",
+      status: 'running',
       started_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       source: manifest.source,
@@ -507,8 +507,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         planner: { provider: plannerProvider, model: plannerModel },
         defaults: { provider: defaultProvider, model: defaultModel },
         max_parallel: maxParallel,
-        isolation: "shared",
-        context_strategy: flags.contextStrategy ?? "link-only",
+        isolation: 'shared',
+        context_strategy: flags.contextStrategy ?? 'link-only',
         context_budget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
         memory: !flags.noMemory,
         memory_budget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
@@ -536,9 +536,9 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       ),
     };
     store = new StateStore(paths.state, initialState, () =>
-      logger.trace("state.checkpointed", { path: paths.state }),
+      logger.trace('state.checkpointed', { path: paths.state }),
     );
-    logger.info("run.created", { run_id: runId, source: manifest.source.path });
+    logger.info('run.created', { run_id: runId, source: manifest.source.path });
 
     const summaries = new Map<string, string>();
     const singleTask = manifest.tasks.length === 1;
@@ -555,7 +555,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       defaultProvider: defaultProvider as ProviderId,
       defaultModel,
       binOverrides,
-      contextStrategy: flags.contextStrategy ?? "link-only",
+      contextStrategy: flags.contextStrategy ?? 'link-only',
       contextBudget: flags.contextBudget ?? CONTEXT_BUDGET_DEFAULT,
       memory: !flags.noMemory,
       memoryBudget: flags.memoryBudget ?? MEMORY_BUDGET_DEFAULT,
@@ -575,7 +575,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
         if (
           (singleTask || flags.verbose) &&
           !flags.quiet &&
-          result.output.trim() !== ""
+          result.output.trim() !== ''
         ) {
           progress.write(`\n${result.output.trim()}\n`);
         }
@@ -584,23 +584,23 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
 
     const finalTotals = store.get().totals;
     store.setStatus(
-      finalTotals.failed > 0 ? "failed" : finalTotals.parked > 0 ? "paused" : "completed",
+      finalTotals.failed > 0 ? 'failed' : finalTotals.parked > 0 ? 'paused' : 'completed',
     );
     const state = store.get() as RunState;
     const report = buildReport(state, manifest, {
       runDir: paths.runDir,
       summaries,
     });
-    writeFileSync(paths.report, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    writeFileSync(paths.report, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
     stopTicker();
 
     logger.info(
-      state.status === "failed"
-        ? "run.failed"
-        : state.status === "paused"
-          ? "run.paused"
-          : "run.completed",
+      state.status === 'failed'
+        ? 'run.failed'
+        : state.status === 'paused'
+          ? 'run.paused'
+          : 'run.completed',
       {
         succeeded: state.totals.succeeded,
         failed: state.totals.failed,

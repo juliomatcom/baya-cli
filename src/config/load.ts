@@ -1,14 +1,14 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
-import { ProviderIdSchema, type ProviderId } from "../manifest/index.js";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { ProviderIdSchema, type ProviderId } from '../manifest/index.js';
 import {
   BUILTIN_CONFIG,
   CONFIG_VERSION,
   ConfigFileSchema,
   type ConfigFile,
   type ResolvedConfig,
-} from "./schema.js";
-import { userConfigPath } from "./paths.js";
+} from './schema.js';
+import { userConfigPath } from './paths.js';
 
 /**
  * Layered config (config.md §Precedence). Highest wins:
@@ -17,7 +17,7 @@ import { userConfigPath } from "./paths.js";
  * Every value records the layer it came from, so `baya config --show` can
  * explain itself instead of printing an unattributed blob.
  */
-export const LAYER_NAMES = ["flags", "env", "user", "built-in"] as const;
+export const LAYER_NAMES = ['flags', 'env', 'user', 'built-in'] as const;
 export type LayerName = (typeof LAYER_NAMES)[number];
 
 export interface ConfigLayer {
@@ -48,16 +48,16 @@ export class ConfigError extends Error {
     message: string,
   ) {
     super(`${path}: ${message}`);
-    this.name = "ConfigError";
+    this.name = 'ConfigError';
   }
 }
 
 function readConfigFile(path: string): ConfigFile | null {
   let raw: string;
   try {
-    raw = readFileSync(path, "utf8");
+    raw = readFileSync(path, 'utf8');
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw new ConfigError(path, (err as Error).message);
   }
 
@@ -71,8 +71,8 @@ function readConfigFile(path: string): ConfigFile | null {
   const result = ConfigFileSchema.safeParse(parsed);
   if (!result.success) {
     const issue = result.error.issues[0];
-    const key = issue?.path.join(".") ?? "<root>";
-    throw new ConfigError(path, `invalid key "${key}" — ${issue?.message ?? "unknown"}`);
+    const key = issue?.path.join('.') ?? '<root>';
+    throw new ConfigError(path, `invalid key "${key}" — ${issue?.message ?? 'unknown'}`);
   }
   return result.data;
 }
@@ -95,32 +95,32 @@ function providerOrThrow(value: string, origin: string): ProviderId {
 function envLayer(env: NodeJS.ProcessEnv): ConfigFile {
   const values: ConfigFile = {};
   const set = (
-    section: "defaults" | "planner",
-    key: "provider" | "model",
+    section: 'defaults' | 'planner',
+    key: 'provider' | 'model',
     raw: string | undefined,
   ): void => {
-    if (raw === undefined || raw === "") return;
+    if (raw === undefined || raw === '') return;
     const target = (values[section] ??= {});
-    if (key === "provider") target.provider = providerOrThrow(raw, "env");
+    if (key === 'provider') target.provider = providerOrThrow(raw, 'env');
     else target.model = raw;
   };
-  set("defaults", "provider", env["BAYA_DEFAULT_PROVIDER"]);
-  set("defaults", "model", env["BAYA_DEFAULT_MODEL"]);
-  set("planner", "provider", env["BAYA_PLANNER_PROVIDER"]);
-  set("planner", "model", env["BAYA_PLANNER_MODEL"]);
+  set('defaults', 'provider', env['BAYA_DEFAULT_PROVIDER']);
+  set('defaults', 'model', env['BAYA_DEFAULT_MODEL']);
+  set('planner', 'provider', env['BAYA_PLANNER_PROVIDER']);
+  set('planner', 'model', env['BAYA_PLANNER_MODEL']);
   return values;
 }
 
 function flagLayer(flags: ConfigFlags): ConfigFile {
   const values: ConfigFile = {};
   if (flags.defaultProvider) {
-    values.defaults = { provider: providerOrThrow(flags.defaultProvider, "flags") };
+    values.defaults = { provider: providerOrThrow(flags.defaultProvider, 'flags') };
   }
   if (flags.defaultModel) {
     values.defaults = { ...values.defaults, model: flags.defaultModel };
   }
   if (flags.plannerProvider) {
-    values.planner = { provider: providerOrThrow(flags.plannerProvider, "flags") };
+    values.planner = { provider: providerOrThrow(flags.plannerProvider, 'flags') };
   }
   if (flags.plannerModel) {
     values.planner = { ...values.planner, model: flags.plannerModel };
@@ -141,10 +141,10 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
   const user = readConfigFile(userPath);
 
   const layers: ConfigLayer[] = [
-    { name: "flags", origin: "command line", values: flagLayer(options.flags ?? {}) },
-    { name: "env", origin: "BAYA_* environment", values: envLayer(env) },
-    { name: "user", origin: userPath, values: user ?? {} },
-    { name: "built-in", origin: "built-in defaults", values: {} },
+    { name: 'flags', origin: 'command line', values: flagLayer(options.flags ?? {}) },
+    { name: 'env', origin: 'BAYA_* environment', values: envLayer(env) },
+    { name: 'user', origin: userPath, values: user ?? {} },
+    { name: 'built-in', origin: 'built-in defaults', values: {} },
   ];
 
   const config: ResolvedConfig = {
@@ -155,15 +155,15 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
     modelCatalog: {},
   };
   const sources: Record<string, LayerName> = {
-    "defaults.provider": "built-in",
-    "defaults.model": "built-in",
-    "planner.provider": "built-in",
-    "planner.model": "built-in",
+    'defaults.provider': 'built-in',
+    'defaults.model': 'built-in',
+    'planner.provider': 'built-in',
+    'planner.model': 'built-in',
   };
 
   // Lowest precedence first, so a higher layer simply overwrites.
   for (const layer of [...layers].reverse()) {
-    for (const section of ["defaults", "planner"] as const) {
+    for (const section of ['defaults', 'planner'] as const) {
       const values = layer.values[section];
       if (!values) continue;
       if (values.provider !== undefined) {
@@ -201,7 +201,7 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
   // who answered one setup question has answered this one too.
   if (config.planner.provider === null && config.defaults.provider !== null) {
     config.planner.provider = config.defaults.provider;
-    sources["planner.provider"] = sources["defaults.provider"] ?? "built-in";
+    sources['planner.provider'] = sources['defaults.provider'] ?? 'built-in';
   }
 
   return {
@@ -234,7 +234,7 @@ export function writeConfigFile(path: string, values: ConfigFile): void {
   mkdirSync(dirname(path), { recursive: true });
   const body = { version: CONFIG_VERSION, ...values };
   const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+  writeFileSync(tmp, `${JSON.stringify(body, null, 2)}\n`, 'utf8');
   renameSync(tmp, path);
 }
 
@@ -250,13 +250,13 @@ export function setConfigValue(
 ): string {
   const path = userConfigPath(env);
   const current = readConfigFile(path) ?? {};
-  const [section, field] = key.split(".");
+  const [section, field] = key.split('.');
 
   // `baya config set modelAliases.luna gpt-5.6-luna` — or `... null` to drop it.
-  if (section === "modelAliases" && field) {
+  if (section === 'modelAliases' && field) {
     const next: ConfigFile = { ...current, modelAliases: { ...current.modelAliases } };
     const map = next.modelAliases as Record<string, string>;
-    if (value === "null") delete map[field];
+    if (value === 'null') delete map[field];
     else map[field] = value;
     if (Object.keys(map).length === 0) delete next.modelAliases;
     writeConfigFile(path, next);
@@ -266,12 +266,12 @@ export function setConfigValue(
   // `baya config set modelCatalog.codex.gpt-5 "GPT-5, fast"` — the value is the
   // model's description; `... null` drops the entry. Same persistence rules as
   // the modelAliases branch: prune empty containers, write the user layer only.
-  if (section === "modelCatalog") {
-    const parts = key.split(".");
+  if (section === 'modelCatalog') {
+    const parts = key.split('.');
     const providerRaw = parts[1];
     // Model ids contain dots (`gpt-5.6-luna`), so the id is everything past the
     // provider segment, rejoined.
-    const modelId = parts.slice(2).join(".");
+    const modelId = parts.slice(2).join('.');
     if (!providerRaw || !modelId) {
       throw new ConfigError(path, `unknown config key "${key}"`);
     }
@@ -284,7 +284,7 @@ export function setConfigValue(
     const entries = [...(catalog[providerId] ?? [])];
     const idx = entries.findIndex((model) => model.id === modelId);
     const existing = idx === -1 ? undefined : entries[idx];
-    if (value === "null") {
+    if (value === 'null') {
       if (idx !== -1) entries.splice(idx, 1);
     } else if (existing) {
       entries[idx] = { ...existing, description: value };
@@ -298,16 +298,16 @@ export function setConfigValue(
     return path;
   }
 
-  if ((section !== "defaults" && section !== "planner") || !field) {
+  if ((section !== 'defaults' && section !== 'planner') || !field) {
     throw new ConfigError(path, `unknown config key "${key}"`);
   }
   const next: ConfigFile = { ...current, [section]: { ...current[section] } };
   const target = next[section] as { provider?: ProviderId | null; model?: string | null };
 
-  if (field === "provider") {
-    target.provider = value === "null" ? null : providerOrThrow(value, path);
-  } else if (field === "model") {
-    target.model = value === "null" ? null : value;
+  if (field === 'provider') {
+    target.provider = value === 'null' ? null : providerOrThrow(value, path);
+  } else if (field === 'model') {
+    target.model = value === 'null' ? null : value;
   } else {
     throw new ConfigError(path, `unknown config key "${key}"`);
   }

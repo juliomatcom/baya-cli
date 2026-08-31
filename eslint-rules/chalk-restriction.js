@@ -7,17 +7,17 @@
 export const CHALK_RESTRICTED_IMPORTS = {
   paths: [
     {
-      name: "chalk",
-      message: "chalk may only be imported in src/ui/theme.ts (conventions.md #11).",
+      name: 'chalk',
+      message: 'chalk may only be imported in src/ui/theme.ts (conventions.md #11).',
     },
     {
-      name: "ora",
-      message: "ora may only be imported in src/ui/progress.ts (conventions.md #16b).",
+      name: 'ora',
+      message: 'ora may only be imported in src/ui/progress.ts (conventions.md #16b).',
     },
     {
-      name: "@inquirer/prompts",
+      name: '@inquirer/prompts',
       message:
-        "@inquirer/prompts may only be imported in src/config/wizard.ts and src/ui/confirm.ts (conventions.md).",
+        '@inquirer/prompts may only be imported in src/config/wizard.ts and src/ui/confirm.ts (conventions.md).',
     },
   ],
 };

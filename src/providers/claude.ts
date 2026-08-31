@@ -1,13 +1,13 @@
-import { type ProviderEvent, type TaskResult } from "../manifest/index.js";
-import { stripAnsi } from "../log/index.js";
-import { extractResultFromText, parseResultJson, synthesizeFailure } from "./result.js";
+import { type ProviderEvent, type TaskResult } from '../manifest/index.js';
+import { stripAnsi } from '../log/index.js';
+import { extractResultFromText, parseResultJson, synthesizeFailure } from './result.js';
 import type {
   BuildRunInput,
   ExtractContext,
   ProviderAdapter,
   ProviderUsage,
   SpawnPlan,
-} from "./types.js";
+} from './types.js';
 
 /**
  * claude adapter (providers.md §claude, flags verified live 2026-08-28, v2.1.251).
@@ -34,7 +34,7 @@ function withoutSchemaKey(schemaContents: string): Record<string, unknown> {
  * The editing tools, withheld from a task granted only `read-only` access.
  * Bash is deliberately NOT in this list — see `permissionModeFor`.
  */
-const EDIT_TOOLS = ["Write", "Edit", "NotebookEdit"] as const;
+const EDIT_TOOLS = ['Write', 'Edit', 'NotebookEdit'] as const;
 
 /**
  * Non-interactive `-p` cannot prompt, so the mode has to pre-decide everything
@@ -57,7 +57,7 @@ const EDIT_TOOLS = ["Write", "Edit", "NotebookEdit"] as const;
  * is not equivalent — a task that must not touch the tree belongs on codex.
  */
 function permissionModeFor(input: BuildRunInput): string {
-  return input.dangerouslyAllowAll ? "bypassPermissions" : "auto";
+  return input.dangerouslyAllowAll ? 'bypassPermissions' : 'auto';
 }
 
 /**
@@ -69,47 +69,47 @@ function permissionModeFor(input: BuildRunInput): string {
  */
 function commonFlags(input: BuildRunInput, resuming = false): string[] {
   const argv = [
-    "-p",
-    "--output-format",
-    "json",
-    "--json-schema",
+    '-p',
+    '--output-format',
+    'json',
+    '--json-schema',
     // Inline JSON only — a file path is rejected. And no `$schema` meta-pointer:
     // claude's validator has no 2020-12 meta-schema loaded and fails with
     // "no schema with key or ref https://json-schema.org/draft/2020-12/schema".
     // It validates structurally without a declared dialect.
     JSON.stringify(withoutSchemaKey(input.schemaContents)),
-    "--permission-mode",
+    '--permission-mode',
     permissionModeFor(input),
   ];
   // Comma-joined, not spread: `--disallowed-tools` is variadic and would
   // otherwise swallow whatever flag follows it.
-  if (input.task.access === "read-only" && !input.dangerouslyAllowAll) {
-    argv.push("--disallowed-tools", EDIT_TOOLS.join(","));
+  if (input.task.access === 'read-only' && !input.dangerouslyAllowAll) {
+    argv.push('--disallowed-tools', EDIT_TOOLS.join(','));
   }
-  if (input.model !== null) argv.push("--model", input.model);
+  if (input.model !== null) argv.push('--model', input.model);
   // `--session-id` pre-assigns the id so resume needs no event parsing (M4.1).
   if (!resuming && input.sessionId !== undefined) {
-    argv.push("--session-id", input.sessionId);
+    argv.push('--session-id', input.sessionId);
   }
   return argv;
 }
 
-function classify(text: string): "rate_limit" | "auth" | "other" {
+function classify(text: string): 'rate_limit' | 'auth' | 'other' {
   const lower = text.toLowerCase();
   if (
-    lower.includes("rate limit") ||
-    lower.includes("429") ||
-    lower.includes("overloaded")
+    lower.includes('rate limit') ||
+    lower.includes('429') ||
+    lower.includes('overloaded')
   )
-    return "rate_limit";
+    return 'rate_limit';
   if (
-    lower.includes("unauthorized") ||
-    lower.includes("401") ||
-    lower.includes("authentication") ||
-    lower.includes("api key")
+    lower.includes('unauthorized') ||
+    lower.includes('401') ||
+    lower.includes('authentication') ||
+    lower.includes('api key')
   )
-    return "auth";
-  return "other";
+    return 'auth';
+  return 'other';
 }
 
 /** The one JSON object `--output-format json` prints, parsed. */
@@ -131,13 +131,13 @@ function parseObject(raw: string): ClaudeResult | null {
   } catch {
     return null;
   }
-  return value !== null && typeof value === "object" ? (value as ClaudeResult) : null;
+  return value !== null && typeof value === 'object' ? (value as ClaudeResult) : null;
 }
 
 function lastFinalObject(events: ProviderEvent[]): ClaudeResult | null {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
-    if (event && event.t === "final") {
+    if (event && event.t === 'final') {
       const parsed = parseObject(event.raw);
       if (parsed) return parsed;
     }
@@ -148,9 +148,9 @@ function lastFinalObject(events: ProviderEvent[]): ClaudeResult | null {
 function deniedTools(obj: ClaudeResult): string[] {
   if (!Array.isArray(obj.permission_denials)) return [];
   return obj.permission_denials.map((entry) => {
-    if (entry !== null && typeof entry === "object") {
+    if (entry !== null && typeof entry === 'object') {
       const record = entry as Record<string, unknown>;
-      return String(record["tool_name"] ?? record["tool"] ?? JSON.stringify(entry));
+      return String(record['tool_name'] ?? record['tool'] ?? JSON.stringify(entry));
     }
     return String(entry);
   });
@@ -170,7 +170,7 @@ function withDenialNote(results: TaskResult[], denied: string[]): TaskResult[] {
   for (const name of denied) counts.set(name, (counts.get(name) ?? 0) + 1);
   const listed = [...counts.entries()]
     .map(([name, n]) => (n > 1 ? `${name} \u00d7${n}` : name))
-    .join(", ");
+    .join(', ');
   // Every task in the process shares its permission set, so every task in the
   // process shares the caveat.
   return results.map((result) => ({
@@ -178,7 +178,7 @@ function withDenialNote(results: TaskResult[], denied: string[]): TaskResult[] {
     notes: [
       ...result.notes,
       {
-        severity: "warn" as const,
+        severity: 'warn' as const,
         message: `claude was denied permission for: ${listed}. Whatever the task could not run, it could not verify.`,
       },
     ],
@@ -186,31 +186,31 @@ function withDenialNote(results: TaskResult[], denied: string[]): TaskResult[] {
 }
 
 export const claudeAdapter: ProviderAdapter = {
-  id: "claude",
+  id: 'claude',
 
   capabilities: {
-    promptDelivery: ["stdin", "argv"],
-    structuredOutput: "schema-inline",
-    events: "json",
-    sessionId: "preassign",
-    resume: "session",
+    promptDelivery: ['stdin', 'argv'],
+    structuredOutput: 'schema-inline',
+    events: 'json',
+    sessionId: 'preassign',
+    resume: 'session',
     // `--output-format json` is one object, so no `tool` events exist to read
     // and this adapter reports no commands. Its file changes still reach
     // memory through the protocol's own `files_changed`.
-    observations: "none",
+    observations: 'none',
     cwdFlag: false,
     modelFlag: true,
     // Subscription-throttled until measured under load (risk register).
     maxConcurrency: 1,
   },
 
-  installHint: "npm i -g @anthropic-ai/claude-code",
+  installHint: 'npm i -g @anthropic-ai/claude-code',
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
       argv: [input.bin, ...commonFlags(input)],
       cwd: input.cwd,
-      stdin: "pipe",
+      stdin: 'pipe',
       stdinData: input.prompt,
     };
   },
@@ -221,9 +221,9 @@ export const claudeAdapter: ProviderAdapter = {
    */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, "--resume", sessionId, ...commonFlags(input, true)],
+      argv: [input.bin, '--resume', sessionId, ...commonFlags(input, true)],
       cwd: input.cwd,
-      stdin: "pipe",
+      stdin: 'pipe',
       stdinData: answer,
     };
   },
@@ -235,27 +235,27 @@ export const claudeAdapter: ProviderAdapter = {
    */
   parseEvents(chunk: string): ProviderEvent[] {
     const out: ProviderEvent[] = [];
-    for (const line of chunk.split("\n")) {
+    for (const line of chunk.split('\n')) {
       const trimmed = stripAnsi(line).trim();
-      if (trimmed === "") continue;
+      if (trimmed === '') continue;
       const obj = parseObject(trimmed);
       if (!obj) {
-        out.push({ t: "unknown", raw: trimmed });
+        out.push({ t: 'unknown', raw: trimmed });
         continue;
       }
-      if (typeof obj.session_id === "string") {
-        out.push({ t: "session", id: obj.session_id });
+      if (typeof obj.session_id === 'string') {
+        out.push({ t: 'session', id: obj.session_id });
       }
       if (obj.is_error === true) {
         const message =
-          typeof obj.result === "string" && obj.result.trim() !== ""
+          typeof obj.result === 'string' && obj.result.trim() !== ''
             ? obj.result
-            : String(obj.subtype ?? "claude reported an error");
-        out.push({ t: "error", kind: classify(message), message });
-      } else if (typeof obj.result === "string" && obj.result.trim() !== "") {
-        out.push({ t: "text", text: obj.result });
+            : String(obj.subtype ?? 'claude reported an error');
+        out.push({ t: 'error', kind: classify(message), message });
+      } else if (typeof obj.result === 'string' && obj.result.trim() !== '') {
+        out.push({ t: 'text', text: obj.result });
       }
-      out.push({ t: "final", raw: trimmed });
+      out.push({ t: 'final', raw: trimmed });
     }
     return out;
   },
@@ -268,7 +268,7 @@ export const claudeAdapter: ProviderAdapter = {
       // result too, and both rungs below return early.
       const denied = deniedTools(obj);
       // Rung 1: the schema-enforced object claude parsed for us.
-      if (obj.structured_output !== null && typeof obj.structured_output === "object") {
+      if (obj.structured_output !== null && typeof obj.structured_output === 'object') {
         const parsed = parseResultJson(
           ctx.taskIds,
           JSON.stringify(obj.structured_output),
@@ -277,39 +277,39 @@ export const claudeAdapter: ProviderAdapter = {
       }
       // Rungs 2–3: `.result` is the same payload as a string — often clean
       // JSON, sometimes prose around a fenced block.
-      if (typeof obj.result === "string") {
+      if (typeof obj.result === 'string') {
         const fromText = extractResultFromText(ctx.taskIds, obj.result);
         if (fromText) return withDenialNote(fromText.results, denied);
       }
       if (denied.length > 0) {
         return synthesizeFailure(
           ctx.taskIds,
-          `claude was denied permission for: ${denied.join(", ")}. Raise --permission-mode or pass --dangerously-allow-all.`,
+          `claude was denied permission for: ${denied.join(', ')}. Raise --permission-mode or pass --dangerously-allow-all.`,
           { retryable: false },
         );
       }
       if (obj.is_error === true) {
         const message =
-          typeof obj.result === "string" && obj.result.trim() !== ""
+          typeof obj.result === 'string' && obj.result.trim() !== ''
             ? obj.result
-            : `claude error (${String(obj.subtype ?? "unknown")})`;
+            : `claude error (${String(obj.subtype ?? 'unknown')})`;
         return synthesizeFailure(ctx.taskIds, message, {
-          retryable: classify(message) !== "auth",
+          retryable: classify(message) !== 'auth',
         });
       }
     }
 
-    const errorEvent = ctx.events.find((event) => event.t === "error");
-    if (errorEvent && errorEvent.t === "error") {
+    const errorEvent = ctx.events.find((event) => event.t === 'error');
+    if (errorEvent && errorEvent.t === 'error') {
       return synthesizeFailure(ctx.taskIds, errorEvent.message, {
-        retryable: errorEvent.kind !== "auth",
+        retryable: errorEvent.kind !== 'auth',
       });
     }
 
-    const detail = stripAnsi(ctx.stderr).trim().split("\n").slice(-3).join(" ").trim();
+    const detail = stripAnsi(ctx.stderr).trim().split('\n').slice(-3).join(' ').trim();
     return synthesizeFailure(
       ctx.taskIds,
-      `claude produced no parseable result (exit ${String(ctx.exitCode)})${detail ? `: ${detail}` : ""}`,
+      `claude produced no parseable result (exit ${String(ctx.exitCode)})${detail ? `: ${detail}` : ''}`,
     );
   },
 
@@ -317,15 +317,15 @@ export const claudeAdapter: ProviderAdapter = {
     const obj = lastFinalObject(events);
     if (!obj) return {};
     const out: ProviderUsage = {};
-    if (typeof obj.total_cost_usd === "number") out.cost_usd = obj.total_cost_usd;
-    if (obj.usage !== null && typeof obj.usage === "object") {
+    if (typeof obj.total_cost_usd === 'number') out.cost_usd = obj.total_cost_usd;
+    if (obj.usage !== null && typeof obj.usage === 'object') {
       const usage = obj.usage as Record<string, unknown>;
       const num = (key: string): number =>
-        typeof usage[key] === "number" ? (usage[key] as number) : 0;
-      const write = num("cache_creation_input_tokens");
-      const read = num("cache_read_input_tokens");
-      const input = num("input_tokens") + write + read;
-      const output = num("output_tokens");
+        typeof usage[key] === 'number' ? (usage[key] as number) : 0;
+      const write = num('cache_creation_input_tokens');
+      const read = num('cache_read_input_tokens');
+      const input = num('input_tokens') + write + read;
+      const output = num('output_tokens');
       if (input > 0) out.input_tokens = input;
       if (output > 0) out.output_tokens = output;
       if (write > 0) out.cache_write_input_tokens = write;

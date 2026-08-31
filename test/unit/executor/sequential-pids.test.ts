@@ -1,13 +1,13 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   writeTaskResultBatchSchema,
   writeTaskResultSchema,
   type Manifest,
-} from "../../../src/manifest/index.js";
-import { createRegistry } from "../../../src/providers/index.js";
-import { codexAdapter } from "../../../src/providers/codex.js";
+} from '../../../src/manifest/index.js';
+import { createRegistry } from '../../../src/providers/index.js';
+import { codexAdapter } from '../../../src/providers/codex.js';
 import {
   StateStore,
   emptyTaskEntry,
@@ -15,9 +15,9 @@ import {
   runPaths,
   runSequential,
   type RunState,
-} from "../../../src/executor/index.js";
-import { captureLogger } from "../../helpers/logger.js";
-import { FAKE_PROVIDER } from "../../helpers/runCli.js";
+} from '../../../src/executor/index.js';
+import { captureLogger } from '../../helpers/logger.js';
+import { FAKE_PROVIDER } from '../../helpers/runCli.js';
 
 /**
  * `onProcessSpawn` / `onProcessExit` are the pair `src/cli/run.ts` and
@@ -26,20 +26,20 @@ import { FAKE_PROVIDER } from "../../helpers/runCli.js";
  * lose or double-count one — otherwise Ctrl+C signals a stale pid or misses a
  * live group.
  */
-const TASK_IDS = ["a", "b", "c"] as const;
+const TASK_IDS = ['a', 'b', 'c'] as const;
 
 function manifest(): Manifest {
   return {
     version: 1,
-    source: { path: "tasks.md", sha256: "abc" },
+    source: { path: 'tasks.md', sha256: 'abc' },
     tasks: TASK_IDS.map((id) => ({
       id,
       title: `Task ${id}`,
-      instruction: "do it",
-      provider: "codex" as const,
+      instruction: 'do it',
+      provider: 'codex' as const,
       model: null,
       depends_on: [],
-      access: "read-only" as const,
+      access: 'read-only' as const,
       cwd: null,
     })),
   };
@@ -49,17 +49,17 @@ function initialState(runId: string): RunState {
   return {
     version: 1,
     run_id: runId,
-    status: "running",
-    started_at: "2026-08-31T00:00:00.000Z",
-    updated_at: "2026-08-31T00:00:00.000Z",
-    source: { path: "tasks.md", sha256: "abc" },
-    manifest_path: "manifest.json",
+    status: 'running',
+    started_at: '2026-08-31T00:00:00.000Z',
+    updated_at: '2026-08-31T00:00:00.000Z',
+    source: { path: 'tasks.md', sha256: 'abc' },
+    manifest_path: 'manifest.json',
     config_snapshot: {
-      planner: { provider: "codex", model: null },
-      defaults: { provider: "codex", model: null },
+      planner: { provider: 'codex', model: null },
+      defaults: { provider: 'codex', model: null },
       max_parallel: 3,
-      isolation: "shared",
-      context_strategy: "link-only",
+      isolation: 'shared',
+      context_strategy: 'link-only',
       context_budget: 12_000,
       memory: false,
       memory_budget: 1200,
@@ -83,15 +83,15 @@ function initialState(runId: string): RunState {
   };
 }
 
-describe("scheduler pid callbacks", () => {
-  it("pairs every spawn with an exit for the same pid, across parallel processes", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "baya-pids-"));
+describe('scheduler pid callbacks', () => {
+  it('pairs every spawn with an exit for the same pid, across parallel processes', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'baya-pids-'));
     const runId = makeRunId();
     const paths = runPaths(cwd, runId);
     mkdirSync(paths.runDir, { recursive: true });
     mkdirSync(paths.schemaDir, { recursive: true });
 
-    const scenarioPath = join(cwd, "scenario.json");
+    const scenarioPath = join(cwd, 'scenario.json');
     writeFileSync(
       scenarioPath,
       JSON.stringify({
@@ -101,10 +101,10 @@ describe("scheduler pid callbacks", () => {
             {
               hang_ms: 200,
               final: {
-                baya: "1",
-                kind: "task_result",
+                baya: '1',
+                kind: 'task_result',
                 task_id: id,
-                status: "ok",
+                status: 'ok',
                 summary: id,
               },
             },
@@ -130,7 +130,7 @@ describe("scheduler pid callbacks", () => {
       store,
       schemaPath: writeTaskResultSchema(paths.schemaDir),
       batchSchemaPath: writeTaskResultBatchSchema(paths.schemaDir),
-      defaultProvider: "codex",
+      defaultProvider: 'codex',
       defaultModel: null,
       binOverrides: { codex: FAKE_PROVIDER },
       memory: false,

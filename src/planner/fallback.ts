@@ -1,5 +1,5 @@
-import { MANIFEST_VERSION, type Manifest, type Task } from "../manifest/index.js";
-import { isDoneLine } from "./done.js";
+import { MANIFEST_VERSION, type Manifest, type Task } from '../manifest/index.js';
+import { isDoneLine } from './done.js';
 
 /**
  * The deterministic linear fallback (risk register: "Planner unreliability").
@@ -15,10 +15,10 @@ import { isDoneLine } from "./done.js";
 export function slugify(text: string, index: number): string {
   const slug = text
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
     .slice(0, 64)
-    .replace(/-+$/, "");
+    .replace(/-+$/, '');
   return /^[a-z0-9]/.test(slug) ? slug : `task-${index + 1}`;
 }
 
@@ -29,7 +29,7 @@ interface Section {
 
 /** Strip a leading list/enumeration marker so it does not end up in the title. */
 function stripMarker(line: string): string {
-  return line.replace(/^\s*(?:[-*+]|\d+[.):]?)\s+/, "").trim();
+  return line.replace(/^\s*(?:[-*+]|\d+[.):]?)\s+/, '').trim();
 }
 
 /**
@@ -62,7 +62,7 @@ function groupByMarker(lines: string[], marker: RegExp): Section[] {
  * is unstructured and rung 5 applies.
  */
 export function splitSections(taskText: string): Section[] {
-  const lines = taskText.split("\n");
+  const lines = taskText.split('\n');
 
   const headingIndexes = lines
     .map((line, index) => ({ line, index }))
@@ -78,8 +78,8 @@ export function splitSections(taskText: string): Section[] {
       return tops.map(({ line, index }, position) => {
         const end = tops[position + 1]?.index ?? lines.length;
         return {
-          title: line.replace(/^#+\s+/, "").trim(),
-          body: lines.slice(index, end).join("\n").trim(),
+          title: line.replace(/^#+\s+/, '').trim(),
+          body: lines.slice(index, end).join('\n').trim(),
         };
       });
     }
@@ -94,32 +94,32 @@ export function splitSections(taskText: string): Section[] {
   const blocks = taskText
     .split(/\n[ \t]*\n/)
     .map((block) => block.trim())
-    .filter((block) => block !== "");
+    .filter((block) => block !== '');
   if (blocks.length > 1) {
     return blocks.map((body) => {
-      const first = stripMarker((body.split("\n")[0] ?? body).replace(/^#+\s*/, ""));
-      return { title: first === "" ? body.slice(0, 60) : first.slice(0, 200), body };
+      const first = stripMarker((body.split('\n')[0] ?? body).replace(/^#+\s*/, ''));
+      return { title: first === '' ? body.slice(0, 60) : first.slice(0, 200), body };
     });
   }
 
   const title =
     taskText
       .trim()
-      .split("\n")[0]
-      ?.replace(/^#+\s*/, "")
-      .trim() ?? "task";
-  return [{ title: title === "" ? "task" : title, body: taskText.trim() }];
+      .split('\n')[0]
+      ?.replace(/^#+\s*/, '')
+      .trim() ?? 'task';
+  return [{ title: title === '' ? 'task' : title, body: taskText.trim() }];
 }
 
 function toSection(lines: string[]): Section {
-  const body = lines.join("\n").trim();
-  const first = stripMarker(lines[0] ?? "");
-  return { title: first === "" ? body.slice(0, 60) : first, body };
+  const body = lines.join('\n').trim();
+  const first = stripMarker(lines[0] ?? '');
+  return { title: first === '' ? body.slice(0, 60) : first, body };
 }
 
 export function linearFallback(
   taskText: string,
-  source: Manifest["source"],
+  source: Manifest['source'],
   options: { maxTasks?: number } = {},
 ): Manifest {
   // The fallback has no model to read a marker for it, so it drops marked
@@ -142,14 +142,14 @@ export function linearFallback(
     return {
       id,
       title: section.title.slice(0, 200),
-      instruction: section.body === "" ? section.title : section.body,
+      instruction: section.body === '' ? section.title : section.body,
       provider: null,
       model: null,
       depends_on: index === 0 ? [] : [],
       // `access` is unknowable without a model reading the text. Assume the
       // permissive level:
       // a read-only task denied a write fails loudly, which is the safer error.
-      access: "read-write",
+      access: 'read-write',
       cwd: null,
     };
   });

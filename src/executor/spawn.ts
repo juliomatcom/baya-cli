@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
-import { stripAnsi } from "../log/index.js";
-import type { SpawnPlan } from "../providers/index.js";
+import { spawn } from 'node:child_process';
+import { stripAnsi } from '../log/index.js';
+import type { SpawnPlan } from '../providers/index.js';
 
 /**
  * Subprocess lifecycle. Two hard rules live here:
@@ -67,21 +67,21 @@ export function createLineSplitter(onLine: (line: string) => void): {
   push: (chunk: string) => void;
   flush: () => void;
 } {
-  let buffer = "";
+  let buffer = '';
   return {
     push(chunk: string): void {
       buffer += chunk;
-      let index = buffer.indexOf("\n");
+      let index = buffer.indexOf('\n');
       while (index !== -1) {
         const line = buffer.slice(0, index);
         buffer = buffer.slice(index + 1);
-        if (line.trim() !== "") onLine(line);
-        index = buffer.indexOf("\n");
+        if (line.trim() !== '') onLine(line);
+        index = buffer.indexOf('\n');
       }
     },
     flush(): void {
-      if (buffer.trim() !== "") onLine(buffer);
-      buffer = "";
+      if (buffer.trim() !== '') onLine(buffer);
+      buffer = '';
     },
   };
 }
@@ -90,7 +90,7 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
   const { plan } = options;
   const [command, ...args] = plan.argv;
   if (command === undefined) {
-    return Promise.reject(new Error("spawn plan has an empty argv"));
+    return Promise.reject(new Error('spawn plan has an empty argv'));
   }
 
   return new Promise((resolve, reject) => {
@@ -99,11 +99,11 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
       env: options.env ?? process.env,
       detached: true,
       windowsHide: true,
-      stdio: [plan.stdin === "pipe" ? "pipe" : "ignore", "pipe", "pipe"],
+      stdio: [plan.stdin === 'pipe' ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     });
 
-    let stdout = "";
-    let stderr = "";
+    let stdout = '';
+    let stderr = '';
     let timedOut = false;
     let settled = false;
 
@@ -123,11 +123,11 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
       options.timeoutMs !== undefined && options.timeoutMs > 0
         ? timers.set(() => {
             timedOut = true;
-            killGroup(child.pid, "SIGTERM");
+            killGroup(child.pid, 'SIGTERM');
             // A provider that traps SIGTERM would hang the run past its
             // deadline forever; escalate the whole group once the grace is up.
             killTimer = timers.set(() => {
-              if (!settled) killGroup(child.pid, "SIGKILL");
+              if (!settled) killGroup(child.pid, 'SIGKILL');
             }, killGraceMs);
           }, options.timeoutMs)
         : undefined;
@@ -137,25 +137,25 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
       if (killTimer !== undefined) timers.clear(killTimer);
     };
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      const text = stripAnsi(chunk.toString("utf8"));
+    child.stdout?.on('data', (chunk: Buffer) => {
+      const text = stripAnsi(chunk.toString('utf8'));
       stdout += text;
       outSplitter.push(text);
     });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      const text = stripAnsi(chunk.toString("utf8"));
+    child.stderr?.on('data', (chunk: Buffer) => {
+      const text = stripAnsi(chunk.toString('utf8'));
       stderr += text;
       errSplitter.push(text);
     });
 
-    child.on("error", (err) => {
+    child.on('error', (err) => {
       if (settled) return;
       settled = true;
       clearTimers();
       reject(err);
     });
 
-    child.on("close", (code, signal) => {
+    child.on('close', (code, signal) => {
       if (settled) return;
       settled = true;
       clearTimers();
@@ -164,9 +164,9 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
       resolve({ code, signal, stdout, stderr, pid: child.pid, timedOut });
     });
 
-    if (plan.stdin === "pipe" && child.stdin) {
+    if (plan.stdin === 'pipe' && child.stdin) {
       // EPIPE is normal: a provider that has read enough may close stdin first.
-      child.stdin.on("error", () => undefined);
+      child.stdin.on('error', () => undefined);
       if (plan.stdinData !== undefined) child.stdin.write(plan.stdinData);
       child.stdin.end();
     }

@@ -1,20 +1,20 @@
-import { formGroup, groupKey, projectGroups } from "../../../src/executor/group.js";
+import { formGroup, groupKey, projectGroups } from '../../../src/executor/group.js';
 
 /**
  * The admission rule, which is the whole of grouping: same key, and every
  * dependency either already succeeded or inside the group.
  */
 const CODEX = groupKey({
-  provider: "codex",
+  provider: 'codex',
   model: null,
-  access: "read-only",
-  cwd: "/w",
+  access: 'read-only',
+  cwd: '/w',
 });
 const CLAUDE = groupKey({
-  provider: "claude",
+  provider: 'claude',
   model: null,
-  access: "read-only",
-  cwd: "/w",
+  access: 'read-only',
+  cwd: '/w',
 });
 
 const graph = (
@@ -46,67 +46,67 @@ const form = (
   });
 };
 
-describe("formGroup", () => {
-  it("collapses a chain, because the dependency is in the group", () => {
+describe('formGroup', () => {
+  it('collapses a chain, because the dependency is in the group', () => {
     const chain: Parameters<typeof graph>[0] = [
-      ["a", []],
-      ["b", ["a"]],
-      ["c", ["b"]],
+      ['a', []],
+      ['b', ['a']],
+      ['c', ['b']],
     ];
-    expect(form(chain, "a")).toEqual(["a", "b", "c"]);
+    expect(form(chain, 'a')).toEqual(['a', 'b', 'c']);
   });
 
-  it("collapses siblings, because their dependencies already succeeded", () => {
+  it('collapses siblings, because their dependencies already succeeded', () => {
     const fanout: Parameters<typeof graph>[0] = [
-      ["b", ["a"]],
-      ["c", ["a"]],
+      ['b', ['a']],
+      ['c', ['a']],
     ];
-    expect(form(fanout, "b", 4, ["a"])).toEqual(["b", "c"]);
+    expect(form(fanout, 'b', 4, ['a'])).toEqual(['b', 'c']);
   });
 
-  it("never crosses a key boundary — a different model is a different process", () => {
+  it('never crosses a key boundary — a different model is a different process', () => {
     const mixed: Parameters<typeof graph>[0] = [
-      ["a", []],
-      ["b", ["a"], CLAUDE],
-      ["c", ["a"]],
+      ['a', []],
+      ['b', ['a'], CLAUDE],
+      ['c', ['a']],
     ];
-    expect(form(mixed, "a")).toEqual(["a", "c"]);
+    expect(form(mixed, 'a')).toEqual(['a', 'c']);
   });
 
-  it("leaves out a task whose dependency is neither done nor in the group", () => {
+  it('leaves out a task whose dependency is neither done nor in the group', () => {
     const blocked: Parameters<typeof graph>[0] = [
-      ["a", []],
-      ["b", ["other"]],
+      ['a', []],
+      ['b', ['other']],
     ];
-    expect(form(blocked, "a")).toEqual(["a"]);
+    expect(form(blocked, 'a')).toEqual(['a']);
   });
 
-  it("stops at the cap", () => {
+  it('stops at the cap', () => {
     const chain: Parameters<typeof graph>[0] = [
-      ["a", []],
-      ["b", ["a"]],
-      ["c", ["b"]],
-      ["d", ["c"]],
+      ['a', []],
+      ['b', ['a']],
+      ['c', ['b']],
+      ['d', ['c']],
     ];
-    expect(form(chain, "a", 2)).toEqual(["a", "b"]);
+    expect(form(chain, 'a', 2)).toEqual(['a', 'b']);
   });
 
-  it("a cap of one is a true bypass: one task, one process", () => {
+  it('a cap of one is a true bypass: one task, one process', () => {
     const chain: Parameters<typeof graph>[0] = [
-      ["a", []],
-      ["b", ["a"]],
+      ['a', []],
+      ['b', ['a']],
     ];
-    expect(form(chain, "a", 1)).toEqual(["a"]);
+    expect(form(chain, 'a', 1)).toEqual(['a']);
   });
 
-  it("returns members in topological order even when the seed is downstream", () => {
+  it('returns members in topological order even when the seed is downstream', () => {
     // `b` is the seed but depends on `a`, which is admitted after it. Prompting
     // them in admission order would ask for `b` before the work it builds on.
     const chain: Parameters<typeof graph>[0] = [
-      ["a", []],
-      ["b", ["a"]],
+      ['a', []],
+      ['b', ['a']],
     ];
-    expect(form(chain, "b")).toEqual(["a", "b"]);
+    expect(form(chain, 'b')).toEqual(['a', 'b']);
   });
 });
 
@@ -115,71 +115,71 @@ describe("formGroup", () => {
  * scheduler, so the assertions are about group membership — never about how
  * the preview words it.
  */
-describe("projectGroups", () => {
+describe('projectGroups', () => {
   const project = (spec: Parameters<typeof graph>[0], cap = 3): string[][] => {
     const { candidates } = graph(spec);
     const nodes = spec.map(([id, depends_on]) => ({ id, depends_on }));
     return projectGroups(nodes, candidates, cap).map((group) => group.members);
   };
 
-  it("collapses a chain into one process, the way the scheduler would", () => {
+  it('collapses a chain into one process, the way the scheduler would', () => {
     expect(
       project([
-        ["a", []],
-        ["b", ["a"]],
-        ["c", ["b"]],
+        ['a', []],
+        ['b', ['a']],
+        ['c', ['b']],
       ]),
-    ).toEqual([["a", "b", "c"]]);
+    ).toEqual([['a', 'b', 'c']]);
   });
 
-  it("splits on the grouping key", () => {
+  it('splits on the grouping key', () => {
     expect(
       project([
-        ["a", []],
-        ["b", [], CLAUDE],
+        ['a', []],
+        ['b', [], CLAUDE],
       ]),
-    ).toEqual([["a"], ["b"]]);
+    ).toEqual([['a'], ['b']]);
   });
 
-  it("packs a layer up to the cap and starts a new process for the rest", () => {
+  it('packs a layer up to the cap and starts a new process for the rest', () => {
     expect(
       project([
-        ["a", []],
-        ["b", []],
-        ["c", []],
-        ["d", []],
+        ['a', []],
+        ['b', []],
+        ['c', []],
+        ['d', []],
       ]),
-    ).toEqual([["a", "b", "c"], ["d"]]);
+    ).toEqual([['a', 'b', 'c'], ['d']]);
   });
 
-  it("covers every task exactly once", () => {
+  it('covers every task exactly once', () => {
     const groups = project([
-      ["a", []],
-      ["b", ["a"]],
-      ["c", [], CLAUDE],
-      ["d", ["a", "c"]],
+      ['a', []],
+      ['b', ['a']],
+      ['c', [], CLAUDE],
+      ['d', ['a', 'c']],
     ]);
-    expect(groups.flat().sort()).toEqual(["a", "b", "c", "d"]);
+    expect(groups.flat().sort()).toEqual(['a', 'b', 'c', 'd']);
   });
 
-  it("gives every task its own process at a cap of one", () => {
+  it('gives every task its own process at a cap of one', () => {
     expect(
       project(
         [
-          ["a", []],
-          ["b", ["a"]],
+          ['a', []],
+          ['b', ['a']],
         ],
         1,
       ),
-    ).toEqual([["a"], ["b"]]);
+    ).toEqual([['a'], ['b']]);
   });
 
-  it("is deterministic — same manifest, same groups", () => {
+  it('is deterministic — same manifest, same groups', () => {
     const spec: Parameters<typeof graph>[0] = [
-      ["a", []],
-      ["b", []],
-      ["c", ["a"], CLAUDE],
-      ["d", ["b"]],
+      ['a', []],
+      ['b', []],
+      ['c', ['a'], CLAUDE],
+      ['d', ['b']],
     ];
     expect(project(spec)).toEqual(project(spec));
   });

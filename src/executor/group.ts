@@ -1,4 +1,4 @@
-import { readySet, topoOrder, type GraphNode, type ReadyState } from "../graph/index.js";
+import { readySet, topoOrder, type GraphNode, type ReadyState } from '../graph/index.js';
 
 /**
  * Task grouping (execution.md §Grouping). Pure: no I/O, no clock.
@@ -63,7 +63,7 @@ export function groupKey(parts: {
   access: string;
   cwd: string;
 }): string {
-  return [parts.provider, parts.model ?? "", parts.access, parts.cwd].join(" ");
+  return [parts.provider, parts.model ?? '', parts.access, parts.cwd].join(' ');
 }
 
 export interface FormGroupInput {
@@ -161,7 +161,7 @@ export function projectGroups(
   cap: number,
 ): ProjectedGroup[] {
   const order = topoOrder(nodes);
-  const states = new Map<string, ReadyState>(nodes.map((node) => [node.id, "pending"]));
+  const states = new Map<string, ReadyState>(nodes.map((node) => [node.id, 'pending']));
   const idsIn = (state: ReadyState): Set<string> =>
     new Set(order.filter((id) => states.get(id) === state));
   const groups: ProjectedGroup[] = [];
@@ -173,14 +173,14 @@ export function projectGroups(
       seedId: ready[0] as string,
       order,
       candidates,
-      pending: idsIn("pending"),
-      succeeded: idsIn("succeeded"),
+      pending: idsIn('pending'),
+      succeeded: idsIn('succeeded'),
       cap: Math.max(1, cap),
     });
     groups.push({ index: groups.length + 1, members });
     // The happy path, which is what a preview can honestly show: every member
     // succeeds, so the next pass sees exactly what the scheduler would.
-    for (const id of members) states.set(id, "succeeded");
+    for (const id of members) states.set(id, 'succeeded');
   }
 
   return groups;
