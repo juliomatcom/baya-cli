@@ -239,12 +239,14 @@ The headline is a filled badge, graded on **how much of the run landed** — not
 
 ## Exit codes
 
-| Code  | Meaning                                                             |
-| :---- | :------------------------------------------------------------------ |
-| `0`   | All tasks succeeded (or `--dry-run` completed).                     |
-| `1`   | At least one task `failed`, `skipped`, or `parked`.                 |
-| `2`   | Planner / manifest validation / model-gate error; nothing executed. |
-| `130` | SIGINT; children torn down.                                         |
+| Code  | Meaning                                                                                                           |
+| :---- | :---------------------------------------------------------------------------------------------------------------- |
+| `0`   | All tasks succeeded (or `--dry-run` completed).                                                                   |
+| `1`   | At least one task `failed`, `skipped`, or `parked`; or `uncaughtException` (teardown runs, logged `run.crashed`). |
+| `2`   | Planner / manifest validation / model-gate error; nothing executed.                                               |
+| `130` | SIGINT; children torn down (SIGTERM → grace → SIGKILL).                                                           |
+| `143` | SIGTERM; same teardown.                                                                                           |
+| `129` | SIGHUP; same teardown.                                                                                            |
 
 ## Examples
 

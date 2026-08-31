@@ -17,7 +17,7 @@ Write what you want done in an ordinary text file — Markdown, a bare to-do lis
 No config format to learn. No DSL. No API keys for every provider — it drives the CLIs you already pay for.
 
 > [!WARNING]
-> **Status: early.** The walking skeleton (M1) and provider breadth (M3) have landed — `codex`, `claude`, `opencode`, and `copilot` adapters, model-catalog resolution, and a sequential executor. Published to npm as [`baya-cli`](https://www.npmjs.com/package/baya-cli); concurrency and resume are still in progress. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
+> **Status: early.** The walking skeleton (M1), provider breadth (M3), and most of concurrency & resilience (M2) have landed — `codex`, `claude`, `opencode`, and `copilot` adapters, model-catalog resolution, a parallel scheduler, `baya runs` / `baya resume`, and process-group signal teardown. Published to npm as [`baya-cli`](https://www.npmjs.com/package/baya-cli). Still open: `--on-error stop`, a parallel-aware status line, and the recovery prompt. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
 
 ---
 
@@ -91,11 +91,13 @@ Baya never parses these structurally — the planner reads every format for inte
 - ✅ **LLM-planned dependency graph** — a model turns your list into a DAG; a deterministic splitter falls back to a linear chain if it can't.
 - ✅ **No API keys** — drives your existing CLI subscriptions; nothing new to pay for.
 - ✅ **Model-per-task** — name `luna`, `sonnet`, etc. in the task text; Baya resolves it to the real id and the provider that serves it.
-- ✅ **Parallel execution** — independent tasks run concurrently (`--max-parallel`); `read-write` tasks are serialized by a write-lock.
+- ✅ **Parallel execution** — independent `read-only` tasks run concurrently (`--max-parallel`, plus a per-provider cap); every `read-write` task takes a single in-memory writer key and runs alone, because agents sharing one working tree collide on the build, not just on files.
 - ✅ **One process, many tasks** — tasks that share a provider, model and permission level are packed into a single agent process and worked through in order, so the repo is read once instead of once per task. `--group-size` (default 3), `--group-size 1` to opt out.
 - ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files changed) carries across to tasks that could not share a process. `--no-memory` to disable.
 - ✅ **Preview gate** — see the full plan before anything runs; `--dry-run` shows it and runs nothing.
-- ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider.
+- ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider; `baya runs` lists what is resumable. A `quota` failure halts the run cleanly rather than feeding the wall every remaining task.
+- ✅ **Skips what you already ticked off** — a task marked `[x]`, `[done]`, `(complete)` or ✅ is read for context and never planned as work, so re-running a part-finished list does not re-pay for what landed.
+- ✅ **Ctrl+C actually stops** — SIGTERM to every provider's process group, a grace window, then SIGKILL; a second Ctrl+C skips the wait. Grandchildren are reaped, not orphaned, and the same path covers SIGTERM, SIGHUP and an uncaught crash.
 
 ## How it works
 
@@ -178,7 +180,7 @@ Working on baya? Start with [`wiki-llm/conventions.md`](wiki-llm/conventions.md)
 
 ## Contributing
 
-Contributions are welcome — the work is broken into 52 sequenced tasks in [`specs/001/02-plan.md`](specs/001/02-plan.md), each with its own done-criteria, so there is plenty that can be picked up independently.
+Contributions are welcome — the work is broken into 62 sequenced tasks in [`specs/001/02-plan.md`](specs/001/02-plan.md), each with its own done-criteria, so there is plenty that can be picked up independently.
 
 Before opening a PR:
 
