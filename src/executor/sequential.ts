@@ -110,6 +110,14 @@ export interface RunSequentialOptions {
     provider: ProviderId;
     model: string | null;
   }) => void;
+  /**
+   * Fires with a provider process's pid the moment it is spawned, and
+   * `onProcessExit` fires with the same pid when that exact process settles.
+   * The CLI keeps `activePids` from the pair, so an interrupt signals every
+   * live process group and never a stale or reused pid.
+   */
+  onProcessSpawn?: (pid: number) => void;
+  onProcessExit?: (pid: number) => void;
 }
 
 export interface RunOutcome {
@@ -162,6 +170,8 @@ interface LiveGroup {
   model: string | null;
   grouped: boolean;
   inGroup: Set<string>;
+  /** The process-group leader's pid, once spawned. */
+  pid?: number;
 }
 
 /** A finished group: `execution` on a normal return, `error` on a thrown one. */
@@ -234,6 +244,13 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
   const refusedWriters = new Set<string>();
   /** Tasks waiting out a retry backoff: task id → the ms it may be offered at. */
   const holdUntil = new Map<string, number>();
+  /**
+   * Id of the first task that failed `quota`, once one has (execution.md
+   * §Failure semantics). A quota wall is the session or the billing account,
+   * not one provider — so admission stops for the whole run and every task that
+   * never started is skipped, blocked by this one.
+   */
+  let quotaHaltBy: string | null = null;
 
   // Routing is static — provider, model, access and cwd all come from the
   // manifest — so the grouping keys are computed once rather than per pass.
@@ -271,6 +288,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     const settled = await Promise.race(inFlight.values());
     inFlight.delete(settled.group.leaderId);
     admission.release(settled.group.leaderId);
+    if (settled.group.pid !== undefined) options.onProcessExit?.(settled.group.pid);
     if (settled.execution === null) throw settled.error;
 
     const plan = retryPlan(settled.group, settled.execution);
@@ -291,6 +309,9 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
     const offered = new Set<string>();
 
     for (;;) {
+      // A quota failure has halted the run: admit nothing more, but leave
+      // whatever is already in flight to finish (execution.md §Failure semantics).
+      if (quotaHaltBy !== null) break;
       const states = toReadyStates(store, tasks);
       const offerable = setOf(states, "pending");
       for (const id of offerable) if (held(id)) offerable.delete(id);
@@ -412,7 +433,9 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
           ...(options.env ? { env: options.env } : {}),
           ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
           onSpawn: (pid) => {
+            group.pid = pid;
             for (const id of memberIds) store.transition(id, { pid });
+            options.onProcessSpawn?.(pid);
           },
         }).then(
           (execution) => ({ group, execution, error: null }),
@@ -708,6 +731,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       });
       options.onTaskSettled?.(taskId, "failed", result);
       markDescendantsSkipped(taskId, inGroup);
+      if (failure.kind === "quota") haltForQuota(taskId, failure);
     });
 
     // Memory is derived from what a task DID, so a failed task contributes too
@@ -885,6 +909,41 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       if (!settleable) continue;
       store.transition(descendant, { state: "skipped", blocked_by: failedId });
       logger.warn("task.skipped", { task_id: descendant, blocked_by: failedId });
+    }
+  }
+
+  /**
+   * A `quota` failure halts the whole run (execution.md §Failure semantics):
+   * admission stops (`admitReady` bails on `quotaHaltBy`), in-flight work is
+   * left to drain, and every task still `pending` — independent branches
+   * included — is `skipped` now, `blocked_by` the quota task.
+   *
+   * The skip carries that task's `failure`, which is what tells it apart from a
+   * plain dependency skip (`markDescendantsSkipped` leaves `failure` null): the
+   * report and `baya resume --provider` need "we stopped the run early" to read
+   * differently from "an upstream of this task broke". The run stays resumable.
+   */
+  function haltForQuota(failedId: string, failure: Failure): void {
+    if (quotaHaltBy !== null) return;
+    quotaHaltBy = failedId;
+    logger.warn("run.halted", {
+      task_id: failedId,
+      kind: failure.kind,
+      message: failure.message,
+    });
+    for (const task of tasks) {
+      if (store.task(task.id)?.state !== "pending") continue;
+      store.transition(task.id, {
+        state: "skipped",
+        blocked_by: failedId,
+        failure,
+      });
+      holdUntil.delete(task.id);
+      logger.warn("task.skipped", {
+        task_id: task.id,
+        blocked_by: failedId,
+        reason: "run-halted-quota",
+      });
     }
   }
 }

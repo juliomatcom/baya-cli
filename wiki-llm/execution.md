@@ -128,16 +128,16 @@ Flags: `--no-memory` (off, for A/B measurement) · `--memory-budget <chars>` (de
 
 ## Failure semantics
 
-| Concern            | Behavior                                                                                                                                                                                                                       |
-| :----------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Task fails         | **Descendants** ⇒ `skipped`, never `failed`. Independent branches continue.                                                                                                                                                    |
-| `--on-error stop`  | Stop admitting new tasks; let in-flight finish; then report.                                                                                                                                                                   |
-| Retries            | `--retries` (default 1), `retry:"now"` failures only. **`quota`/`rate_limit` ⇒ `retry:"later"`, `auth`/`permission` ⇒ `"never"` — none consume attempts.** Exponential backoff + jitter. Taxonomy: [recovery.md](recovery.md). |
-| Provider exhausted | `quota` failure ⇒ stop scheduling **for that provider**; other providers' branches continue; run stays resumable, optionally elsewhere.                                                                                        |
-| Timeout            | `constraints.max_runtime_s` (default 900, summed per group) ⇒ process-group teardown, `status:failed`, `retryable:true`.                                                                                                       |
-| Group dies partway | First casualty `failed`; every later member `skipped` — it never ran. Members the model **did** report are kept, so finished work in a failed group is banked.                                                                 |
+| Concern            | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| :----------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task fails         | **Descendants** ⇒ `skipped`, never `failed`. Independent branches continue.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `--on-error stop`  | Stop admitting new tasks; let in-flight finish; then report.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Retries            | `--retries` (default 1), `retry:"now"` failures only. **`quota`/`rate_limit` ⇒ `retry:"later"`, `auth`/`permission` ⇒ `"never"` — none consume attempts.** Exponential backoff + jitter. Taxonomy: [recovery.md](recovery.md).                                                                                                                                                                                                                                                                                         |
+| Quota failure      | `quota` (`retry:"later"`) ⇒ **halt the whole run**: stop admitting groups, let in-flight work finish, then `skipped` every unstarted task — independent branches included — `blocked_by` the quota task and carrying its `failure` (so it reads apart from a dependency skip). Run stays resumable; `baya resume --provider` is the recovery. A quota wall is the session or the billing account, not one CLI — finishing half the graph elsewhere spends money to land somewhere no more resumable than a clean stop. |
+| Timeout            | `constraints.max_runtime_s` (default 900, summed per group) ⇒ SIGTERM via `killGroup`, a grace window (`killGraceMs`, default 5s), then SIGKILL to whatever is still alive — `status:failed`, `retryable:true`. Same escalation as SIGINT, so a provider that traps SIGTERM cannot outlive its deadline.                                                                                                                                                                                                               |
+| Group dies partway | First casualty `failed`; every later member `skipped` — it never ran. Members the model **did** report are kept, so finished work in a failed group is banked.                                                                                                                                                                                                                                                                                                                                                         |
 
-Exit: `0` all succeeded · `1` any failed/skipped/parked · `2` planner/validation/model-gate error · `130` SIGINT.
+Exit: `0` all succeeded · `1` any failed/skipped/parked (or `uncaughtException`) · `2` planner/validation/model-gate error · `130` SIGINT · `143` SIGTERM · `129` SIGHUP.
 
 ## Escalation — Pause & Resume
 
@@ -159,7 +159,20 @@ Out of scope permanently: PTY multiplexing, keystroke injection, alternate-buffe
 
 Every spawn sets `stdin` explicitly (prompt pipe or `/dev/null`) — inherited stdin makes `claude -p` block 3s/task. Children spawn `detached:true` in their own process group — Node's `child_process` does not kill grandchildren; agentic CLIs spawn subprocesses.
 
-SIGINT → `process.kill(-pgid,'SIGTERM')` for every live group → 5s grace → `SIGKILL` → checkpoint → exit `130`. **Second Ctrl+C kills immediately.** Same path for SIGTERM/SIGHUP/`uncaughtException`. Live pids checkpointed so a later `baya doctor` can reap strays.
+Teardown contract (`src/cli/interrupt.ts`, `createInterruptHandler`), on the first signal:
+
+1. `logger.warn("signal.received")`, then `checkpointInterrupted()` — evidence + a resumable run **before** anything is killed.
+2. `killGroup(pgid,'SIGTERM')` for every live pid; log `process.killed`.
+3. Wait an injected grace window (`graceMs`, default 5s, matching `DEFAULT_KILL_GRACE_MS` in `src/executor/spawn.ts`). Clock + timer are injected so tests are deterministic and send no real signal.
+4. On grace elapse: `killGroup(pgid,'SIGKILL')` for every pid the scheduler **still lists live** (a provider that exited on SIGTERM was already dropped by `onProcessExit`), log `run.interrupted` with `grace_ms`, `progress.dispose()` (restores the cursor — never reconstruct the escape), `releaseLock()`, `exit(code)`.
+
+Nothing in flight ⇒ the grace window is skipped. **A second Ctrl+C during the grace window escalates immediately** — SIGKILL + teardown now, the first signal's exit code stands.
+
+`installInterruptHandlers` registers SIGINT, SIGTERM, SIGHUP and `uncaughtException` on that one handler in both `src/cli/run.ts` and `src/cli/resume.ts`, and returns the unregister function called in `finally`. Every route runs the identical teardown; only the exit code differs: SIGINT `130`, SIGTERM `143`, SIGHUP `129`, `uncaughtException` `1` (logged as `run.crashed`). A crash therefore reaps its child process groups instead of orphaning them. Live pids are checkpointed so a later `baya doctor` can reap strays.
+
+The set of live pids the handler signals is maintained by the scheduler's `onProcessSpawn`/`onProcessExit` callbacks (`RunSequentialOptions`): add on spawn, remove the exact pid on settle, so parallel groups are all signalled and a settled or reused pid is never carried.
+
+A per-process **timeout** runs the same SIGTERM → grace → SIGKILL escalation inside `src/executor/spawn.ts` (`killGroup`, injectable timers).
 
 ## Run state
 
