@@ -20,3 +20,16 @@ exports[`renderReport omits the Flagged section entirely when there are no notes
   Outputs   /w/.baya/runs/r/tasks
 "
 `;
+
+exports[`the Next block — how to pick an unfinished run back up matches the recorded output 1`] = `
+"
+   ✗ Run failed  0 succeeded · 1 failed · 1 skipped · 47.0s · $0.42
+
+  Outputs   /w/.baya/runs/r/tasks
+
+  Next      baya resume 20260828T215204Z-a1f4c9-3182
+            Picks up where this stopped: re-runs 1 failed and 1 skipped.
+            The network was unreachable — check connectivity, a VPN or proxy, and that the
+            registry or API the task needs is up.
+"
+`;

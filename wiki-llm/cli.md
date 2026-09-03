@@ -214,6 +214,21 @@ The headline is a filled badge, graded on **how much of the run landed** — not
 
 **Flagged** aggregates every `notes[]` entry across all tasks, `action_required` first, printed last. No notes ⇒ section omitted. `--json` carries per-task `notes` + an aggregated `flagged` array — nothing terminal-only is lost to a pipe.
 
+**Next** is the way back into an unfinished run, printed last of all and omitted entirely when every task succeeded:
+
+```
+  Next      baya resume 20260903T080018Z-1e8874-44534
+            Picks up where this stopped: re-runs 1 failed and 17 skipped.
+            The network was unreachable — check connectivity, a VPN or proxy, and that the
+            registry or API the task needs is up.
+```
+
+**The command leads.** It is the only undimmed line in the block and it sits on the `Next` row itself — a reader who already knows what broke must not have to hunt past a diagnosis for the way back in. Then `scope`, counting what re-runs and what is kept, then `cause`, one line on what to fix first.
+
+On the `--json` report as `next: {command, scope, cause}` (`null` on a clean run). `cause` is keyed on the **dominant** `failure.kind` (recovery.md §Failure taxonomy) — highest priority present, in the order `quota, auth, permission, network, timeout, rate_limit, schema, crash, interrupted` — not the first task listed: one `quota` halts a whole run and every other failure under it is a symptom. No failure at all (an interrupt, or only `parked` tasks) still gets the block, since the run is still unfinished. A `cause` never names a flag Baya does not have.
+
+Why it exists: `baya resume` has always been able to pick a run up without re-paying for work that succeeded, but a failed report ended on a log path, so the obvious move was to re-run the whole task list from the top. A run that stops on something the user has to fix — no network, a spent allowance, a denied permission — has to say how to come back.
+
 ## Color
 
 `chalk` v6 via semantic tokens in `src/ui/theme.ts` — the only file permitted to import chalk. **Meaning never carried by color alone** — every status pairs a color with a glyph.
