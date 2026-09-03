@@ -13,6 +13,7 @@ export default tseslint.config(
       '.baya/**',
       '.history/**',
       'node_modules/**',
+      'site/**',
       'test/fixtures/**',
     ],
   },

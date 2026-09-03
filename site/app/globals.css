@@ -1,0 +1,248 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 CSS-first configuration. There is no tailwind.config.js; every
+ * design token lives here in `@theme` so it is available both as a CSS variable
+ * and as a generated utility (e.g. `bg-ink`, `text-accent`).
+ */
+@theme {
+  /* Fonts wired up from next/font in app/layout.tsx. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  /* Near-black surface for the header and hero (Tailwind slate-950). */
+  --color-ink: #020617;
+  --color-ink-muted: #1e293b;
+
+  /*
+   * Raised surface for cards sitting on the near-black hero band. Deliberately
+   * lighter than `--color-ink` so a card reads as lifted off the background
+   * rather than painted onto it.
+   */
+  --color-surface-raised: #141d33;
+
+  /* Single green accent for links, buttons, and icon badges. */
+  --color-accent: #16a34a;
+  --color-accent-hover: #15803d;
+  --color-accent-fg: #ffffff;
+  --color-accent-subtle: #dcfce7;
+}
+
+/*
+ * Page defaults: white background, dark text. Sections that need the near-black
+ * treatment opt in with `.surface-dark` (used by the header and hero).
+ */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #ffffff;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-mono);
+  }
+
+  code:not(pre code) {
+    background-color: var(--color-accent-subtle);
+    color: var(--color-accent-hover);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+  }
+
+  a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--color-accent-hover);
+    text-decoration: underline;
+  }
+}
+
+@layer components {
+  /*
+   * Light content card, used everywhere a block of content needs to lift off
+   * the page: a white face, a hairline border, and a soft two-part shadow —
+   * a tight contact shadow plus a wide ambient one, matching the mockup.
+   */
+  .card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    box-shadow:
+      0 1px 2px rgba(2, 6, 23, 0.06),
+      0 16px 40px -16px rgba(2, 6, 23, 0.2);
+  }
+
+  /*
+   * Dark feature card for the near-black sections. Sits on `--color-surface-raised`
+   * (lighter than the hero) with a bright hairline and a deep shadow so it stands
+   * clear of the background instead of dissolving into it.
+   */
+  .card-dark {
+    background-color: var(--color-surface-raised);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 1rem;
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.3),
+      0 24px 48px -18px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Near-black background with light text, for the header and hero. */
+  .surface-dark {
+    background-color: var(--color-ink);
+    color: #e2e8f0;
+  }
+
+  .surface-dark a {
+    color: #ffffff;
+  }
+
+  .surface-dark a:hover {
+    color: var(--color-accent-subtle);
+  }
+
+  /* Solid green call-to-action button. */
+  .btn-accent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    background-color: var(--color-accent);
+    color: var(--color-accent-fg);
+    transition: background-color 0.15s ease;
+  }
+
+  .btn-accent:hover {
+    background-color: var(--color-accent-hover);
+    color: var(--color-accent-fg);
+    text-decoration: none;
+  }
+
+  /* Small square badge that holds a feature icon. */
+  .icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.5rem;
+    background-color: var(--color-accent-subtle);
+    color: var(--color-accent-hover);
+  }
+
+  /* Terminal / command-line snippet block. */
+  .terminal {
+    font-family: var(--font-mono);
+    background-color: var(--color-ink);
+    color: #e2e8f0;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  /*
+   * Header navigation links: light gray on the near-black surface, brightening
+   * to white on hover, never underlined. Scoped under `.surface-dark` so it
+   * outranks the generic `.surface-dark a` rule above.
+   */
+  .surface-dark .nav-link {
+    color: #cbd5e1;
+    transition: color 0.15s ease;
+  }
+
+  .surface-dark .nav-link:hover {
+    color: #ffffff;
+    text-decoration: none;
+  }
+
+  /* Framed terminal card for the hero: light title bar, dark monospace body. */
+  .terminal-window {
+    border-radius: 0.75rem;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    box-shadow: 0 24px 60px -20px rgba(2, 6, 23, 0.7);
+  }
+
+  .terminal-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #e2e8f0;
+    padding: 0.75rem 1rem;
+  }
+
+  .terminal-dot {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 9999px;
+  }
+
+  .terminal-body {
+    background-color: var(--color-ink);
+    color: #e2e8f0;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    padding: 1.25rem 1.25rem 1.5rem;
+    margin: 0;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  /* Blinking block cursor for the fresh prompt at the end of the terminal. */
+  .cursor-blink {
+    display: inline-block;
+    width: 0.5rem;
+    height: 1.05em;
+    margin-left: 0.15rem;
+    vertical-align: text-bottom;
+    background-color: currentColor;
+    animation: cursor-blink 1.1s step-end infinite;
+  }
+}
+
+@keyframes cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-blink {
+    animation: none;
+  }
+}

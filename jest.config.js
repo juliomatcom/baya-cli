@@ -24,6 +24,7 @@ export default {
     '<rootDir>/.history/',
     '<rootDir>/test/fixtures/',
     '<rootDir>/test/contract/',
+    '<rootDir>/site/',
   ],
   setupFiles: ['<rootDir>/test/setup/force-color-off.ts'],
   clearMocks: true,
