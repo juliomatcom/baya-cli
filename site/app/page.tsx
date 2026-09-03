@@ -9,7 +9,7 @@ import {
 } from '@/app/lib/site';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Baya – One command. Multiple models.',
+  title: 'Baya – Local AI multi-provider CLI orchestrator.',
   description:
     'Run plain-text coding tasks across the AI agents you already use. Baya builds a dependency graph, routes each task to the fitting provider and model, and carries the run through to a report.',
   path: '/',
