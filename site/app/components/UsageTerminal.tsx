@@ -17,11 +17,11 @@ const COMMANDS: Command[] = [
   {
     label: 'USAGE:',
     labelClassName: 'text-teal-300',
-    copyText: 'baya <path-to-task-file>',
+    copyText: 'baya /path/to/tasks.md',
     segments: [
       { text: '$ ', className: 'text-slate-500' },
       { text: 'baya ', className: 'text-green-400' },
-      { text: '<path-to-task-file>', className: 'text-amber-300' },
+      { text: '/path/to/tasks.md', className: 'text-amber-300' },
     ],
   },
   {
