@@ -180,7 +180,7 @@ Each adapter declares an ordered preference; the executor uses the first support
 
 ### 4.4 Permissions
 
-Baya never guesses. Each task carries a policy mapped per adapter (`codex -s workspace-write`, `gemini --approval-mode auto_edit`, …). Default: **read-only**; `writes: true` tasks get workspace-write. Full bypass requires an explicit `--dangerously-allow-all` on the Baya invocation and is never inferred from the Markdown.
+Baya never guesses. Each task carries a policy mapped per adapter (`codex -s workspace-write` plus `-c sandbox_workspace_write.network_access=true`, `gemini --approval-mode auto_edit`, …). `read-write` grants writes, commands, and network alike — codex's write sandbox is offline by default and had to be opened explicitly to match the other adapters. Default: **read-only**; `writes: true` tasks get workspace-write. Full bypass requires an explicit `--dangerously-allow-all` on the Baya invocation and is never inferred from the Markdown.
 
 ## 5. Execution
 

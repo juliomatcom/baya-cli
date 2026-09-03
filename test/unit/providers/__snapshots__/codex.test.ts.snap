@@ -48,6 +48,8 @@ exports[`codexAdapter.buildRun argv uses the workspace-write sandbox only for re
   "/work",
   "-s",
   "workspace-write",
+  "-c",
+  "sandbox_workspace_write.network_access=true",
   "--output-schema",
   "/work/.baya/schema/task_result.schema.json",
   "-o",

@@ -28,6 +28,35 @@ function sandboxFor(input: BuildRunInput): string {
 }
 
 /**
+ * ⚠️ codex's `workspace-write` sandbox blocks the **network** as well as the
+ * filesystem: `sandbox_workspace_write.network_access` defaults to `false`, so
+ * every DNS lookup inside the seatbelt profile fails with `ENOTFOUND` — the
+ * host's own resolver is fine and nothing in the error names a sandbox.
+ *
+ * That default cost a real run (20260903T080018Z): a scaffold task whose whole
+ * job was `npx create-next-app` died on `getaddrinfo ENOTFOUND
+ * registry.npmjs.org`, took its 17 dependents down as skipped, and burned a
+ * retry on a failure no model could route around. The agent had already tried
+ * `npm install --offline`, the cache, and an alternate registry.
+ *
+ * codex is also the only adapter that sandboxes at all: claude gets
+ * `--permission-mode auto` and copilot `--allow-all-tools`, both of which reach
+ * the network freely. Leaving codex offline made the same task succeed or fail
+ * on which provider the planner happened to pick.
+ *
+ * So `access: "read-write"` means writes **and** commands **and** network, on
+ * every provider. A task allowed to edit the tree is a task expected to install,
+ * build, and fetch. Confinement to the workspace is what `workspace-write`
+ * still buys; `read-only` keeps both — no writes, no network — and stays the
+ * mode for reviewing, summarizing, and answering.
+ *
+ * `-c` overrides one config key and is accepted by `exec` and `exec resume`
+ * alike (unlike `-s`), so a resumed turn keeps the network its session opened
+ * with.
+ */
+const NETWORK_ACCESS_FLAG = 'sandbox_workspace_write.network_access=true';
+
+/**
  * ⚠️ `codex exec` and `codex exec resume` do **not** share a flag surface.
  * Verified live 2026-08-29 against codex-cli 0.150.1: `resume` accepts
  * `--json`, `--skip-git-repo-check`, `--output-schema`, `-o`, `-m` — and
@@ -49,7 +78,11 @@ function commonFlags(input: BuildRunInput, mode: 'exec' | 'resume'): string[] {
   const argv = ['--json'];
   if (mode === 'exec') argv.push('--color', 'never');
   argv.push('--skip-git-repo-check');
-  if (mode === 'exec') argv.push('-C', input.cwd, '-s', sandboxFor(input));
+  const sandbox = sandboxFor(input);
+  if (mode === 'exec') argv.push('-C', input.cwd, '-s', sandbox);
+  // `danger-full-access` is already unrestricted; `read-only` gets no network
+  // by design. Only the confined write mode needs the door opened.
+  if (sandbox === 'workspace-write') argv.push('-c', NETWORK_ACCESS_FLAG);
   argv.push('--output-schema', input.schemaPath, '-o', input.resultFile);
   if (input.model !== null) argv.push('-m', input.model);
   return argv;

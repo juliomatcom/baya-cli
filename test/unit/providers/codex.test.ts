@@ -63,6 +63,42 @@ describe('codexAdapter.buildRun argv', () => {
     expect(codexAdapter.buildRun(input({ model: 'some-model' })).argv).toContain('-m');
   });
 
+  it('opens the network for read-write: workspace-write blocks DNS by default', () => {
+    // A `workspace-write` task that cannot resolve a hostname fails every
+    // install, fetch, and build that touches a registry — with an `ENOTFOUND`
+    // that names no sandbox. Read-write means writes, commands, and network.
+    const argv = codexAdapter.buildRun(
+      input({ task: task({ access: 'read-write' }) }),
+    ).argv;
+    expect(argv[argv.indexOf('-c') + 1]).toBe(
+      'sandbox_workspace_write.network_access=true',
+    );
+  });
+
+  it('leaves read-only offline — the key applies to workspace-write anyway', () => {
+    expect(codexAdapter.buildRun(input()).argv).not.toContain('-c');
+  });
+
+  it('does not repeat the override under danger-full-access', () => {
+    expect(
+      codexAdapter.buildRun(input({ dangerouslyAllowAll: true })).argv,
+    ).not.toContain('-c');
+  });
+
+  it('carries the network override into a resumed turn, which cannot repass -s', () => {
+    // `resume` rejects `-s` and inherits its session's sandbox, but it does
+    // accept `-c` — so the escalation turn keeps the network the run opened with.
+    const argv = codexAdapter.buildResume(
+      'thread-42',
+      'use postgres',
+      input({ task: task({ access: 'read-write' }) }),
+    ).argv;
+    expect(argv).not.toContain('-s');
+    expect(argv[argv.indexOf('-c') + 1]).toBe(
+      'sandbox_workspace_write.network_access=true',
+    );
+  });
+
   it('escalates to danger-full-access only under --dangerously-allow-all', () => {
     const argv = codexAdapter.buildRun(input({ dangerouslyAllowAll: true })).argv;
     expect(argv[argv.indexOf('-s') + 1]).toBe('danger-full-access');
