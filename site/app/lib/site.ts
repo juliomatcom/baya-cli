@@ -1,10 +1,9 @@
 /**
- * Canonical production origin. GitHub Pages serves this project from
- * https://juliomatcom.github.io/baya-cli/, so the `/baya-cli` base path is part
- * of every absolute URL. `next.config.ts` bakes the same prefix into asset and
- * link URLs for production builds; keep the two in sync.
+ * Canonical production origin. The site is served from the root of its custom
+ * domain, so every absolute URL (canonicals, sitemap, Open Graph images) is
+ * built against this bare origin with no path prefix.
  */
-export const SITE_URL = 'https://juliomatcom.github.io/baya-cli';
+export const SITE_URL = 'https://baya-cli.depre.net';
 
 export const GITHUB_URL = 'https://github.com/juliomatcom/baya-cli';
 
