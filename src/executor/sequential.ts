@@ -93,7 +93,7 @@ export interface RunSequentialOptions {
    * downstream task's context is assembled from.
    */
   priorResults?: ReadonlyMap<string, TaskResult>;
-  env?: NodeJS.ProcessEnv;
+  env: NodeJS.ProcessEnv;
   /** Fires the moment a task settles, so `warn`/`action_required` notes print immediately. */
   onTaskSettled?: (taskId: string, state: TaskState, result: TaskResult) => void;
   /**
@@ -343,7 +343,10 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
       const resolved = adapter
         ? await registry.resolve(provider, {
             ...(options.binOverrides ? { binOverrides: options.binOverrides } : {}),
-            ...(options.env ? { env: options.env } : {}),
+            // Named, not assumed: a run resolves against the environment it
+            // was handed, so a test's sealed env cannot silently become the
+            // host's. `env` is required on these options for that reason.
+            env: options.env,
             probe: false,
           })
         : null;

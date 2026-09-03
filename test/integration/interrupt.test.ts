@@ -22,6 +22,7 @@ import { SIGINT_EXIT_CODE, createInterruptHandler } from '../../src/cli/interrup
 import { createProgress } from '../../src/ui/progress.js';
 import { captureLogger } from '../helpers/logger.js';
 import { FAKE_PROVIDER } from '../helpers/runCli.js';
+import { sealedEnv } from '../helpers/env.js';
 
 /**
  * Case 4, testing.md: a long fake provider that spawns a grandchild and traps
@@ -178,7 +179,7 @@ function initialState(runId: string): RunState {
         groupSize: 1,
         maxParallel: 2,
         retries: 0,
-        env: { ...process.env, BAYA_FAKE_SCRIPT: scenarioPath },
+        env: sealedEnv({ BAYA_FAKE_SCRIPT: scenarioPath }),
         onProcessSpawn: (pid) => activePids.add(pid),
         onProcessExit: (pid) => activePids.delete(pid),
       });

@@ -2,13 +2,14 @@ import { renderHelp } from '../../../src/cli/help.js';
 import { createRegistry, type ProviderAdapter } from '../../../src/providers/index.js';
 import { codexAdapter } from '../../../src/providers/codex.js';
 import { createTheme } from '../../../src/ui/theme.js';
+import { sealedEnv } from '../../helpers/env.js';
 
 const theme = createTheme('never');
 
 async function help(adapters: ProviderAdapter[]): Promise<string> {
   const registry = createRegistry(adapters);
   const statuses = await registry.resolveAll({
-    env: { PATH: '/nonexistent', HOME: '/nonexistent' },
+    env: sealedEnv(),
   });
   return renderHelp(statuses, theme);
 }

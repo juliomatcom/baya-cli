@@ -9,7 +9,11 @@ Every component spawns nondeterministic, rate-limited, paid subprocesses. The fa
 
 ## Fake-provider harness
 
-⚠️ **A test workspace is sealed off from the host's provider installs.** `makeWorkspace` gives every run a `$PATH` holding a lone `node` symlink and a `$BAYA_KNOWN_LOCATIONS` scoped to its temp `$HOME`. Both defaults reach real directories — `$PATH`'s node bin and the known-location nvm bin are the same directory `npm i -g` writes to — so a test asserting that **no** provider resolves used to find the developer's own `copilot`. It failed four tests locally and none in CI. Anything that resolves a binary must be reachable through those two variables.
+⚠️ **No test may read the host.** Binary resolution reaches the machine through exactly two variables — `$PATH` and `$BAYA_KNOWN_LOCATIONS` — and `sealedEnv()` in `test/helpers/env.ts` closes both: a `$PATH` holding one `node` symlink, a `$HOME` that does not exist, and an empty known-location list. **Every** test env comes from it; `makeWorkspace` included.
+
+Never hand-build one. `{ PATH: '/nonexistent', HOME: home }` looks sealed and is not: the known-location defaults still reach the active nvm bin, `/opt/homebrew/bin` and `/usr/local/bin`. That is what made four tests fail on a laptop with `copilot` installed and pass in CI — the worst shape a failure takes, because it reads as a broken branch. `env` is **required** on `resolveBinary`, `Registry.resolve`/`resolveAll`, `doctor` and `runSequential` for the same reason: a forgotten env is a type error, not a silent host read. `process.env` enters at the CLI entry points and in `test/contract`, where the host is the subject.
+
+Proof, not assumption: `resolve.test.ts` plants providers in every known location and asserts a sealed env still finds nothing. To check the whole suite by hand, run it hostile — `HOME=<fake home with providers> PATH=<dir of fake providers>:$PATH npm test` — and expect an identical result.
 
 `test/fixtures/fake-provider.mjs` — a real executable pointed at via the user config's binary override. Reads a scenario from `BAYA_FAKE_SCRIPT` (JSON) and replays it deterministically:
 

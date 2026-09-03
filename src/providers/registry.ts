@@ -23,7 +23,8 @@ export interface ProviderStatus {
 export interface ResolveOptions {
   /** user config `providers.<id>.bin` overrides, keyed by provider id. */
   binOverrides?: Partial<Record<ProviderId, string>>;
-  env?: NodeJS.ProcessEnv;
+  /** Required: resolution reads the host through this and nowhere else. */
+  env: NodeJS.ProcessEnv;
   /** Skip the `--version` probe — `resolve()` is on the run path, `doctor` is not. */
   probe?: boolean;
 }
@@ -32,8 +33,8 @@ export interface Registry {
   readonly ids: ProviderId[];
   get(id: string): ProviderAdapter | undefined;
   has(id: string): id is ProviderId;
-  resolve(id: ProviderId, options?: ResolveOptions): Promise<ResolvedProvider | null>;
-  resolveAll(options?: ResolveOptions): Promise<ProviderStatus[]>;
+  resolve(id: ProviderId, options: ResolveOptions): Promise<ResolvedProvider | null>;
+  resolveAll(options: ResolveOptions): Promise<ProviderStatus[]>;
 }
 
 export function createRegistry(adapters: readonly ProviderAdapter[]): Registry {
@@ -44,7 +45,7 @@ export function createRegistry(adapters: readonly ProviderAdapter[]): Registry {
 
   async function resolve(
     id: ProviderId,
-    options: ResolveOptions = {},
+    options: ResolveOptions,
   ): Promise<ResolvedProvider | null> {
     const cacheKey = `${id}:${options.probe === false ? 'nover' : 'ver'}`;
     const cached = cache.get(cacheKey);
@@ -58,7 +59,7 @@ export function createRegistry(adapters: readonly ProviderAdapter[]): Registry {
 
     const found = resolveBinary(id, {
       override: options.binOverrides?.[id],
-      ...(options.env ? { env: options.env } : {}),
+      env: options.env,
       ...(adapter.knownLocations ? { extraLocations: adapter.knownLocations } : {}),
     });
     if (!found) {

@@ -6,6 +6,7 @@ import {
   knownLocations,
   resolveBinary,
 } from '../../../src/providers/index.js';
+import { homeLocations, sealedEnv } from '../../helpers/env.js';
 import { codexAdapter } from '../../../src/providers/codex.js';
 
 function makeExecutable(dir: string, name: string): string {
@@ -39,9 +40,33 @@ describe('knownLocations', () => {
   });
 
   it('resolves nothing when the search list is empty and $PATH is empty', () => {
-    expect(
-      resolveBinary('codex', { env: { PATH: '', BAYA_KNOWN_LOCATIONS: '' } }),
-    ).toBeNull();
+    expect(resolveBinary('codex', { env: sealedEnv({ PATH: '' }) })).toBeNull();
+  });
+});
+
+describe('the sealed test environment', () => {
+  /**
+   * The invariant behind `sealedEnv`, asserted rather than assumed: with
+   * provider binaries planted in every directory resolution knows about,
+   * a sealed env still finds nothing.
+   *
+   * Without it the suite's result depends on what the developer has
+   * installed — four tests failed on a laptop with `copilot` in the nvm bin
+   * and passed in CI, which reads as a broken branch every time.
+   */
+  it('finds nothing even with providers planted in every known location', () => {
+    const host = mkdtempSync(join(tmpdir(), 'baya-hostile-'));
+    makeExecutable(join(host, 'bin'), 'codex');
+    for (const dir of ['.local/bin', '.opencode/bin', '.claude/local']) {
+      makeExecutable(join(host, ...dir.split('/')), 'codex');
+    }
+
+    // A hand-built env that *looks* sealed: it is not, because the
+    // known-location defaults still reach the host.
+    expect(knownLocations({ PATH: '/nonexistent', HOME: host })).not.toEqual([]);
+    // The real thing.
+    expect(resolveBinary('codex', { env: sealedEnv() })).toBeNull();
+    expect(resolveBinary('codex', { env: sealedEnv({ HOME: host }) })).toBeNull();
   });
 });
 
@@ -52,7 +77,7 @@ describe('resolveBinary', () => {
     makeExecutable(join(root, 'path'), 'codex');
 
     expect(
-      resolveBinary('codex', { override, env: { PATH: join(root, 'path') } }),
+      resolveBinary('codex', { override, env: sealedEnv({ PATH: join(root, 'path') }) }),
     ).toEqual({ bin: override, source: 'config' });
   });
 
@@ -62,18 +87,20 @@ describe('resolveBinary', () => {
     expect(
       resolveBinary('codex', {
         override: join(root, 'nope', 'codex'),
-        env: { PATH: join(root, 'path') },
+        env: sealedEnv({ PATH: join(root, 'path') }),
       }),
     ).toBeNull();
-    expect(resolveBinary('codex', { env: { PATH: join(root, 'path') } })?.bin).toBe(
-      onPath,
-    );
+    expect(
+      resolveBinary('codex', { env: sealedEnv({ PATH: join(root, 'path') }) })?.bin,
+    ).toBe(onPath);
   });
 
   it('finds a binary on $PATH', () => {
     const root = mkdtempSync(join(tmpdir(), 'baya-resolve-'));
     const bin = makeExecutable(join(root, 'path'), 'codex');
-    expect(resolveBinary('codex', { env: { PATH: join(root, 'path') } })).toEqual({
+    expect(
+      resolveBinary('codex', { env: sealedEnv({ PATH: join(root, 'path') }) }),
+    ).toEqual({
       bin,
       source: 'path',
     });
@@ -82,18 +109,22 @@ describe('resolveBinary', () => {
   it('finds a binary in ~/.local/bin when $PATH does not have it — never assume $PATH', () => {
     const home = mkdtempSync(join(tmpdir(), 'baya-home-'));
     const bin = makeExecutable(join(home, '.local', 'bin'), 'codex');
-    expect(resolveBinary('codex', { env: { PATH: '/nonexistent', HOME: home } })).toEqual(
-      {
-        bin,
-        source: 'known-location',
-      },
-    );
+    expect(
+      resolveBinary('codex', {
+        env: sealedEnv({ HOME: home, BAYA_KNOWN_LOCATIONS: homeLocations(home) }),
+      }),
+    ).toEqual({
+      bin,
+      source: 'known-location',
+    });
   });
 
   it('returns null when nothing resolves', () => {
     const home = mkdtempSync(join(tmpdir(), 'baya-home-'));
     expect(
-      resolveBinary('codex', { env: { PATH: '/nonexistent', HOME: home } }),
+      resolveBinary('codex', {
+        env: sealedEnv({ HOME: home, BAYA_KNOWN_LOCATIONS: homeLocations(home) }),
+      }),
     ).toBeNull();
   });
 
@@ -101,7 +132,13 @@ describe('resolveBinary', () => {
     const root = mkdtempSync(join(tmpdir(), 'baya-resolve-'));
     mkdirSync(join(root, 'path', 'codex'), { recursive: true });
     expect(
-      resolveBinary('codex', { env: { PATH: join(root, 'path'), HOME: root } }),
+      resolveBinary('codex', {
+        env: sealedEnv({
+          PATH: join(root, 'path'),
+          HOME: root,
+          BAYA_KNOWN_LOCATIONS: homeLocations(root),
+        }),
+      }),
     ).toBeNull();
   });
 });
@@ -113,7 +150,7 @@ describe('registry', () => {
     const registry = createRegistry([codexAdapter]);
 
     const statuses = await registry.resolveAll({
-      env: { PATH: '/nonexistent', HOME: home },
+      env: sealedEnv({ HOME: home, BAYA_KNOWN_LOCATIONS: homeLocations(home) }),
     });
     expect(statuses).toHaveLength(1);
     expect(statuses[0]?.id).toBe('codex');
@@ -125,7 +162,7 @@ describe('registry', () => {
     const home = mkdtempSync(join(tmpdir(), 'baya-home-'));
     const registry = createRegistry([codexAdapter]);
     const statuses = await registry.resolveAll({
-      env: { PATH: '/nonexistent', HOME: home },
+      env: sealedEnv({ HOME: home, BAYA_KNOWN_LOCATIONS: homeLocations(home) }),
     });
     expect(statuses[0]?.resolved).toBeNull();
   });

@@ -12,8 +12,16 @@ import type { ResolvedProvider } from './types.js';
  * the active nvm bin, none of which a non-login shell necessarily exports.
  *
  * Chain: config override -> `$PATH` -> known locations -> not found.
+ *
+ * ⚠️ **`env` is required, everywhere down this file and through the registry.**
+ * It used to default to `process.env`, which meant any caller that forgot it —
+ * including a test — searched the developer's own machine without saying so.
+ * That is how four tests came to pass in CI and fail on a laptop with `copilot`
+ * installed. The ambient environment now enters only where a human names it:
+ * the CLI entry points, and a contract test that probes real binaries on
+ * purpose. A test that forgets gets a type error instead of the host.
  */
-export function knownLocations(env: NodeJS.ProcessEnv = process.env): string[] {
+export function knownLocations(env: NodeJS.ProcessEnv): string[] {
   // `$BAYA_KNOWN_LOCATIONS` replaces the list outright (`:`-delimited); empty
   // means "search nowhere but `$PATH` and the config override".
   //
@@ -52,15 +60,16 @@ function isExecutableFile(path: string): boolean {
 export interface ResolveBinaryOptions {
   /** user config `providers.<id>.bin`. Absolute paths only. */
   override?: string | undefined;
-  env?: NodeJS.ProcessEnv;
+  /** Required — see `knownLocations`. There is no ambient fallback. */
+  env: NodeJS.ProcessEnv;
   extraLocations?: string[];
 }
 
 export function resolveBinary(
   name: string,
-  options: ResolveBinaryOptions = {},
+  options: ResolveBinaryOptions,
 ): { bin: string; source: ResolvedProvider['source'] } | null {
-  const env = options.env ?? process.env;
+  const { env } = options;
 
   if (options.override) {
     // A configured path that does not exist is an error worth surfacing, not a

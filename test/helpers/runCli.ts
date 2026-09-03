@@ -1,19 +1,18 @@
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { main } from '../../src/cli/index.js';
 import { runPaths, type RunPaths } from '../../src/executor/index.js';
 import type { FakeProviderScenario } from './fakeProvider.js';
+import { homeLocations, sealedEnv } from './env.js';
 
 /**
  * Drives the real CLI end to end against `fake-provider.mjs`, which stands in
@@ -23,26 +22,6 @@ import type { FakeProviderScenario } from './fakeProvider.js';
 export const FAKE_PROVIDER = fileURLToPath(
   new URL('../fixtures/fake-provider.mjs', import.meta.url),
 );
-
-/**
- * A `$PATH` holding node and nothing else.
- *
- * ⚠️ This used to be `dirname(process.execPath)` — "the node bin dir, which
- * holds node". Under nvm (and any npm prefix that shares it) that directory is
- * also where `npm i -g` puts its binaries, so on a machine with a provider CLI
- * installed the tests that assert **no** provider resolves found a real one and
- * failed. Four of them, only on such machines, never in CI: the worst shape a
- * failure can take, because it reads as "the branch broke something".
- *
- * Created once per process and shared: it holds a single symlink and is
- * read-only to every test.
- */
-const NODE_ONLY_BIN = (() => {
-  const dir = mkdtempSync(join(tmpdir(), 'baya-node-bin-'));
-  const link = join(dir, 'node');
-  if (!existsSync(link)) symlinkSync(process.execPath, link);
-  return dir;
-})();
 
 export interface Workspace {
   cwd: string;
@@ -105,30 +84,16 @@ export function makeWorkspace(options: CliOptions = {}): Workspace {
     home,
     tasksPath,
     scenarioPath,
-    env: {
-      // The fake provider's shebang is `#!/usr/bin/env node`, so node itself
-      // must stay reachable; the provider binary comes from the config
-      // override, never from this PATH — and no real provider may leak in
-      // through it, which is what `NODE_ONLY_BIN` guarantees.
-      PATH: NODE_ONLY_BIN,
-      // Known-location search, scoped to this workspace's home. Without it the
-      // defaults reach real host directories — the nvm bin included, which is
-      // where `npm i -g` puts provider CLIs — and a test asserting that no
-      // provider resolves finds whatever the developer happens to have
-      // installed. The `.local/bin` entry stays because a test writes a fake
-      // provider there on purpose.
-      BAYA_KNOWN_LOCATIONS: [
-        join(home, '.local', 'bin'),
-        join(home, '.opencode', 'bin'),
-        join(home, '.claude', 'local'),
-      ].join(delimiter),
+    env: sealedEnv({
+      // Known-location search, scoped to this workspace's own home — a test
+      // plants a fake provider in its `.local/bin` on purpose.
+      BAYA_KNOWN_LOCATIONS: homeLocations(home),
       HOME: home,
       XDG_CONFIG_HOME: join(home, '.config'),
       BAYA_FAKE_SCRIPT: scenarioPath,
       BAYA_NO_INPUT: '1',
-      NO_COLOR: '1',
       ...options.env,
-    },
+    }),
   };
 }
 

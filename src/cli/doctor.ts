@@ -18,7 +18,7 @@ export interface DoctorOptions {
   registry: Registry;
   cwd: string;
   theme: Theme;
-  env?: NodeJS.ProcessEnv;
+  env: NodeJS.ProcessEnv;
   binOverrides?: Partial<Record<ProviderId, string>>;
 }
 
@@ -32,7 +32,9 @@ export async function doctor(options: DoctorOptions): Promise<DoctorReport> {
   const { theme } = options;
   const statuses = await options.registry.resolveAll({
     ...(options.binOverrides ? { binOverrides: options.binOverrides } : {}),
-    ...(options.env ? { env: options.env } : {}),
+    // `doctor` reports on the machine it is run on, so the ambient environment
+    // is the subject here — but the caller names it; this never assumes it.
+    env: options.env,
   });
 
   const lines: string[] = ['', `  ${theme.taskId('Providers')}`];
