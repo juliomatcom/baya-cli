@@ -6,18 +6,21 @@
 
 ```
 
-**Orchestrate local AI coding CLIs from a plain-text task list.**
+**Run a list of coding tasks across the AI subscriptions you already use.**
 
 [![CI](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/baya-cli)](https://www.npmjs.com/package/baya-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Write what you want done in an ordinary text file — Markdown, a bare to-do list, YAML, whatever you already keep tasks in. Baya asks a model to turn it into a dependency graph, then routes each task to the AI coding CLI you already have installed and logged in — `codex`, `claude`, `copilot`, `opencode` — running independent work in parallel and piping each task's output into the ones that depend on it.
+## One command. Multiple models. No juggling.
 
-No config format to learn. No DSL. No API keys for every provider — it drives the CLIs you already pay for.
+Baya is a zero-config command-line orchestrator for executing coding tasks with the AI agents you already have installed and authenticated. Write the actions in plain text and run one command. Baya turns them into a dependency graph, routes each task to the provider and model that fit it, and carries the run through to a report.
 
-> [!WARNING]
-> **Status: early.** The walking skeleton (M1), provider breadth (M3), and most of concurrency & resilience (M2) have landed — `codex`, `claude`, `opencode`, and `copilot` adapters, model-catalog resolution, a parallel scheduler, `baya runs` / `baya resume`, and process-group signal teardown. Published to npm as [`baya-cli`](https://www.npmjs.com/package/baya-cli). Still open: `--on-error stop`, a parallel-aware status line, and the recovery prompt. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
+It works with `codex`, `claude`, `copilot`, and `opencode`. Use one default model, or choose a different model or provider for a specific task. Independent tasks run in parallel; dependent tasks wait for their prerequisites. Compatible tasks share a process, and useful findings pass forward, so you spend less time switching agents and less money repeating setup and discovery.
+
+If a provider fails, runs out of quota, or you interrupt the command, Baya checkpoints the run and resumes the unfinished work. There is no config format, DSL, or separate API key to learn.
+
+Tools such as [T3 Code](https://github.com/pingdotgg/t3code) focus on interactively controlling agent sessions. Baya focuses on executing a task list from start to finish. For this workflow, its advantage is automation: one command handles planning, model selection, ordering, parallel execution, context handoff, process reuse, and recovery while coordinating the subscriptions and coding agents already on your machine.
 
 ---
 
@@ -99,6 +102,9 @@ Baya never parses these structurally — the planner reads every format for inte
 - ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider; `baya runs` lists what is resumable. A `quota` failure halts the run cleanly rather than feeding the wall every remaining task.
 - ✅ **Skips what you already ticked off** — a task marked `[x]`, `[done]`, `(complete)` or ✅ is read for context and never planned as work, so re-running a part-finished list does not re-pay for what landed.
 - ✅ **Ctrl+C actually stops** — SIGTERM to every provider's process group, a grace window, then SIGKILL; a second Ctrl+C skips the wait. Grandchildren are reaped, not orphaned, and the same path covers SIGTERM, SIGHUP and an uncaught crash.
+
+> [!WARNING]
+> **Status: early.** The walking skeleton (M1), provider breadth (M3), and most of concurrency & resilience (M2) have landed — `codex`, `claude`, `opencode`, and `copilot` adapters, model-catalog resolution, a parallel scheduler, `baya runs` / `baya resume`, and process-group signal teardown. Published to npm as [`baya-cli`](https://www.npmjs.com/package/baya-cli). Still open: `--on-error stop`, a parallel-aware status line, and the recovery prompt. Follow along in [`specs/001/02-plan.md`](specs/001/02-plan.md).
 
 ## How it works
 
