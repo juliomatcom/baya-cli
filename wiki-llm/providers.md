@@ -88,6 +88,8 @@ Chain: user config (`providers.<id>.bin`) override → `$PATH` → known locatio
 
 Reference machine: `claude`/`codex` in `~/.local/bin`; `copilot`/`gemini` in nvm bin; `opencode` in `~/.opencode/bin`. **None in a system directory** — never assume a plain `$PATH` lookup.
 
+`$BAYA_KNOWN_LOCATIONS` (`:`-delimited) replaces that list outright; set-and-empty means "search nowhere but `$PATH` and the config override". ⚠️ Three defaults are absolute **host** paths — the active nvm bin above all, which is also where `npm i -g` lands — so code that must resolve _nothing_ resolves whatever the developer happens to have installed. `test/helpers/runCli.ts` scopes both this and `$PATH` to the temp workspace for exactly that reason: four integration tests asserting "no provider resolves" found the machine's real `copilot`, failing on the author's machine and passing in CI, which reads as a broken branch every time. Any new host-wide lookup must be reachable through this variable.
+
 ---
 
 ## codex — ✅ verified 2026-08-28 (live); adapter M1.5 landed

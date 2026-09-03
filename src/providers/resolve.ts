@@ -14,6 +14,19 @@ import type { ResolvedProvider } from './types.js';
  * Chain: config override -> `$PATH` -> known locations -> not found.
  */
 export function knownLocations(env: NodeJS.ProcessEnv = process.env): string[] {
+  // `$BAYA_KNOWN_LOCATIONS` replaces the list outright (`:`-delimited); empty
+  // means "search nowhere but `$PATH` and the config override".
+  //
+  // Three of the defaults are absolute host paths — the nvm bin above all,
+  // which is also where `npm i -g` lands — so on a machine with a provider
+  // installed there, code that must resolve *nothing* resolves something. That
+  // is not hypothetical: it failed four tests on the author's machine and none
+  // in CI, which reads as "this branch broke the suite" every time.
+  const configured = env['BAYA_KNOWN_LOCATIONS'];
+  if (configured !== undefined) {
+    return configured.split(delimiter).filter((dir) => dir !== '');
+  }
+
   const home = env['HOME'] ?? homedir();
   return [
     join(home, '.local', 'bin'),

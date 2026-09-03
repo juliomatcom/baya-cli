@@ -1,7 +1,11 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createRegistry, resolveBinary } from '../../../src/providers/index.js';
+import {
+  createRegistry,
+  knownLocations,
+  resolveBinary,
+} from '../../../src/providers/index.js';
 import { codexAdapter } from '../../../src/providers/codex.js';
 
 function makeExecutable(dir: string, name: string): string {
@@ -11,6 +15,35 @@ function makeExecutable(dir: string, name: string): string {
   chmodSync(path, 0o755);
   return path;
 }
+
+describe('knownLocations', () => {
+  /**
+   * Three of the defaults are absolute host paths, the active nvm bin among
+   * them — which is also where `npm i -g` puts provider CLIs. Anything that
+   * must resolve *nothing* therefore resolved whatever the developer had
+   * installed: four integration tests failed on the author's machine and none
+   * in CI, which reads as a broken branch every time.
+   */
+  it('lets the environment replace the host paths it would otherwise search', () => {
+    expect(knownLocations({ BAYA_KNOWN_LOCATIONS: '/a:/b' })).toEqual(['/a', '/b']);
+  });
+
+  it('treats an empty value as "search nowhere", not as "use the defaults"', () => {
+    expect(knownLocations({ BAYA_KNOWN_LOCATIONS: '' })).toEqual([]);
+  });
+
+  it('still searches the defaults when the variable is unset', () => {
+    const locations = knownLocations({ HOME: '/home/x' });
+    expect(locations).toContain('/home/x/.local/bin');
+    expect(locations.length).toBeGreaterThan(1);
+  });
+
+  it('resolves nothing when the search list is empty and $PATH is empty', () => {
+    expect(
+      resolveBinary('codex', { env: { PATH: '', BAYA_KNOWN_LOCATIONS: '' } }),
+    ).toBeNull();
+  });
+});
 
 describe('resolveBinary', () => {
   it('takes a config override ahead of everything else', () => {

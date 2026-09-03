@@ -9,6 +9,8 @@ Every component spawns nondeterministic, rate-limited, paid subprocesses. The fa
 
 ## Fake-provider harness
 
+⚠️ **A test workspace is sealed off from the host's provider installs.** `makeWorkspace` gives every run a `$PATH` holding a lone `node` symlink and a `$BAYA_KNOWN_LOCATIONS` scoped to its temp `$HOME`. Both defaults reach real directories — `$PATH`'s node bin and the known-location nvm bin are the same directory `npm i -g` writes to — so a test asserting that **no** provider resolves used to find the developer's own `copilot`. It failed four tests locally and none in CI. Anything that resolves a binary must be reachable through those two variables.
+
 `test/fixtures/fake-provider.mjs` — a real executable pointed at via the user config's binary override. Reads a scenario from `BAYA_FAKE_SCRIPT` (JSON) and replays it deterministically:
 
 ```json
