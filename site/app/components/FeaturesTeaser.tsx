@@ -10,23 +10,24 @@ const LICENSE_URL =
 const TEASER_CARDS = [
   {
     number: '01',
-    icon: 'layers' as const,
-    title: 'Multi-agent orchestration',
-    description: 'Parallel task execution and process reuse.',
+    icon: 'graph' as const,
+    title: 'LLM-planned dependency graph',
+    description:
+      'Baya turns your plain-text list into a DAG. Independent tasks run in parallel; dependent tasks wait for their prerequisites.',
   },
   {
     number: '02',
     icon: 'route' as const,
-    title: 'Visual dependency graph & routing',
+    title: 'Per-task model routing',
     description:
-      'Your task list becomes a dependency graph, and every task is routed to the provider and model that fit it best.',
+      'Every task goes to the provider and model that fit it — codex, claude, copilot, or opencode — on the CLI subscriptions you already have. No API keys.',
   },
   {
     number: '03',
-    icon: 'handoff' as const,
-    title: 'Context & state handoff',
+    icon: 'recycle' as const,
+    title: 'Process reuse & context handoff',
     description:
-      'State is managed automatically, and useful findings hand off between tasks — even across different models.',
+      'Compatible tasks share one agent process, and useful findings pass forward between tasks — even across models — so you never pay twice for setup and discovery.',
   },
 ];
 
