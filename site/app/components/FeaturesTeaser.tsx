@@ -125,12 +125,22 @@ export default function FeaturesTeaser() {
             </Link>
           </p>
 
-          <div className="mt-14 text-center">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Usage
-            </h3>
-            <div className="mx-auto mt-4 max-w-xl">
-              <CopyCodeBlock code="baya <task-list.yaml>" />
+          <div className="mx-auto mt-14 max-w-xl space-y-6 text-center">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Usage
+              </h3>
+              <div className="mt-4">
+                <CopyCodeBlock code="baya <path-to-task-file>" wrap={false} />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Help
+              </h3>
+              <div className="mt-4">
+                <CopyCodeBlock code="baya -h" wrap={false} />
+              </div>
             </div>
           </div>
         </div>
@@ -144,7 +154,7 @@ export default function FeaturesTeaser() {
               Node 24+ and one supported CLI. Then:
             </p>
             <div className="mt-3">
-              <CopyCodeBlock code="npm install -g baya-cli" />
+              <CopyCodeBlock code="npm install -g baya-cli" wrap={false} />
             </div>
           </div>
 

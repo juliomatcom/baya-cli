@@ -2,28 +2,38 @@ import Link from 'next/link';
 
 const GITHUB_URL = 'https://github.com/juliomatcom/baya-cli';
 
-const TERMINAL_LINES = [
-  { text: '$ baya my-tasks.md', tone: 'prompt' as const },
-  { text: 'Run order · 3 tasks · 2 stages', tone: 'muted' as const },
-  {
-    text: '✓ design-api    codex     4.2s   Designed the orders REST API',
-    tone: 'default' as const,
-  },
-  {
-    text: '✓ db-schema     claude    6.9s   Generated the schema from that design',
-    tone: 'default' as const,
-  },
-  {
-    text: '✓ integration   codex    12.4s   Wrote integration tests for the endpoint',
-    tone: 'default' as const,
-  },
-  { text: '', tone: 'default' as const },
+type Line = { text: string; className?: string };
+
+// A trimmed-down end-of-run report, matching the shape `baya` actually prints:
+// the run header, a few completed tasks, the graded headline with token and
+// cost totals, and the Flagged section.
+const BODY_LINES: Line[] = [
+  { text: '$ baya build-site.md', className: 'text-slate-300' },
+  { text: 'Run order · 18 tasks · 9 stages', className: 'text-slate-500' },
+  { text: '' },
+  { text: '  ✓ scaffold-site  luna    project scaffolded', className: 'text-slate-300' },
+  { text: '  ✓ visual-base    sonnet  dark hero, green accent', className: 'text-slate-300' },
+  { text: '  ✓ docs-page      sonnet  sidebar from the wiki', className: 'text-slate-300' },
+  { text: '  ✓ seo-pass       sonnet  sitemap, robots, JSON-LD', className: 'text-slate-300' },
+  { text: '  · 14 more', className: 'text-slate-500' },
+  { text: '' },
+];
+
+const SUMMARY_LINES: Line[] = [
+  { text: '✓ Run complete', className: 'font-bold text-accent' },
+  { text: '  18 succeeded · 112m57s · 7 processes', className: 'text-slate-400' },
+  { text: '  21.5M tokens (20.6M cached) · $3.98', className: 'text-slate-400' },
+  { text: '' },
+  { text: 'Flagged', className: 'text-slate-500' },
+  { text: '  ⚑ add-pages-workflow', className: 'text-[#eab308]' },
+  { text: '    enable GitHub Pages — I cannot', className: 'text-slate-300' },
+  { text: '' },
 ];
 
 export default function Hero() {
   return (
     <section className="surface-dark">
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pb-20 pt-12 md:grid-cols-2 md:gap-16 md:pb-28 md:pt-16">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 pb-20 pt-12 md:grid-cols-2 md:gap-16 md:pb-28 md:pt-16">
         <div>
           <h1 className="text-4xl font-bold text-white sm:text-5xl">
             One command. Multiple models. No juggling.
@@ -50,7 +60,7 @@ export default function Hero() {
           </div>
         </div>
 
-        <div className="terminal-window">
+        <div className="terminal-window min-w-0">
           <div className="terminal-titlebar" aria-hidden="true">
             <span className="terminal-dot bg-[#ff5f56]" />
             <span className="terminal-dot bg-[#ffbd2e]" />
@@ -58,24 +68,14 @@ export default function Hero() {
           </div>
           <pre className="terminal-body">
             <code>
-              {TERMINAL_LINES.map((line) => (
+              {[...BODY_LINES, ...SUMMARY_LINES].map((line, index) => (
                 <span
-                  key={line.text || 'blank'}
-                  className={
-                    line.tone === 'muted'
-                      ? 'block text-slate-500'
-                      : line.tone === 'prompt'
-                        ? 'block text-slate-300'
-                        : 'block'
-                  }
+                  key={line.text || `blank-${index}`}
+                  className={`block ${line.className ?? ''}`}
                 >
-                  {line.text || ' '}
+                  {line.text || ' '}
                 </span>
               ))}
-              <span className="block">
-                Final summary:{' '}
-                <span className="text-accent">Successful</span>
-              </span>
               <span className="block text-slate-300">
                 ${' '}
                 <span className="cursor-blink" aria-hidden="true" />
