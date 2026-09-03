@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import CopyCodeBlock from '@/app/components/CopyCodeBlock';
 import FeatureCard from '@/app/components/FeatureCard';
+import UsageTerminal from '@/app/components/UsageTerminal';
 
 const GITHUB_URL = 'https://github.com/juliomatcom/baya-cli';
 const LICENSE_URL =
@@ -100,11 +101,11 @@ export default function FeaturesTeaser() {
        * The dark cards start on the band and run onto the white below it.
        */}
       <div
-        className="surface-dark absolute inset-x-0 top-0 h-80"
+        className="surface-dark absolute inset-x-0 top-0 h-72"
         aria-hidden="true"
       />
 
-      <div className="relative mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3 md:py-16">
+      <div className="relative mx-auto grid max-w-6xl gap-10 px-6 py-10 md:grid-cols-3 md:py-12">
         <div className="md:col-span-2">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
             What you get
@@ -125,23 +126,8 @@ export default function FeaturesTeaser() {
             </Link>
           </p>
 
-          <div className="mx-auto mt-14 max-w-xl space-y-6 text-center">
-            <div>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Usage
-              </h3>
-              <div className="mt-4">
-                <CopyCodeBlock code="baya <path-to-task-file>" wrap={false} />
-              </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Help
-              </h3>
-              <div className="mt-4">
-                <CopyCodeBlock code="baya -h" wrap={false} />
-              </div>
-            </div>
+          <div className="mt-12">
+            <UsageTerminal />
           </div>
         </div>
 

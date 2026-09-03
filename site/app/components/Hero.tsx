@@ -8,32 +8,31 @@ type Line = { text: string; className?: string };
 // the run header, a few completed tasks, the graded headline with token and
 // cost totals, and the Flagged section.
 const BODY_LINES: Line[] = [
-  { text: '$ baya build-site.md', className: 'text-slate-300' },
-  { text: 'Run order · 18 tasks · 9 stages', className: 'text-slate-500' },
+  { text: '$ baya tasks.md', className: 'text-slate-300' },
+  { text: 'Run order · 6 tasks · 3 stages', className: 'text-slate-500' },
   { text: '' },
-  { text: '  ✓ scaffold-site  luna    project scaffolded', className: 'text-slate-300' },
-  { text: '  ✓ visual-base    sonnet  dark hero, green accent', className: 'text-slate-300' },
-  { text: '  ✓ docs-page      sonnet  sidebar from the wiki', className: 'text-slate-300' },
-  { text: '  ✓ seo-pass       sonnet  sitemap, robots, JSON-LD', className: 'text-slate-300' },
-  { text: '  · 14 more', className: 'text-slate-500' },
+  { text: '  ✓ design-api   codex   6 endpoints', className: 'text-slate-300' },
+  { text: '  ✓ gen-schema   claude  4 tables created', className: 'text-slate-300' },
+  { text: '  ✓ build-ui     codex   orders table', className: 'text-slate-300' },
+  { text: '  ✓ tests        codex   14 tests pass', className: 'text-slate-300' },
   { text: '' },
 ];
 
 const SUMMARY_LINES: Line[] = [
   { text: '✓ Run complete', className: 'font-bold text-accent' },
-  { text: '  18 succeeded · 112m57s · 7 processes', className: 'text-slate-400' },
-  { text: '  21.5M tokens (20.6M cached) · $3.98', className: 'text-slate-400' },
+  { text: '  6 succeeded · 1m12s · 2 processes', className: 'text-slate-400' },
+  { text: '  214k tokens (188k cached) · $0.37', className: 'text-slate-400' },
   { text: '' },
   { text: 'Flagged', className: 'text-slate-500' },
-  { text: '  ⚑ add-pages-workflow', className: 'text-[#eab308]' },
-  { text: '    enable GitHub Pages — I cannot', className: 'text-slate-300' },
+  { text: '  ⚑ gen-schema', className: 'text-[#eab308]' },
+  { text: '    locks users ~30s at 1M+ rows', className: 'text-slate-300' },
   { text: '' },
 ];
 
 export default function Hero() {
   return (
     <section className="surface-dark">
-      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 pb-20 pt-12 md:grid-cols-2 md:gap-16 md:pb-28 md:pt-16">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 pb-12 pt-12 md:grid-cols-2 md:gap-16 md:pb-14 md:pt-16">
         <div>
           <h1 className="text-4xl font-bold text-white sm:text-5xl">
             One command. Multiple models. No juggling.
