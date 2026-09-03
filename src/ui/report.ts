@@ -297,6 +297,11 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   // The `$` figure stays only when a provider gave us one (cli.md: no fabricated
   // cost). See spec §Non-goals — cost accounting is v1.1.
   const tokens = (totals.input_tokens ?? 0) + (totals.output_tokens ?? 0);
+  // The cached share, called out because it changes what the total *means*.
+  // A run reporting `8.5M tokens` reads as runaway spend; `8.5M tokens (8.3M
+  // cached)` says most of it was a cache read a provider re-sent, and moves
+  // the question to why the same context was re-sent so many times.
+  const cached = totals.cached_input_tokens ?? 0;
   const meter: string[] = [];
   // Sits with the cost meters, not the task counts, because that is what it
   // is: every process re-pays a CLI's startup. Suppressed for a single task,
@@ -304,7 +309,13 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   if (report.tasks.length > 1 && report.processes > 0) {
     meter.push(`${report.processes} ${report.processes === 1 ? 'process' : 'processes'}`);
   }
-  if (tokens > 0) meter.push(`${formatTokens(tokens)} tokens`);
+  if (tokens > 0) {
+    meter.push(
+      cached > 0
+        ? `${formatTokens(tokens)} tokens (${formatTokens(cached)} cached)`
+        : `${formatTokens(tokens)} tokens`,
+    );
+  }
   if (totals.cost_usd > 0) meter.push(formatCost(totals.cost_usd));
   // Hierarchy, loudest first: a filled badge for the outcome, colored counts
   // for what happened, and the meters dimmed — they are reference numbers, not

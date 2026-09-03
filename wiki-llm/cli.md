@@ -212,6 +212,8 @@ The headline is a filled badge, graded on **how much of the run landed** — not
 
 `processes` counts provider processes actually spawned (execution.md §Grouping), not tasks — the number that says whether grouping is earning its place. Omitted for a single-task run. Also on the `--json` report as `processes`.
 
+The token meter names the **cached share** when a provider reported one: `8.5M tokens (8.3M cached)`. The bare total reads as runaway spend on a run that mostly re-sent context it had already paid to write; the split moves the question to why the same context went out so many times. Omitted when `cached_input_tokens` is zero.
+
 **Flagged** aggregates every `notes[]` entry across all tasks, `action_required` first, printed last. No notes ⇒ section omitted. `--json` carries per-task `notes` + an aggregated `flagged` array — nothing terminal-only is lost to a pipe.
 
 **Next** is the way back into an unfinished run, printed last of all and omitted entirely when every task succeeded:

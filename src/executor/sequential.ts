@@ -952,6 +952,22 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
  * A dependency inside the same group has not run yet, so there is no result to
  * summarize — but it still belongs in the context, because the prompt has to
  * tell the agent that the upstream work is its own, a few sections above.
+ *
+ * ⚠️ This entry is written **before any of the group runs**, so it cannot know
+ * how the dependency turned out. It used to claim `status: 'ok'` — "Done
+ * earlier in this same conversation." — which was a guess that read as a fact.
+ *
+ * Run 20260903T080018Z: `scaffold-site` failed on a sandbox with no network,
+ * and the two tasks grouped behind it read "(ok)" in their own context and did
+ * their work anyway — editing the root tooling and running the root test
+ * suite. `markDescendantsSkipped` then discarded both `ok` results, because
+ * the DAG says work built on a failed dependency cannot be trusted. Paid for,
+ * thrown away, and the files left on disk contradicting a state that said
+ * `skipped`.
+ *
+ * So the status is `pending` and the prompt says what to do if it did not
+ * succeed. A group cannot be steered from outside — it is one process, one
+ * conversation — so the only lever is telling the truth in the prompt.
  */
 function collectUpstreams(
   task: Task,
@@ -970,8 +986,8 @@ function collectUpstreams(
         {
           taskId: depId,
           title: dep.title,
-          status: 'ok',
-          summary: 'Done earlier in this same conversation.',
+          status: 'pending',
+          summary: 'Earlier task in this same batch — not yet run when this was written.',
           resultPath: paths.result(depId),
           outputPath: paths.output(depId),
           output: '',

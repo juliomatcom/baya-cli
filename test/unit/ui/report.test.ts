@@ -179,6 +179,41 @@ describe('renderReport', () => {
     expect(text).not.toContain('$0.00');
   });
 
+  /**
+   * `8.5M tokens` on a failed run reads as runaway spend. Naming the cached
+   * share says most of it was context a provider re-sent, and moves the
+   * question to why the same context was re-sent so many times.
+   */
+  it('names the cached share, which changes what the total means', () => {
+    const cached = state({
+      totals: {
+        ...state().totals,
+        cost_usd: 0,
+        input_tokens: 8_490_701,
+        output_tokens: 42_534,
+        cached_input_tokens: 8_261_553,
+        cache_write_input_tokens: 0,
+      },
+    });
+    expect(renderReport(report(cached), theme)).toContain('8.5M tokens (8.3M cached)');
+  });
+
+  it('says nothing about a cache the provider never reported', () => {
+    const uncached = state({
+      totals: {
+        ...state().totals,
+        cost_usd: 0,
+        input_tokens: 1000,
+        output_tokens: 200,
+        cached_input_tokens: 0,
+        cache_write_input_tokens: 0,
+      },
+    });
+    const text = renderReport(report(uncached), theme);
+    expect(text).toContain('1.2k tokens');
+    expect(text).not.toContain('cached');
+  });
+
   // A `<id>` placeholder in this line left the reader to assemble the path by
   // hand — the one thing the line exists to spare them.
   it('names the file itself when a single task wrote an output', () => {

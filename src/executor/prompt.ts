@@ -106,8 +106,11 @@ export function renderGroupPrompt(
     'did rather than rediscovering it. They are still separate tasks: each has its',
     'own instruction and needs its own entry in the response.',
     '',
-    'If one task fails, keep going with the rest unless they depended on it, and',
-    "report the failure in that task's own entry.",
+    'If one task fails, keep going with the rest — except any task that lists it',
+    'under `Upstream results`. Those depend on it, and Baya discards their results',
+    'anyway when the task they were built on failed. Report such a task `failed`',
+    'without attempting it, naming the dependency in `error.message`. Doing the',
+    'work regardless is paid for and then thrown away.',
     '',
   );
 
@@ -228,7 +231,13 @@ function contextLines(request: TaskRequest, inGroup: ReadonlySet<string>): strin
     lines.push(`Full result: ${entry.result_path}`);
     lines.push(`Full output: ${entry.output_path}`);
     if (inGroup.has(entry.task_id)) {
-      lines.push('(You did this earlier in this same conversation — see above.)');
+      // Written before the batch started, so it cannot say how that task went;
+      // the agent is the only one who knows, and only it can act on the answer.
+      lines.push(
+        `(This task depends on ${entry.task_id}, which you do earlier in this same`,
+        'conversation — see above. If it did not succeed, do not attempt this task:',
+        'report it `failed`, naming that dependency in `error.message`.)',
+      );
     } else if (entry.inline !== null) {
       lines.push('', '<upstream_output>', entry.inline, '</upstream_output>');
     } else {
