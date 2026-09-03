@@ -5,12 +5,13 @@ import { pageMetadata } from '@/app/lib/site';
 export const metadata: Metadata = pageMetadata({
   title: 'FAQ – Baya',
   description:
-    'Answers to the common questions about Baya: why not just use one CLI, whether it saves money, whether you need API keys, and whether parallel runs are safe.',
+    'Answers to the common questions about Baya: why not just use one CLI, how it compares to T3 Code, whether it saves money, whether you need API keys, and whether parallel runs are safe.',
   path: '/faq',
 });
 
 /**
- * The four README FAQ pairs. `question` and `answerText` are plain strings that
+ * The README FAQ pairs (plus the T3 Code comparison from the README intro).
+ * `question` and `answerText` are plain strings that
  * feed the FAQPage JSON-LD verbatim; `answer` is the richer markup rendered on
  * the page. Keep the two in sync when either side changes.
  */
@@ -32,6 +33,30 @@ const FAQ: FaqEntry[] = [
         Because you probably pay for more than one, and they are good at
         different things. Baya lets a task list say “plan with one, build with
         another” and handles the plumbing.
+      </p>
+    ),
+  },
+  {
+    id: 'vs-t3-code',
+    question: 'How is this different from T3 Code?',
+    answerText:
+      'Tools such as T3 Code focus on interactively controlling agent sessions. Baya focuses on executing a task list from start to finish. Its advantage for that workflow is automation: one command handles planning, model selection, ordering, parallel execution, context handoff, process reuse, and recovery while coordinating the subscriptions and coding agents already on your machine.',
+    answer: (
+      <p>
+        Tools such as{' '}
+        <a
+          href="https://github.com/pingdotgg/t3code"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          T3 Code
+        </a>{' '}
+        focus on interactively controlling agent sessions. Baya focuses on
+        executing a task list from start to finish. Its advantage for that
+        workflow is automation: one command handles planning, model selection,
+        ordering, parallel execution, context handoff, process reuse, and
+        recovery while coordinating the subscriptions and coding agents already
+        on your machine.
       </p>
     ),
   },
@@ -139,8 +164,9 @@ export default function FaqPage() {
           Questions people ask
         </h1>
         <p className="mt-6 text-lg text-slate-600">
-          Why Baya sits alongside the CLIs you already run, what it does for your
-          bill, and how it keeps a parallel run from stepping on itself.
+          Why Baya sits alongside the CLIs you already run, how it compares to
+          T3 Code, what it does for your bill, and how it keeps a parallel run
+          from stepping on itself.
         </p>
 
         <div className="mt-12 space-y-10">

@@ -4,11 +4,20 @@ import { useEffect, useRef, useState } from 'react';
 
 type CopyCodeBlockProps = {
   code: string;
+  /**
+   * Wrap long lines instead of scrolling them. On by default for the
+   * multi-line task-list examples; pass `false` for single-line commands that
+   * should stay on one line (and scroll if the container is too narrow).
+   */
+  wrap?: boolean;
 };
 
 const COPIED_DURATION_MS = 1500;
 
-export default function CopyCodeBlock({ code }: CopyCodeBlockProps) {
+export default function CopyCodeBlock({
+  code,
+  wrap = true,
+}: CopyCodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -35,8 +44,12 @@ export default function CopyCodeBlock({ code }: CopyCodeBlockProps) {
   }
 
   return (
-    <div className="flex items-center gap-4 overflow-hidden rounded-lg bg-ink px-4 py-3 text-sm text-slate-200">
-      <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap break-words font-mono">
+    <div className="flex items-center gap-3 overflow-hidden rounded-lg bg-ink px-4 py-3 text-sm text-slate-200">
+      <pre
+        className={`min-w-0 flex-1 overflow-x-auto font-mono ${
+          wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
+        }`}
+      >
         <code>{code}</code>
       </pre>
       <button
