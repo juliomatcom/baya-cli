@@ -1,0 +1,1 @@
+Baya — one command runs a plain-text list of coding tasks across the AI agents you already use.

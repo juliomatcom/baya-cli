@@ -2,4 +2,5 @@ dist/
 coverage/
 .baya/
 node_modules/
+site/
 CHANGELOG.md
