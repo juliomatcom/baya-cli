@@ -12,7 +12,7 @@ export const SITE_NAME = 'Baya';
 
 /** One-line pitch, lifted from the README. */
 export const SITE_DESCRIPTION =
-  'Baya is a zero-config command-line orchestrator for executing coding tasks with the AI agents you already have installed and authenticated. Write the actions in plain text and run one command: Baya turns them into a dependency graph, routes each task to the provider and model that fit it, and carries the run through to a report.';
+  'Baya is a zero-config command-line orchestrator for the AI coding agents you already have installed and authenticated. Write the actions in plain text and run one command: Baya turns them into a dependency graph, routes each task to the provider and model that fit it, and carries the run through to a report.';
 
 /** Default social card, served as static files from `app/`. */
 export const OG_IMAGE = '/opengraph-image.png';

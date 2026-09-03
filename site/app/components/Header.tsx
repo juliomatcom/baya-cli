@@ -39,7 +39,7 @@ export default function Header() {
           <span className="text-accent" aria-hidden="true">
             {'>_'}
           </span>
-          <span className="text-white">Baya-cli</span>
+          <span className="text-white">Baya-cli 🕊️</span>
         </Link>
 
         <nav

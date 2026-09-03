@@ -29,11 +29,11 @@ export default function Hero() {
             One command. Multiple models. No juggling.
           </h1>
           <p className="mt-6 max-w-xl text-lg text-slate-400">
-            Baya is a zero-config command-line orchestrator that turns a plain-text
-            task list into a dependency graph and routes each task to the provider
-            and model that fit it. Independent tasks run in parallel, dependent
-            tasks wait for their prerequisites, and the run carries through to a
-            report.
+            Baya is a zero-config command-line orchestrator for AI coding agents.
+            It turns a plain-text task list into a dependency graph and routes
+            each task to the provider and model that fit it. Independent tasks
+            run in parallel, dependent tasks wait for their prerequisites, and
+            the run carries through to a report.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-6">
             <Link href="/#install" className="btn-accent">

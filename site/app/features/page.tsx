@@ -7,7 +7,7 @@ import { pageMetadata } from '@/app/lib/site';
 export const metadata: Metadata = pageMetadata({
   title: 'Features – Baya',
   description:
-    'Everything Baya does: zero-config multi-provider orchestration, an LLM-planned dependency graph, per-task model routing, parallel execution, process grouping, cross-task memory, a preview gate, checkpointed resume, and clean Ctrl+C teardown.',
+    'Everything Baya does: zero-config orchestration for AI coding agents, an LLM-planned dependency graph, per-task model routing, parallel execution, process grouping, cross-task memory, a preview gate, checkpointed resume, and clean Ctrl+C teardown.',
   path: '/features',
 });
 
