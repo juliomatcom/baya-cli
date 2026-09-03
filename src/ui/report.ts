@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { Manifest, Note, NoteSeverity } from '../manifest/index.js';
-import type { RunState } from '../executor/state.js';
+import type { Failure, RunState } from '../executor/state.js';
 import type { Theme } from './theme.js';
 import { formatCost, formatDuration, formatTokens, wrap } from './text.js';
 
@@ -55,7 +55,28 @@ export interface RunReport {
   run_dir: string;
   /** Absolute `tasks/` directory. Every task's `output.md` sits one level in. */
   outputs_path: string;
+  /** How to pick the run back up, or `null` when nothing is left to run. */
+  next: NextStep | null;
   exit_code: number;
+}
+
+/**
+ * The way back into an unfinished run.
+ *
+ * A run that stops on something the user has to fix — no network, a spent
+ * allowance, a denied permission — leaves them holding a failure and no way
+ * forward. `baya resume <runId>` has always existed; the report never said so,
+ * so the obvious move was to re-run the whole task list and pay again for
+ * every task that already succeeded.
+ *
+ * `cause` names what to fix, `command` is the line to paste once it is fixed,
+ * and `scope` says what resuming will and will not re-run. `--json` carries the
+ * same three, so a pipe is not left guessing either.
+ */
+export interface NextStep {
+  cause: string;
+  command: string;
+  scope: string;
 }
 
 const SEVERITY_ORDER: Record<NoteSeverity, number> = {
@@ -63,6 +84,97 @@ const SEVERITY_ORDER: Record<NoteSeverity, number> = {
   warn: 1,
   info: 2,
 };
+
+/**
+ * One line on what to fix, per `failure.kind` (recovery.md §Failure taxonomy).
+ *
+ * Support, not the headline: the command above it is what the reader needs,
+ * and this says what to do before pasting it. Kept to a single line each, and
+ * never naming a flag Baya does not have — a wrong flag costs more trust than
+ * a vague sentence.
+ */
+const CAUSE_BY_KIND: Record<Failure['kind'], string> = {
+  network:
+    'The network was unreachable — check connectivity, a VPN or proxy, and that the registry or API the task needs is up.',
+  quota:
+    "The provider's allowance is spent — wait for the reset, or add `--provider <id>` to finish the rest elsewhere.",
+  rate_limit:
+    'The provider is rate-limiting — give it a few minutes, or add `--provider <id>` to finish elsewhere.',
+  auth: 'The provider rejected the credentials — sign in again, or fix the API key.',
+  permission:
+    'A task was denied a permission it needed — widen its access, or re-run with `--dangerously-allow-all` if that is what you intend.',
+  timeout: 'A task ran past its runtime limit — split it into smaller tasks.',
+  schema:
+    'A provider returned a result Baya could not read — nothing to fix on your side.',
+  crash:
+    'The provider CLI exited badly — its stderr log is under the run directory above.',
+  interrupted: 'Nothing to fix: the run was interrupted.',
+};
+
+/** Highest-priority kind first: the ones a person must act on before a retry can work. */
+const KIND_PRIORITY: readonly Failure['kind'][] = [
+  'quota',
+  'auth',
+  'permission',
+  'network',
+  'timeout',
+  'rate_limit',
+  'schema',
+  'crash',
+  'interrupted',
+];
+
+/**
+ * The dominant failure, not merely the first: one `quota` halts a whole run
+ * and every other task's failure is downstream of it, so reporting whichever
+ * task happened to be listed first would name a symptom as the cause.
+ */
+function dominantKind(state: RunState): Failure['kind'] | null {
+  const kinds = new Set(
+    Object.values(state.tasks)
+      .map((entry) => entry.failure?.kind)
+      .filter((kind): kind is Failure['kind'] => kind !== undefined && kind !== null),
+  );
+  return KIND_PRIORITY.find((kind) => kinds.has(kind)) ?? null;
+}
+
+/**
+ * `null` when the run finished — a clean run must not end on a line about
+ * recovering from something.
+ */
+export function nextStepFor(state: RunState): NextStep | null {
+  const { totals } = state;
+  // `pending`/`running` are zero at the end of a run that ran to completion —
+  // but not after a Ctrl+C, which can leave tasks that never started. A resume
+  // re-runs those too (recovery.md §Resume), so they count as unfinished here
+  // or an interrupted run gets a block that promises to re-run nothing.
+  const unfinished =
+    totals.failed + totals.skipped + totals.parked + totals.pending + totals.running;
+  if (unfinished === 0) return null;
+
+  const kind = dominantKind(state);
+  const cause =
+    kind !== null
+      ? CAUSE_BY_KIND[kind]
+      : state.status === 'interrupted'
+        ? CAUSE_BY_KIND.interrupted
+        : // A parked task asked a question rather than failing; the answer is
+          // the thing to supply, and the question is in the task's own output.
+          'A task asked a question — its output above has it.';
+
+  const rerun: string[] = [];
+  if (totals.failed > 0) rerun.push(`${totals.failed} failed`);
+  if (totals.skipped > 0) rerun.push(`${totals.skipped} skipped`);
+  if (totals.parked > 0) rerun.push(`${totals.parked} parked`);
+  const unstarted = totals.pending + totals.running;
+  if (unstarted > 0) rerun.push(`${unstarted} unfinished`);
+  const scope =
+    totals.succeeded > 0
+      ? `Picks up where this stopped: re-runs ${rerun.join(' and ')}, keeps the ${totals.succeeded} that succeeded.`
+      : `Picks up where this stopped: re-runs ${rerun.join(' and ')}.`;
+
+  return { cause, command: `baya resume ${state.run_id}`, scope };
+}
 
 export function buildReport(
   state: RunState,
@@ -122,6 +234,7 @@ export function buildReport(
     flagged,
     run_dir: options.runDir,
     outputs_path: join(options.runDir, 'tasks'),
+    next: nextStepFor(state),
     exit_code: exitCodeFor(state),
   };
 }
@@ -184,6 +297,11 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   // The `$` figure stays only when a provider gave us one (cli.md: no fabricated
   // cost). See spec §Non-goals — cost accounting is v1.1.
   const tokens = (totals.input_tokens ?? 0) + (totals.output_tokens ?? 0);
+  // The cached share, called out because it changes what the total *means*.
+  // A run reporting `8.5M tokens` reads as runaway spend; `8.5M tokens (8.3M
+  // cached)` says most of it was a cache read a provider re-sent, and moves
+  // the question to why the same context was re-sent so many times.
+  const cached = totals.cached_input_tokens ?? 0;
   const meter: string[] = [];
   // Sits with the cost meters, not the task counts, because that is what it
   // is: every process re-pays a CLI's startup. Suppressed for a single task,
@@ -191,7 +309,13 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
   if (report.tasks.length > 1 && report.processes > 0) {
     meter.push(`${report.processes} ${report.processes === 1 ? 'process' : 'processes'}`);
   }
-  if (tokens > 0) meter.push(`${formatTokens(tokens)} tokens`);
+  if (tokens > 0) {
+    meter.push(
+      cached > 0
+        ? `${formatTokens(tokens)} tokens (${formatTokens(cached)} cached)`
+        : `${formatTokens(tokens)} tokens`,
+    );
+  }
   if (totals.cost_usd > 0) meter.push(formatCost(totals.cost_usd));
   // Hierarchy, loudest first: a filled badge for the outcome, colored counts
   // for what happened, and the meters dimmed — they are reference numbers, not
@@ -225,6 +349,29 @@ export function renderReport(report: RunReport, theme: Theme, width = 100): stri
     written.length === 1 && written[0] !== undefined
       ? join(report.run_dir, written[0].output_path as string)
       : report.outputs_path;
-  lines.push('', `  ${theme.note('Outputs')}   ${outputs}`, '');
+  lines.push('', `  ${theme.note('Outputs')}   ${outputs}`);
+
+  // Last, because it is what the reader does next. A failed run that ends on a
+  // path and nothing else leaves "so now what?" as an exercise.
+  if (report.next !== null) {
+    const indent = ' '.repeat(12);
+    // The command comes first and undimmed — it is the whole point of the
+    // block, and the one line here meant to be copied. Leading with the
+    // diagnosis instead buried it, and a reader who already knows what broke
+    // still has to hunt for the way back in. `taskId` is the theme's plain
+    // bold, the same token the `Flagged` heading above uses.
+    lines.push(
+      '',
+      `  ${theme.note('Next'.padEnd(7))}   ${theme.taskId(report.next.command)}`,
+    );
+    for (const row of wrap(report.next.scope, width - 14)) {
+      lines.push(`${indent}${theme.note(row)}`);
+    }
+    for (const row of wrap(report.next.cause, width - 14)) {
+      lines.push(`${indent}${theme.note(row)}`);
+    }
+  }
+
+  lines.push('');
   return lines.join('\n');
 }

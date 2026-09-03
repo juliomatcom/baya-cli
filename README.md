@@ -99,7 +99,7 @@ Baya never parses these structurally — the planner reads every format for inte
 - ✅ **One process, many tasks** — tasks that share a provider, model and permission level are packed into a single agent process and worked through in order, so the repo is read once instead of once per task. `--group-size` (default 3), `--group-size 1` to opt out.
 - ✅ **Doesn't pay twice** — what earlier tasks found (commands that worked, files changed) carries across to tasks that could not share a process. `--no-memory` to disable.
 - ✅ **Preview gate** — see the full plan before anything runs; `--dry-run` shows it and runs nothing.
-- ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider; `baya runs` lists what is resumable. A `quota` failure halts the run cleanly rather than feeding the wall every remaining task.
+- ✅ **Resume** — checkpointed before every transition. Run out of credits mid-graph and `baya resume <runId>` picks up where it stopped, optionally on a different provider; `baya runs` lists what is resumable. An unfinished run ends by printing that exact command, what it will re-run, and what to fix first. A `quota` failure halts the run cleanly rather than feeding the wall every remaining task.
 - ✅ **Skips what you already ticked off** — a task marked `[x]`, `[done]`, `(complete)` or ✅ is read for context and never planned as work, so re-running a part-finished list does not re-pay for what landed.
 - ✅ **Ctrl+C actually stops** — SIGTERM to every provider's process group, a grace window, then SIGKILL; a second Ctrl+C skips the wait. Grandchildren are reaped, not orphaned, and the same path covers SIGTERM, SIGHUP and an uncaught crash.
 
@@ -143,7 +143,7 @@ flowchart TB
     RES -.->|derived facts| S
     BUS --> S
     ASK --> S
-    REC --> OUT["Report<br/><i>summaries · flagged notes</i>"]
+    REC --> OUT["Report<br/><i>summaries · flagged notes · how to resume</i>"]
     BUS --> OUT
 ```
 
@@ -175,6 +175,13 @@ its CLI never read.
 separator; its `-f/--file` attaches a file _to_ a message and does not carry
 one. It has no permission mapping yet — `--dangerously-allow-all` and a task's
 `read-only` access are both no-ops there.
+
+A task's permission level is what it is allowed to **do**, not what it edits: a
+`read-write` task can write, run commands, and reach the network; a `read-only`
+task does none of the three. `codex` is the only provider that enforces this
+with an OS sandbox — writes stay inside the workspace even under
+`read-write` — where `claude` and `copilot` enforce it by withholding tools. A
+task that must not touch the tree belongs on `codex`.
 
 Full flag surfaces, event shapes, and capability matrix: [`wiki-llm/providers.md`](wiki-llm/providers.md).
 

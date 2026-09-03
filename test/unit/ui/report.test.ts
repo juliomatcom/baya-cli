@@ -1,6 +1,7 @@
 import { buildReport, exitCodeFor, renderReport } from '../../../src/ui/report.js';
 import { createTheme } from '../../../src/ui/theme.js';
 import { emptyTaskEntry, type RunState } from '../../../src/executor/index.js';
+import type { Failure } from '../../../src/executor/index.js';
 import type { Manifest } from '../../../src/manifest/index.js';
 
 const theme = createTheme('never');
@@ -178,6 +179,41 @@ describe('renderReport', () => {
     expect(text).not.toContain('$0.00');
   });
 
+  /**
+   * `8.5M tokens` on a failed run reads as runaway spend. Naming the cached
+   * share says most of it was context a provider re-sent, and moves the
+   * question to why the same context was re-sent so many times.
+   */
+  it('names the cached share, which changes what the total means', () => {
+    const cached = state({
+      totals: {
+        ...state().totals,
+        cost_usd: 0,
+        input_tokens: 8_490_701,
+        output_tokens: 42_534,
+        cached_input_tokens: 8_261_553,
+        cache_write_input_tokens: 0,
+      },
+    });
+    expect(renderReport(report(cached), theme)).toContain('8.5M tokens (8.3M cached)');
+  });
+
+  it('says nothing about a cache the provider never reported', () => {
+    const uncached = state({
+      totals: {
+        ...state().totals,
+        cost_usd: 0,
+        input_tokens: 1000,
+        output_tokens: 200,
+        cached_input_tokens: 0,
+        cache_write_input_tokens: 0,
+      },
+    });
+    const text = renderReport(report(uncached), theme);
+    expect(text).toContain('1.2k tokens');
+    expect(text).not.toContain('cached');
+  });
+
   // A `<id>` placeholder in this line left the reader to assemble the path by
   // hand — the one thing the line exists to spare them.
   it('names the file itself when a single task wrote an output', () => {
@@ -202,6 +238,112 @@ describe('renderReport', () => {
     const text = renderReport(report(both), theme);
     expect(text).toContain('/w/.baya/runs/r/tasks');
     expect(text).not.toContain('output.md');
+  });
+});
+
+describe('the Next block — how to pick an unfinished run back up', () => {
+  const failure = (kind: Failure['kind']): Failure => ({
+    kind,
+    message: `${kind} happened`,
+    provider_code: null,
+    status_code: null,
+    retry: 'now',
+    occurred_at: '2026-08-28T21:52:40.000Z',
+  });
+
+  const stopped = (
+    kind: Failure['kind'],
+    totals: Partial<RunState['totals']> = {},
+  ): RunState =>
+    state({
+      status: 'failed',
+      totals: { ...state().totals, succeeded: 0, failed: 1, skipped: 1, ...totals },
+      tasks: {
+        'gen-schema': emptyTaskEntry({ state: 'failed', failure: failure(kind) }),
+        'deploy-cfg': emptyTaskEntry({ state: 'skipped', blocked_by: 'gen-schema' }),
+      },
+    });
+
+  it('says nothing after a clean run — success must not end on recovery advice', () => {
+    expect(report().next).toBeNull();
+    expect(renderReport(report(), theme)).not.toContain('Next');
+  });
+
+  it('names the resume command for the run that actually failed', () => {
+    const text = renderReport(report(stopped('network')), theme);
+    expect(text).toContain('baya resume 20260828T215204Z-a1f4c9-3182');
+  });
+
+  it('leads with the command, not the diagnosis — the command is the point', () => {
+    const text = renderReport(report(stopped('network')), theme);
+    const block = text.slice(text.indexOf('Next'));
+    expect(block.indexOf('baya resume')).toBeLessThan(block.indexOf('unreachable'));
+    // On the `Next` line itself, not buried under a wrapped explanation.
+    expect(block.split('\n')[0]).toContain('baya resume');
+  });
+
+  it('names the cause, so the reader knows what to go and fix', () => {
+    // The failure that motivated this block: an agent that could not resolve a
+    // hostname reported `ENOTFOUND` and nothing about what to do next.
+    expect(report(stopped('network')).next?.cause).toContain('network was unreachable');
+    expect(report(stopped('auth')).next?.cause).toContain('credentials');
+    expect(report(stopped('quota')).next?.cause).toContain('--provider');
+  });
+
+  it('reports the dominant failure, not whichever task is listed first', () => {
+    // One `quota` halts the whole run, so every other failure is downstream of
+    // it. Naming a symptom would send the reader to fix the wrong thing.
+    const mixed = state({
+      status: 'failed',
+      totals: { ...state().totals, succeeded: 0, failed: 2, skipped: 0 },
+      tasks: {
+        'gen-schema': emptyTaskEntry({ state: 'failed', failure: failure('crash') }),
+        'deploy-cfg': emptyTaskEntry({ state: 'failed', failure: failure('quota') }),
+      },
+    });
+    expect(buildReport(mixed, manifest, { runDir: '/out' }).next?.cause).toContain(
+      'allowance is spent',
+    );
+  });
+
+  it('promises that finished work is kept — the reason to resume over re-running', () => {
+    const partial = stopped('network', { succeeded: 1, failed: 1, skipped: 0 });
+    expect(buildReport(partial, manifest, { runDir: '/out' }).next?.scope).toBe(
+      'Picks up where this stopped: re-runs 1 failed, keeps the 1 that succeeded.',
+    );
+  });
+
+  it('counts only what will actually run again', () => {
+    expect(report(stopped('network')).next?.scope).toBe(
+      'Picks up where this stopped: re-runs 1 failed and 1 skipped.',
+    );
+  });
+
+  it('offers a resume after an interrupt, which fails nothing at all', () => {
+    // Ctrl+C leaves tasks that never started: `pending`, not `failed` or
+    // `skipped`. Counting only failures promised to re-run nothing at all.
+    const stoppedByHand = state({
+      status: 'interrupted',
+      totals: { ...state().totals, succeeded: 1, failed: 0, skipped: 0, pending: 1 },
+    });
+    const next = buildReport(stoppedByHand, manifest, { runDir: '/out' }).next;
+    expect(next?.cause).toContain('interrupted');
+    expect(next?.scope).toBe(
+      'Picks up where this stopped: re-runs 1 unfinished, keeps the 1 that succeeded.',
+    );
+  });
+
+  it('reaches --json too: the block is report data, not terminal decoration', () => {
+    const parsed = JSON.parse(JSON.stringify(report(stopped('network'))));
+    expect(parsed.next).toEqual({
+      cause: expect.stringContaining('network'),
+      command: 'baya resume 20260828T215204Z-a1f4c9-3182',
+      scope: expect.any(String),
+    });
+  });
+
+  it('matches the recorded output', () => {
+    expect(renderReport(report(stopped('network')), theme)).toMatchSnapshot();
   });
 });
 

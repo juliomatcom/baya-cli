@@ -6,12 +6,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { main } from '../../src/cli/index.js';
 import { runPaths, type RunPaths } from '../../src/executor/index.js';
 import type { FakeProviderScenario } from './fakeProvider.js';
+import { homeLocations, sealedEnv } from './env.js';
 
 /**
  * Drives the real CLI end to end against `fake-provider.mjs`, which stands in
@@ -83,18 +84,16 @@ export function makeWorkspace(options: CliOptions = {}): Workspace {
     home,
     tasksPath,
     scenarioPath,
-    env: {
-      // The fake provider's shebang is `#!/usr/bin/env node`, so node itself
-      // must stay reachable; the provider binary comes from the config
-      // override, never from this PATH.
-      PATH: dirname(process.execPath),
+    env: sealedEnv({
+      // Known-location search, scoped to this workspace's own home — a test
+      // plants a fake provider in its `.local/bin` on purpose.
+      BAYA_KNOWN_LOCATIONS: homeLocations(home),
       HOME: home,
       XDG_CONFIG_HOME: join(home, '.config'),
       BAYA_FAKE_SCRIPT: scenarioPath,
       BAYA_NO_INPUT: '1',
-      NO_COLOR: '1',
       ...options.env,
-    },
+    }),
   };
 }
 

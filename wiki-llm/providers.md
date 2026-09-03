@@ -88,6 +88,10 @@ Chain: user config (`providers.<id>.bin`) override → `$PATH` → known locatio
 
 Reference machine: `claude`/`codex` in `~/.local/bin`; `copilot`/`gemini` in nvm bin; `opencode` in `~/.opencode/bin`. **None in a system directory** — never assume a plain `$PATH` lookup.
 
+`$BAYA_KNOWN_LOCATIONS` (`:`-delimited) replaces that list outright; set-and-empty means "search nowhere but `$PATH` and the config override". ⚠️ Three defaults are absolute **host** paths — the active nvm bin above all, which is also where `npm i -g` lands — so code that must resolve _nothing_ resolves whatever the developer happens to have installed.
+
+`env` is therefore **required** on `resolveBinary`, `Registry.resolve`/`resolveAll`, `doctor` and `runSequential`: it used to default to `process.env`, so any caller that forgot it searched the machine without saying so. Four tests asserting "no provider resolves" found the author's real `copilot` and failed locally while passing in CI. `process.env` now enters only where a human names it — the CLI entry points, and `test/contract`, which probes real binaries on purpose. Tests build every env through `sealedEnv()` (testing.md).
+
 ---
 
 ## codex — ✅ verified 2026-08-28 (live); adapter M1.5 landed
@@ -104,9 +108,13 @@ Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-fil
 
 ⚠️ `file_change` items carry **`changes: [{path, kind}]`, not `path`.** Reading `path` rendered every file change as a bare `Edit()` — verified against 8 recorded events. `command_execution` carries `command`, `exit_code` (a **string** in the JSONL), and `status`; those three are the whole of codex's memory contribution.
 
-Adapter `src/providers/codex.ts`, snapshot `test/unit/providers/codex.test.ts`. argv: `codex exec --json --color never --skip-git-repo-check -C <cwd> -s <sandbox> --output-schema <file> -o <file> [-m <model>] -`, prompt on stdin behind `-`. Sandbox from task: `access:"read-only"`⇒`read-only`, `access:"read-write"`⇒`workspace-write`, `--dangerously-allow-all`⇒`danger-full-access`.
+Adapter `src/providers/codex.ts`, snapshot `test/unit/providers/codex.test.ts`. argv: `codex exec --json --color never --skip-git-repo-check -C <cwd> -s <sandbox> [-c sandbox_workspace_write.network_access=true] --output-schema <file> -o <file> [-m <model>] -`, prompt on stdin behind `-`. Sandbox from task: `access:"read-only"`⇒`read-only`, `access:"read-write"`⇒`workspace-write`, `--dangerously-allow-all`⇒`danger-full-access`.
 
 ⚠️ **`codex exec resume` does not share `exec`'s flag surface.** Verified live 2026-08-29 (codex-cli 0.150.1): `resume` takes `--json`, `--skip-git-repo-check`, `--output-schema`, `-o`, `-m`, and **rejects `-C`, `-s`, `--color`** — exit 2, `error: unexpected argument '-C' found`, before the model is reached. Passing the `exec` set is what made every session continuation fail in the first real chain run (caught by the cold-retry fallback, so it cost two unbilled spawns rather than two tasks). Consequences: the working directory comes from the spawn `cwd`, and ANSI stripping covers `--color`. Applies to `buildResume` (escalation, M4) only — grouping never resumes.
+
+⚠️ **`workspace-write` blocks the network too** — `sandbox_workspace_write.network_access` defaults to `false`, so every DNS lookup inside the seatbelt profile dies with `ENOTFOUND` while the host resolver is fine and nothing in the error names a sandbox. The adapter passes `-c sandbox_workspace_write.network_access=true` whenever the sandbox is `workspace-write`. Verified live 2026-09-03 (codex-cli 0.150.1): `curl -o /dev/null -w %{http_code} https://registry.npmjs.org/next` returns exit 6 / `000` without the flag and `200` with it, while `touch "$HOME/probe"` still fails `Operation not permitted` either way — confinement is unchanged, only the network door opens. `-c` is accepted by `exec` **and** `exec resume` (unlike `-s`), so a resumed turn keeps its network.
+
+Cost of the default: run `20260903T080018Z-1e8874-44534` put `npx create-next-app` on codex, lost it to `getaddrinfo ENOTFOUND registry.npmjs.org` after the agent had already tried `npm install --offline`, the `_cacache`, and an alternate registry, then skipped all 17 dependents. codex is the only sandboxing adapter — claude (`--permission-mode auto`) and copilot (`--allow-all-tools`) always had network — so the same task succeeded or failed on which provider the planner picked. `access:"read-write"` now means writes **and** commands **and** network on every provider.
 
 ⚠️ `read-only` blocks **every** write, `$TMPDIR` and `/tmp` included — there is no writable-root escape (`sandbox_workspace_write.writable_roots` applies to `workspace-write` only). So a `read-only` task cannot run a test runner, a build, or anything that touches a cache: measured 2026-08-29, jest died on `EPERM` writing its haste-map before a single assertion. That is why the field is named `access` — what the task needs permission to **do**, not what it edits. The old name, `writes`, was read as "this modifies my code" and made a task that only ran a test look dangerous. See protocol.md. `read-only` is for pure reading: reviewing, summarizing, answering.
 

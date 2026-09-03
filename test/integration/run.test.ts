@@ -160,6 +160,21 @@ describe('a two-task chain, end to end', () => {
   });
 
   /**
+   * A group's prompts are written before any of it runs, so an in-group
+   * dependency's outcome is unknowable at that point. Claiming `ok` there had
+   * the agent do work behind a task that had just failed — work Baya then
+   * discarded as `skipped`, having paid for it.
+   */
+  it('never claims an in-group dependency succeeded before it has run', async () => {
+    const result = await runCli(['./tasks.md', '--yes'], { scenario });
+    const request = result.readJson(result.paths!.request('gen-schema')) as {
+      context: Array<{ task_id: string; status: string; summary: string }>;
+    };
+    expect(request.context[0]?.status).toBe('pending');
+    expect(request.context[0]?.summary).not.toMatch(/done/i);
+  });
+
+  /**
    * A process gets one sandbox. Grouping across a change of `access` would
    * silently widen the read-only task's permissions — which is the one thing
    * task-level `access` exists to prevent.

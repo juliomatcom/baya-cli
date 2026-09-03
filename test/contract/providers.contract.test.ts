@@ -70,7 +70,9 @@ describeContract('provider contract', () => {
   });
 
   for (const { id, adapter } of CASES) {
-    const found = resolveBinary(id);
+    // The one place the host is the subject: contract tests probe the real
+    // binaries a developer has installed. Named explicitly, never defaulted.
+    const found = resolveBinary(id, { env: process.env });
     const maybe = found ? it : it.skip;
 
     maybe(

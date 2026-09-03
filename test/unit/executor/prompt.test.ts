@@ -86,10 +86,28 @@ describe('renderGroupPrompt', () => {
       instruction: 'Insert fixtures.',
     });
     const text = renderGroupPrompt([request(), withDep]);
-    expect(text).toContain('You did this earlier in this same conversation');
+    expect(text).toContain('you do earlier in this same');
     expect(text).not.toContain('<upstream_output>');
     // The paths stay: they cost ~nothing and the agent may still want the file.
     expect(text).toContain('/work/.baya/runs/r/tasks/design-api/output.md');
+  });
+
+  /**
+   * A group is one process and one conversation: nothing outside it can stop a
+   * task whose dependency has just failed. The prompt is the only lever, so it
+   * has to say what to do — otherwise the agent does the work, Baya discards
+   * the result as `skipped`, and the tokens are spent for nothing.
+   */
+  it('tells the agent not to attempt a task whose in-group dependency failed', () => {
+    const withDep = request([upstream({ task_id: 'gen-schema', inline: null })], {
+      id: 'seed-db',
+      title: 'Seed the database',
+      instruction: 'Insert fixtures.',
+    });
+    const text = renderGroupPrompt([request(), withDep]);
+    expect(text).toContain('This task depends on gen-schema');
+    expect(text).toContain('do not attempt this task');
+    expect(text).toContain('`error.message`');
   });
 
   it('still inlines an upstream from outside the group', () => {

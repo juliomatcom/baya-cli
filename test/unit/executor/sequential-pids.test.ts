@@ -18,6 +18,7 @@ import {
 } from '../../../src/executor/index.js';
 import { captureLogger } from '../../helpers/logger.js';
 import { FAKE_PROVIDER } from '../../helpers/runCli.js';
+import { sealedEnv } from '../../helpers/env.js';
 
 /**
  * `onProcessSpawn` / `onProcessExit` are the pair `src/cli/run.ts` and
@@ -137,7 +138,7 @@ describe('scheduler pid callbacks', () => {
       groupSize: 1,
       maxParallel: 3,
       retries: 0,
-      env: { ...process.env, BAYA_FAKE_SCRIPT: scenarioPath },
+      env: sealedEnv({ BAYA_FAKE_SCRIPT: scenarioPath }),
       onProcessSpawn: (pid) => {
         spawned.push(pid);
         active.add(pid);
