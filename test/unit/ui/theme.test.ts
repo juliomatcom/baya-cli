@@ -36,9 +36,10 @@ describe('theme', () => {
       }
     });
 
-    it('taskId and provider render plain text unchanged', () => {
+    it('taskId, provider and path render plain text unchanged', () => {
       expect(off.taskId('gen-schema')).toBe('gen-schema');
       expect(off.provider('codex')).toBe('codex');
+      expect(off.path('/work/repo')).toBe('/work/repo');
     });
   });
 
@@ -54,9 +55,22 @@ describe('theme', () => {
       expect(rendered).toMatchSnapshot();
     });
 
-    it('wraps taskId and provider text in ANSI', () => {
+    it('wraps taskId, provider and path text in ANSI', () => {
       expect(on.taskId('gen-schema')).toMatchSnapshot();
       expect(on.provider('codex')).toMatchSnapshot();
+      expect(on.path('/work/repo')).toMatchSnapshot();
+    });
+
+    // The gate's directory is the one input with a blast radius, so it must
+    // not render as dim or unstyled next to the label beside it.
+    it('renders path in bold yellow, never dim or plain', () => {
+      const styled = on.path('/work/repo');
+      expect(styled).toContain('/work/repo');
+      expect(styled).not.toBe('/work/repo');
+      expect(styled).not.toBe(on.note('/work/repo'));
+      const ESCAPE = String.fromCharCode(27);
+      expect(styled).toContain(`${ESCAPE}[1m`);
+      expect(styled).toContain(`${ESCAPE}[33m`);
     });
 
     it('every colored status still contains its glyph (color never carries meaning alone)', () => {

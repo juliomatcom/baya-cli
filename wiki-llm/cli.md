@@ -111,11 +111,13 @@ Non-TTY never prompts: one provider ⇒ used with a warning; several ⇒ exit `2
 
 Every human-facing invocation opens with the `baya` wordmark (`src/ui/banner.ts`) on **stderr**. Suppressed for `--json`, `--version`, `--quiet`. Never on stdout — a piped `--json` payload and `$(baya config path)` stay clean.
 
+Then the `run.agent` line: `▸ default: <provider> [model] [· planner: <provider> [model]]`. Labels dim, providers in `theme.provider`. The planner half appears only when it differs from the default — two unlabelled provider/model pairs on one line are indistinguishable.
+
 ## Plan gate
 
-Header: `baya · <task-list path> · <n> tasks · <provider> [model]`, then `in <cwd>` on its own line.
+Header: `baya · <task-list path> · <n> tasks · <provider> [model]`, then `🤖 agents will run in <cwd>` on its own line — path in `theme.path` (bold yellow), the only such use at the gate.
 
-⚠️ The header path is the **task list's**, which reads as where the work will happen and often is not. The working directory is stated separately because it is the input with a blast radius. Measured 2026-09-04 from `~/personal` (no `.git`, 16 children, 7 repos): "make sure unit tests pass" carried no path, so codex ran 315 suites across 5 projects (1,395,619 input tokens), claude 316 (480,270), opencode 67 in one (182,326) — a 7.6× spread, with `pnpm build:packages` run inside sibling repos. The run reported `succeeded`, because it had. No heuristic warning: a threshold to tune, false-fires on monorepos, and trains people to click through warnings.
+⚠️ The header path is the **task list's**, which reads as where the work will happen and often is not. The working directory is stated separately because it is the input with a blast radius. Measured 2026-09-04 from `~/personal` (no `.git`, 16 children, 7 repos): "make sure unit tests pass" carried no path, so codex ran 315 suites across 5 projects (1,395,619 input tokens), claude 316 (480,270), opencode 67 in one (182,326) — a 7.6× spread, with `pnpm build:packages` run inside sibling repos. The run reported `succeeded`, because it had. No heuristic warning: a threshold to tune, false-fires on monorepos, and trains people to click through warnings. Colour, not a `!` glyph — a warning firing on every run is noise within a week; the emphasis says _look at this_, not _something is wrong_.
 
 Then `planned by <provider> [model] · <tokens> [(<n> cached)] [· $cost] [· <n> attempts]` — what planning spent, immediately before the question. Accumulated across repair attempts; attempt count shown only when >1; cost only when the provider reported one. Omitted entirely when there is no usage (`--plan-in` ran no planner; adapter has no `extractUsage`) — `0 tokens` would be a claim, not an absence. Also logged `plan.usage`. **Not** folded into run totals: those mean what the _tasks_ cost.
 
@@ -252,6 +254,7 @@ Why it exists: `baya resume` has always been able to pick a run up without re-pa
 | `theme.pending`  | dim         | `·`   | `pending`                               |
 | `theme.taskId`   | bold        | —     | task ids                                |
 | `theme.provider` | magenta     | —     | provider names                          |
+| `theme.path`     | bold yellow | —     | the gate's working directory            |
 | `theme.warn`     | yellow      | `!`   | `warn` notes, fallbacks, drift warnings |
 | `theme.action`   | bold yellow | `⚑`   | `action_required` notes                 |
 | `theme.note`     | dim         | `·`   | `info` notes                            |

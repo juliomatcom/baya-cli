@@ -491,7 +491,9 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       `\n  ${theme.taskId('baya')} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ''}${planOrigin === 'fallback' ? theme.warn(' · linear fallback') : ''}\n`,
     );
     // Where the run happens — not the task list's path above it (cli.md §Plan gate).
-    io.stderr.write(`  ${theme.note('in')} ${cwd}\n\n`);
+    io.stderr.write(
+      `  \u{1F916} ${theme.note('agents will run in')} ${theme.path(cwd)}\n\n`,
+    );
     io.stderr.write(
       `${renderDag(manifest, theme, defaultProvider as ProviderId, {
         defaultModel,

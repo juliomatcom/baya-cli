@@ -100,9 +100,9 @@ export function createEventRenderer(
         const agent = `${theme.provider(provider)}${model ? ` ${model}` : theme.note(' (provider default)')}`;
         const plannerPart =
           planner && planner !== provider
-            ? ` · planner ${theme.provider(planner)}${plannerModel ? ` ${plannerModel}` : ''}`
+            ? ` · ${theme.note('planner:')} ${theme.provider(planner)}${plannerModel ? ` ${plannerModel}` : ''}`
             : '';
-        return `${INDENT}${theme.status('run')} agent ${agent}${plannerPart}`;
+        return `${INDENT}${theme.status('run')} ${theme.note('default:')} ${agent}${plannerPart}`;
       }
 
       case 'task.spawned': {

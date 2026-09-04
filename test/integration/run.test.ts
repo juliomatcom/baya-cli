@@ -311,7 +311,7 @@ describe('the plan gate', () => {
    */
   it('states the directory the run will happen in', async () => {
     const result = await runCli(['./tasks.md', '--dry-run'], { scenario });
-    expect(result.stderr).toContain(`in ${result.workspace.cwd}`);
+    expect(result.stderr).toContain(`agents will run in ${result.workspace.cwd}`);
   });
 
   it('states it even when the task list lives somewhere else', async () => {
@@ -319,7 +319,7 @@ describe('the plan gate', () => {
     // is easy to read that as where the work will happen.
     const result = await runCli(['./tasks.md', '--dry-run'], { scenario });
     expect(result.stderr).toContain(result.workspace.tasksPath);
-    expect(result.stderr).toContain(`in ${result.workspace.cwd}`);
+    expect(result.stderr).toContain(`agents will run in ${result.workspace.cwd}`);
   });
 
   it('refuses to hang when stdin is not a TTY and --yes was not passed', async () => {
