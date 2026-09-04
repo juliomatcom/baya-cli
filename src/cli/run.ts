@@ -491,8 +491,24 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- the gate
     progress.stop();
     io.stderr.write(
-      `\n  ${theme.taskId('baya')} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ''}${planOrigin === 'fallback' ? theme.warn(' · linear fallback') : ''}\n\n`,
+      `\n  ${theme.taskId('baya')} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ''}${planOrigin === 'fallback' ? theme.warn(' · linear fallback') : ''}\n`,
     );
+    // ⚠️ Where the run happens, stated before it happens.
+    //
+    // The gate named the task list, the task count and the provider — every
+    // input except the one with a blast radius. Measured 2026-09-04 on a run
+    // from `~/personal`, a directory holding 16 children and 7 git repos:
+    // "make sure unit tests pass" had no place attached, so each agent picked
+    // one. codex and claude read the tree as a container of projects and ran
+    // 315 suites across five of them; opencode ran baya's 67. Same
+    // instruction, same directory, a 7.6x spread in tokens — and two of them
+    // ran `pnpm build:packages` inside sibling repos on the way.
+    //
+    // Nothing there is a failure Baya can detect: the run reported
+    // `succeeded`, because it did. The only moment it is cheap to catch is
+    // this one, and the fix is for the directory to be on screen next to the
+    // question rather than assumed.
+    io.stderr.write(`  ${theme.note('in')} ${cwd}\n\n`);
     io.stderr.write(
       `${renderDag(manifest, theme, defaultProvider as ProviderId, {
         defaultModel,

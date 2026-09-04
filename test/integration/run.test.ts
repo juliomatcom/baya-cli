@@ -297,6 +297,31 @@ describe('--dry-run', () => {
 });
 
 describe('the plan gate', () => {
+  /**
+   * The gate named the task list, the task count and the provider — every
+   * input except the one with a blast radius.
+   *
+   * Measured 2026-09-04 on a run from `~/personal`, a directory holding 16
+   * children and 7 git repos: "make sure unit tests pass" had no place
+   * attached, so each agent picked one. Two read the tree as a container of
+   * projects and ran 315 suites across five of them (running
+   * `pnpm build:packages` inside sibling repos on the way); one ran the 67 of
+   * the project the task list lived in. Same instruction, same directory, a
+   * 7.6x spread in tokens — and the run reported `succeeded`, because it did.
+   */
+  it('states the directory the run will happen in', async () => {
+    const result = await runCli(['./tasks.md', '--dry-run'], { scenario });
+    expect(result.stderr).toContain(`in ${result.workspace.cwd}`);
+  });
+
+  it('states it even when the task list lives somewhere else', async () => {
+    // The case that bites: the path in the header is the task list's, and it
+    // is easy to read that as where the work will happen.
+    const result = await runCli(['./tasks.md', '--dry-run'], { scenario });
+    expect(result.stderr).toContain(result.workspace.tasksPath);
+    expect(result.stderr).toContain(`in ${result.workspace.cwd}`);
+  });
+
   it('refuses to hang when stdin is not a TTY and --yes was not passed', async () => {
     const result = await runCli(['./tasks.md'], { scenario, stdinIsTty: false });
     expect(result.code).toBe(2);
