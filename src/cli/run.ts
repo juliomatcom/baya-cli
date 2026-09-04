@@ -47,13 +47,16 @@ import {
   createEventRenderer,
   createProgress,
   exitCodeFor,
+  formatCost,
+  formatTokens,
   renderDag,
   renderReport,
   resolveRunModel,
   runModelGate,
   type Progress,
 } from '../ui/index.js';
-import { createTheme } from '../ui/theme.js';
+import { createTheme, type Theme } from '../ui/theme.js';
+import type { ProviderUsage } from '../providers/index.js';
 import {
   binOverrides as binOverridesFrom,
   providerToolSettings,
@@ -311,6 +314,12 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- plan
     let manifest: Manifest;
     let planOrigin: 'planner' | 'fallback' | 'file' = 'planner';
+    /**
+     * What planning spent, accumulated across attempts. Stays empty on the
+     * `--plan-in` path, where no planner ran and there is nothing to report.
+     */
+    const plannerUsage: ProviderUsage = {};
+    let plannerAttempts = 0;
 
     if (flags.planIn) {
       const parsed: unknown = JSON.parse(
@@ -403,6 +412,10 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
             // able to reach it — see RunPlannerProviderOptions.onProcessSpawn.
             onProcessSpawn: (pid) => activePids.add(pid),
             onProcessExit: (pid) => activePids.delete(pid),
+            onUsage: (usage) => {
+              plannerAttempts += 1;
+              addUsage(plannerUsage, usage);
+            },
           }),
           logger,
           // Inlined only for a planner that enforces nothing. Naming a schema by
@@ -492,6 +505,25 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       io.stderr.write(`  ${theme.note('resolved')} ${note}\n`);
     }
     if (modelGate.notes.length > 0) io.stderr.write('\n');
+
+    // Immediately after the resolved models and before the gate question: the
+    // last thing read before deciding whether to spend more.
+    const plannerCostLine = renderPlannerCost(
+      plannerUsage,
+      String(plannerProvider),
+      plannerModel,
+      plannerAttempts,
+      theme,
+    );
+    if (plannerCostLine !== null) {
+      logger.info('plan.usage', {
+        provider: String(plannerProvider),
+        model: plannerModel,
+        attempts: plannerAttempts,
+        ...plannerUsage,
+      });
+      io.stderr.write(`${plannerCostLine}\n\n`);
+    }
 
     if (flags.dryRun) {
       logger.info('run.completed', { dry_run: true, tasks: manifest.tasks.length });
@@ -648,6 +680,62 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     progress.dispose();
     lock.release();
   }
+}
+
+/** Folds one attempt's usage into the running total, field by field. */
+function addUsage(total: ProviderUsage, next: ProviderUsage): void {
+  for (const key of [
+    'cost_usd',
+    'input_tokens',
+    'output_tokens',
+    'cached_input_tokens',
+    'cache_write_input_tokens',
+  ] as const) {
+    const value = next[key];
+    if (value !== undefined) total[key] = (total[key] ?? 0) + value;
+  }
+}
+
+/**
+ * What planning cost, on one line at the gate.
+ *
+ * Planning is the one spend a run makes before the user has agreed to
+ * anything, and until now it was invisible: `report.json` totals what the
+ * *tasks* spent, and the planner is not a task. Asking "run this?" is easier
+ * to answer knowing the plan already cost something.
+ *
+ * Returns `null` rather than a placeholder line when the planner reported no
+ * usage — `--plan-in` ran no planner at all, and an adapter with no
+ * `extractUsage` has nothing to say. A line reading `0 tokens` would be a
+ * claim, not an absence.
+ */
+export function renderPlannerCost(
+  usage: ProviderUsage,
+  provider: string,
+  model: string | null,
+  attempts: number,
+  theme: Theme,
+): string | null {
+  const tokens = (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0);
+  if (tokens === 0 && !(usage.cost_usd && usage.cost_usd > 0)) return null;
+
+  const meter: string[] = [];
+  if (tokens > 0) {
+    const cached = usage.cached_input_tokens ?? 0;
+    meter.push(
+      cached > 0
+        ? `${formatTokens(tokens)} tokens (${formatTokens(cached)} cached)`
+        : `${formatTokens(tokens)} tokens`,
+    );
+  }
+  if (usage.cost_usd && usage.cost_usd > 0) meter.push(formatCost(usage.cost_usd));
+  // A repair round is a second call to the model, paid for like the first. If
+  // one happened, the number is only explicable with the count beside it.
+  if (attempts > 1) meter.push(`${attempts} attempts`);
+
+  return `  ${theme.note('planned by')} ${theme.provider(provider)}${
+    model ? theme.note(` ${model}`) : ''
+  } ${theme.note(`· ${meter.join(' · ')}`)}`;
 }
 
 function nullStream(): NodeJS.WritableStream {
