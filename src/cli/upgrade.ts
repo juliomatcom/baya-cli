@@ -77,7 +77,7 @@ export async function upgradeCommand(options: UpgradeCommandOptions): Promise<nu
     // copilot don't) — without this, their raw output is unattributed noise
     // in a multi-provider run.
     io.stdout.write(
-      `\n  ${theme.provider(id)} ${theme.note(`upgrading (${adapter.upgradeArgs.join(' ')})...`)}\n\n`,
+      `\n${theme.provider(id)} ${theme.note(`upgrading (${adapter.upgradeArgs.join(' ')})...`)}\n`,
     );
     try {
       const code = await runUpgrade(resolved.bin, adapter.upgradeArgs, options);
