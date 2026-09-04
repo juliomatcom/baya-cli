@@ -125,6 +125,8 @@ export interface ProviderUsage {
 
 export interface ProviderAdapter {
   id: ProviderId;
+  /** Exact argv appended after the resolved binary path to self-update. */
+  upgradeArgs: string[];
   capabilities: ProviderCapabilities;
   /** Shown by `doctor` and the wizard when the binary is missing. */
   installHint: string;

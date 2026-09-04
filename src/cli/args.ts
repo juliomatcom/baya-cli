@@ -17,6 +17,7 @@ export const COMMANDS = [
   'doctor',
   'config',
   'models',
+  'upgrade',
   'resume',
   'runs',
   'help',
@@ -67,6 +68,8 @@ export interface ParsedArgs {
   configValue?: string;
   /** Optional provider filter for `models`. */
   modelsProvider?: string;
+  /** Optional provider filter for `upgrade`. */
+  upgradeProvider?: string;
   /** The run `baya resume` continues. Absent ⇒ pick one (cli.md §Commands). */
   runId?: string;
   flags: RunFlags;
@@ -322,6 +325,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   }
 
   if (command === 'models' && rest[0] !== undefined) parsed.modelsProvider = rest[0];
+
+  if (command === 'upgrade' && rest[0] !== undefined) parsed.upgradeProvider = rest[0];
 
   if (command === 'resume' && rest[0] !== undefined) parsed.runId = rest[0];
 

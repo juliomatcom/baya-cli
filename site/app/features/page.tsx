@@ -55,6 +55,12 @@ const GROUPS: FeatureGroup[] = [
         description:
           'Markdown, TODO.txt, YAML, or any UTF-8 text. No DSL, no schema — the planner reads whatever you already write for intent, whether a task is a one-liner or a paragraph of constraints.',
       },
+      {
+        icon: 'upgrade',
+        title: 'One-command upgrades',
+        description:
+          'baya upgrade updates every installed provider CLI to its latest version in one shot; baya upgrade <provider> narrows to one.',
+      },
     ],
   },
   {

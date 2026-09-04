@@ -53,6 +53,12 @@ const conforming = JSON.stringify({
   summary: 'made the tables',
 });
 
+describe('copilotAdapter.upgradeArgs', () => {
+  it('matches the real self-update subcommand — `copilot update`, verified 2026-09-04', () => {
+    expect(copilotAdapter.upgradeArgs).toEqual(['update']);
+  });
+});
+
 describe('copilotAdapter.buildRun argv', () => {
   it('matches the recorded surface', () => {
     expect(copilotAdapter.buildRun(input()).argv).toMatchSnapshot();

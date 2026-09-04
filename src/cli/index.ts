@@ -30,6 +30,7 @@ import { renderHelp } from './help.js';
 import { runCommand, type CliIo } from './run.js';
 import { resumeCommand } from './resume.js';
 import { runsCommand } from './runs.js';
+import { upgradeCommand } from './upgrade.js';
 
 /**
  * Command routing and exit codes (cli.md §Exit codes):
@@ -142,6 +143,17 @@ export async function main(options: MainOptions = {}): Promise<number> {
 
       case 'models':
         return modelsCommand(args, { env, cwd, io, theme });
+
+      case 'upgrade':
+        return await upgradeCommand({
+          ...(args.upgradeProvider ? { provider: args.upgradeProvider } : {}),
+          registry,
+          env,
+          cwd,
+          io,
+          theme,
+          binOverrides: binOverrides(loadConfig({ cwd, env }).config),
+        });
 
       case 'runs':
         return runsCommand({ cwd, io, theme, json: args.flags.json });

@@ -216,6 +216,7 @@ function withDenialNote(results: TaskResult[], denied: string[]): TaskResult[] {
 
 export const claudeAdapter: ProviderAdapter = {
   id: 'claude',
+  upgradeArgs: ['update'],
 
   capabilities: {
     promptDelivery: ['stdin', 'argv'],

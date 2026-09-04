@@ -193,6 +193,7 @@ function classifyErrorText(message: string): 'rate_limit' | 'auth' | 'other' {
 
 export const codexAdapter: ProviderAdapter = {
   id: 'codex',
+  upgradeArgs: ['update'],
 
   capabilities: {
     promptDelivery: ['stdin', 'argv'],

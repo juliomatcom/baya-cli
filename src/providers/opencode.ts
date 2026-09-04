@@ -128,6 +128,7 @@ function collectText(events: ProviderEvent[]): string {
 
 export const opencodeAdapter: ProviderAdapter = {
   id: OPENCODE_PROVIDER,
+  upgradeArgs: ['upgrade'],
 
   capabilities: {
     promptDelivery: ['argv'],

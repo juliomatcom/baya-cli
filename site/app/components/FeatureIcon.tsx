@@ -99,6 +99,11 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M6 8.5V14a4 4 0 004 4h5.5M8.5 6H14a4 4 0 014 4v5.5" />
     </>
   ),
+  upgrade: (
+    <>
+      <path d="M12 19V5M5 12l7-7 7 7" />
+    </>
+  ),
 };
 
 export type FeatureIconName = keyof typeof ICONS;
