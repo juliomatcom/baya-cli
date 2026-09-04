@@ -71,6 +71,14 @@ export async function upgradeCommand(options: UpgradeCommandOptions): Promise<nu
     }
 
     const before = await probeVersion(resolved.bin);
+    // Printed *before* the spawn, not just in the final summary: `stdio:
+    // 'inherit'` hands the terminal straight to the child, and not every
+    // provider's own output names itself (codex and opencode do; claude and
+    // copilot don't) — without this, their raw output is unattributed noise
+    // in a multi-provider run.
+    io.stdout.write(
+      `\n  ${theme.provider(id)} ${theme.note(`upgrading (${adapter.upgradeArgs.join(' ')})...`)}\n\n`,
+    );
     try {
       const code = await runUpgrade(resolved.bin, adapter.upgradeArgs, options);
       const after = await probeVersion(resolved.bin);
