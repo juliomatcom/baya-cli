@@ -35,6 +35,7 @@ npm install -g baya-cli   # binary: baya
 
 - Requires **Node 24+** and at least one supported CLI on your machine. Run `baya doctor` to see what it found.
 - On first run `baya` asks once which provider and model to default to, stores it in `~/.config/baya/config.json`, and never asks again.
+- Run `baya upgrade` any time to update every installed provider CLI to its latest version; `baya upgrade <provider>` narrows to one.
 
 ## Usage
 

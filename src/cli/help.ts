@@ -33,6 +33,7 @@ export function renderHelp(statuses: ProviderStatus[], theme: Theme): string {
     '  baya doctor                     check provider installs',
     '  baya config [--show|path|set|refresh-models]',
     '  baya models [provider]          list effective catalog; optional provider filter; --json emits catalog as JSON',
+    '  baya upgrade [provider]         update installed provider CLIs; optional provider filter',
     '  baya runs                       list resumable runs, newest first; --json emits the rows',
     "  baya resume [<runId>]           re-run a run's unfinished tasks; no id ⇒ pick from a list",
     '',

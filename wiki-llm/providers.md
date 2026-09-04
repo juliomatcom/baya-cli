@@ -43,6 +43,7 @@ Command observations are scoped to `codex`, the only provider whose documented e
 ```ts
 interface ProviderAdapter {
   id: ProviderId;
+  upgradeArgs: string[];
   resolve(): Promise<{ bin: string; version: string } | null>;
   capabilities: {
     promptDelivery: ('file' | 'stdin' | 'argv')[]; // ordered preference
@@ -100,6 +101,8 @@ Reference machine: `claude`/`codex` in `~/.local/bin`; `copilot`/`gemini` in nvm
 
 Flags: `-m/--model` · `-C/--cd <DIR>` · `--add-dir` · `-s/--sandbox {read-only,workspace-write,danger-full-access}` · `--json` · `--output-schema <FILE>` · `-o/--output-last-message <FILE>` · `--color never` · `--skip-git-repo-check` · `--ephemeral` · resume `codex exec resume [--last]`.
 
+Self-update: `codex update` — ✅ verified 2026-09-04.
+
 ⚠️ **`-p` is `--profile`, NOT prompt.** Canonical drift trap.
 
 Events (`--json`): `thread.started`→`thread_id` · `turn.started` · `item.completed`→`item.type:"agent_message"`/`item.text`, `item.type:"error"`→error event (full message, e.g. an unknown-model metadata warning) · top-level `type:"error"`→error event · `turn.completed`→`usage`.
@@ -125,6 +128,8 @@ Cost of the default: run `20260903T080018Z-1e8874-44534` put `npx create-next-ap
 `claude -p/--print [prompt]`. Prompt: positional or stdin.
 
 Flags: `--model` (aliases `opus`/`sonnet`/`haiku`, or full id) · `--output-format {text,json,stream-json}` · `--input-format` · `--json-schema '<inline JSON>'` · `--permission-mode {acceptEdits,auto,bypassPermissions,manual,dontAsk,plan}` · `--allowedTools`/`--disallowedTools`/`--tools` · `--add-dir` · `-r/--resume [id]` · `--session-id <uuid>` · `--fork-session` · `--max-budget-usd` · `--append-system-prompt` · `--no-session-persistence` · `-w/--worktree` · `--bare` (skips hooks/plugins/`CLAUDE.md` — consider for determinism).
+
+Self-update: `claude update` (`upgrade` alias) — ✅ verified 2026-09-04.
 
 `--output-format json` = one object: `.result` (final text) · `.session_id` · `.is_error` · `.subtype` · `.permission_denials[]` · `.total_cost_usd` · `.num_turns`. With `--json-schema`: `.structured_output` = parsed object.
 
@@ -154,6 +159,8 @@ Adapter `src/providers/claude.ts`, snapshot `test/unit/providers/claude.test.ts`
 
 Flags: `--model` · `-C <dir>` · `--add-dir` · `--output-format {text,json}` (json=JSONL) · `-s/--silent` · `--no-color` · `--allow-all-tools`/`--allow-all`/`--yolo` · `--allow-tool`/`--deny-tool` · `--no-ask-user` · `-r/--resume[=id]` · `--session-id <id>` · `--secret-env-vars` · `--usage-output-file <file>` · `--max-ai-credits`.
 
+Self-update: `copilot update` — ✅ verified 2026-09-04.
+
 Events: `{type, data, ephemeral, id, timestamp, parentId}`. **15/20 events `ephemeral:true` — filter.** Terminal `{"type":"result","sessionId":…,"exitCode":…,"usage":{"codeChanges":{"filesModified":[…]}}}` → session id + exit code + `files_changed`. Error `{"type":"session.error","data":{"errorType":"quota","errorCode":"quota_exceeded","statusCode":402}}`.
 
 💡 Set `--no-ask-user` — disables the `ask_user` tool so a question returns as `status:"needs_input"` instead of blocking.
@@ -174,6 +181,8 @@ Unprobed: assistant text events, `result` usage fields, `--allow-all-tools` pars
 `opencode run [message..]`. Prompt: **positional only**, after a `--` separator. ⚠️ `-f/--file` attaches a file **to** a message and does not carry one — `run -f prompt.md` with no positional exits 1 (`Error: You must provide a message or a command`). Without `--`, a prompt starting with `-` is parsed as a flag and the command prints help instead of running (yargs). Verified live 2026-08-31, opencode 1.18.25.
 
 Flags: `-m <provider/model>` (compound) · `--dir` · `--format {default,json}` · `-c/--continue` · `-s/--session <id>` · `--fork` · `--agent` · `--title` · `--share`.
+
+Self-update: `opencode upgrade` — ✅ verified 2026-09-04.
 
 Events: JSONL `{type, timestamp, sessionID, …}`. Error `{"type":"error","error":{"name":…,"data":{"statusCode":401,"isRetryable":false}}}` — `isRetryable` boolean, cleanest retry signal in the set.
 

@@ -133,6 +133,11 @@ const COMMANDS = [
       'Print the effective model catalog grouped by provider, each row tagged built-in or user.',
   },
   {
+    name: 'baya upgrade [id]',
+    purpose:
+      "Run each resolved provider's self-update argv; optional provider filter.",
+  },
+  {
     name: 'baya resume <runId>',
     purpose:
       'Re-execute a run’s unfinished tasks; succeeded tasks are kept as context. --provider <id> re-runs elsewhere.',
@@ -390,6 +395,12 @@ export default function DocsPage() {
                 <code>~/.config/baya/config.json</code>, and never asks again.
                 Change it later with <code>baya config</code>.
               </p>
+              <p className="text-slate-600">
+                Run <code>baya upgrade</code> any time to update every installed
+                provider CLI to its latest version; <code>baya upgrade &lt;provider&gt;</code>{' '}
+                narrows to one.
+              </p>
+              <CopyCodeBlock code="baya upgrade" />
             </section>
 
             <section aria-labelledby="quickstart" className="space-y-4">

@@ -53,6 +53,12 @@ const conforming = JSON.stringify({
   summary: 'made the tables',
 });
 
+describe('opencodeAdapter.upgradeArgs', () => {
+  it('matches the real self-update subcommand — `opencode upgrade`, verified 2026-09-04', () => {
+    expect(opencodeAdapter.upgradeArgs).toEqual(['upgrade']);
+  });
+});
+
 describe('opencodeAdapter.buildRun argv', () => {
   it('matches the recorded surface', () => {
     expect(opencodeAdapter.buildRun(input()).argv).toMatchSnapshot();

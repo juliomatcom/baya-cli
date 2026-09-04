@@ -26,6 +26,7 @@ baya tasks.md --yes        # ≡ baya run tasks.md --yes
 | `baya doctor`         | Resolve every provider: path, version, capabilities. Reap stray process groups (gated on a stale lock).                                                                                                                                                                                    | v1     |
 | `baya config`         | Re-run the wizard. Subactions `--show` \| `path` \| `set <key> <value>` \| `refresh-models`. [config.md](config.md).                                                                                                                                                                       | v1     |
 | `baya models [id]`    | Print the effective catalog (`BUILTIN_CATALOG` + config `modelCatalog`) grouped by provider; each row tagged `built-in` / `user`. Optional provider filter; `--json` emits the catalog.                                                                                                    | v1     |
+| `baya upgrade [id]`   | Run each resolved provider's self-update argv; optional provider filter.                                                                                                                                                                                                                   | v1     |
 | `baya resume <runId>` | Re-execute the run's unfinished tasks **in its own run directory**; succeeded tasks are kept as context and never re-run. `--provider <id>` re-runs elsewhere. No `runId` ⇒ pick from a list, never guess; no TTY ⇒ exit `2`. Settings from `config_snapshot`. [recovery.md](recovery.md). | v1     |
 | `baya runs`           | List resumable runs — `running`/`paused`/`failed`/`interrupted`, newest first: id, source, start, status, totals. `--json` emits the rows. Unreadable `state.json` ⇒ a `damaged` row, never a crash.                                                                                       | v1     |
 
@@ -83,6 +84,7 @@ USAGE
   baya doctor                     check provider installs
   baya config [--show|path|set|refresh-models]
   baya models [provider]          list the effective model catalog
+  baya upgrade [provider]         update installed provider CLIs
   baya runs                       list resumable runs
 
 PROVIDERS

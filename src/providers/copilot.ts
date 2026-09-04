@@ -157,6 +157,7 @@ function collectText(events: ProviderEvent[]): string {
 
 export const copilotAdapter: ProviderAdapter = {
   id: 'copilot',
+  upgradeArgs: ['update'],
 
   capabilities: {
     promptDelivery: ['argv'],

@@ -47,6 +47,12 @@ const input = (overrides = {}) => ({
   ...overrides,
 });
 
+describe('codexAdapter.upgradeArgs', () => {
+  it('matches the real self-update subcommand — `codex update`, verified 2026-09-04', () => {
+    expect(codexAdapter.upgradeArgs).toEqual(['update']);
+  });
+});
+
 describe('codexAdapter.buildRun argv', () => {
   it('matches the recorded surface', () => {
     expect(codexAdapter.buildRun(input()).argv).toMatchSnapshot();

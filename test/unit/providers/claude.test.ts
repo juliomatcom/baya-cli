@@ -73,6 +73,12 @@ const conformingResult = JSON.stringify({
   summary: 'created 4 tables',
 });
 
+describe('claudeAdapter.upgradeArgs', () => {
+  it('matches the real self-update subcommand — `claude update`, verified 2026-09-04', () => {
+    expect(claudeAdapter.upgradeArgs).toEqual(['update']);
+  });
+});
+
 describe('claudeAdapter.buildRun argv', () => {
   it('matches the recorded surface', () => {
     expect(claudeAdapter.buildRun(input()).argv).toMatchSnapshot();
