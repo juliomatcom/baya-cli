@@ -24,7 +24,6 @@ export const TOOL_CAPABILITIES = [
   'agents',
   'notebook',
   'memories',
-  'plugins',
 ] as const;
 
 export type ToolCapability = (typeof TOOL_CAPABILITIES)[number];
@@ -36,7 +35,6 @@ export const CAPABILITY_HELP: Record<ToolCapability, string> = {
   agents: 'spawning sub-agents (claude, codex)',
   notebook: 'editing Jupyter notebooks (claude)',
   memories: "the provider's own stored memories (codex)",
-  plugins: 'externally installed plugins (opencode)',
 };
 
 export function isToolCapability(value: string): value is ToolCapability {

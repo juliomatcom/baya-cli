@@ -59,26 +59,22 @@ describe('opencodeAdapter.buildRun argv', () => {
   });
 
   /**
-   * Measured 2026-09-04 against opencode 1.18.25: ~21,130 input tokens without
-   * `--pure`, ~10,427 with it. Half the context was externally installed
-   * plugins the run never called.
+   * ⚠️ This adapter takes no lean-tools flag, and that is a measured decision,
+   * not an omission. `--pure` did not survive measurement: repeated identical
+   * invocations alternating it gave 10,426 / 31,886 / 20,902 / 10,426 input
+   * tokens — the number tracks session and cache state, not the flag — and the
+   * controlled pair through this adapter measured 10,878 without it against
+   * 10,895 with it.
    */
-  it('runs without external plugins by default', () => {
-    expect(opencodeAdapter.buildRun(input()).argv).toContain('--pure');
+  it('does not disable plugins, which measured no saving', () => {
+    expect(opencodeAdapter.buildRun(input()).argv).not.toContain('--pure');
   });
 
-  it('keeps plugins when asked for them by name, and under "all"', () => {
-    expect(opencodeAdapter.buildRun(input({ tools: ['plugins'] })).argv).not.toContain(
-      '--pure',
-    );
-    expect(opencodeAdapter.buildRun(input({ tools: ['all'] })).argv).not.toContain(
-      '--pure',
-    );
-  });
-
-  it('ignores a capability opencode has no flag for', () => {
-    expect(opencodeAdapter.buildRun(input({ tools: ['notebook'] })).argv).toContain(
-      '--pure',
+  it('still accepts a capability list without acting on it', () => {
+    // A mixed run passes one --tools to every adapter, so names meant for
+    // another provider have to be inert here rather than an error.
+    expect(opencodeAdapter.buildRun(input({ tools: ['web', 'all'] })).argv).toEqual(
+      opencodeAdapter.buildRun(input()).argv,
     );
   });
 

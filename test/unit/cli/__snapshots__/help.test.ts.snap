@@ -31,7 +31,7 @@ OPTIONS
   --memory-budget <n>        memory block size in chars (default 1200)
   --group-size <n>           max tasks per provider process (default 3)
   --tools <list>             restore capabilities on top of the lean tool set:
-                             web, agents, notebook, memories, plugins, or all
+                             web, agents, notebook, memories, or all
   --max-parallel <n>         global process concurrency (default min(4, cpus))
   --on-error <mode>          continue (default) | stop
   --retries <n>              extra attempts on a transient failure (default 1)
