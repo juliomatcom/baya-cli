@@ -1,6 +1,7 @@
 import { type ProviderEvent, type TaskResult } from '../manifest/index.js';
 import { stripAnsi } from '../log/index.js';
 import { extractResultFromText, parseResultJson, synthesizeFailure } from './result.js';
+import { wantsEverything, type ToolCapability } from './tools.js';
 import type {
   BuildRunInput,
   ExtractContext,
@@ -33,8 +34,49 @@ function withoutSchemaKey(schemaContents: string): Record<string, unknown> {
 /**
  * The editing tools, withheld from a task granted only `read-only` access.
  * Bash is deliberately NOT in this list — see `permissionModeFor`.
+ *
+ * Only reachable under `tools: ['all']` now; the lean path names what it wants
+ * instead of naming what it does not.
  */
 const EDIT_TOOLS = ['Write', 'Edit', 'NotebookEdit'] as const;
+
+/**
+ * What a task actually gets, as an **allowlist**.
+ *
+ * ⚠️ `--disallowed-tools` — what this replaced — withholds a tool's *use* and
+ * still ships its *definition*. That distinction is the whole cost: measured
+ * 2026-09-04 (v2.1.251) on a task whose prompt is ~400 tokens, claude's default
+ * surface is 14,419 input tokens and this set is 7,517. The ~7k difference is
+ * tool JSON for `Task`, `WebFetch`, `WebSearch`, `Skill`, `SlashCommand`,
+ * `ToolSearch` and friends, none of which a "summarize this file" task opens.
+ *
+ * ⚠️ `Bash` is in the **read-only** set on purpose. Withholding it would read
+ * as the stricter choice — and would finally close the gap `permissionModeFor`
+ * documents, where a read-only claude task can still write through a shell
+ * redirect — but it would also silently break every existing read-only task
+ * that shells out to `git log` or `rg`. Access semantics are not this change's
+ * to alter; `access` still means what it meant.
+ */
+const READ_TOOLS = ['Read', 'Grep', 'Glob', 'Bash'] as const;
+const WRITE_TOOLS = ['Write', 'Edit', 'TodoWrite'] as const;
+
+/** Capability names to the tools claude calls them. Unmapped names are ignored. */
+const CAPABILITY_TOOLS: Partial<Record<ToolCapability, readonly string[]>> = {
+  web: ['WebFetch', 'WebSearch'],
+  agents: ['Task'],
+  notebook: ['NotebookEdit'],
+};
+
+function toolsFor(input: BuildRunInput): string[] {
+  const names = new Set<string>(READ_TOOLS);
+  if (input.task.access === 'read-write' || input.dangerouslyAllowAll) {
+    for (const name of WRITE_TOOLS) names.add(name);
+  }
+  for (const capability of input.tools ?? []) {
+    for (const name of CAPABILITY_TOOLS[capability] ?? []) names.add(name);
+  }
+  return [...names];
+}
 
 /**
  * Non-interactive `-p` cannot prompt, so the mode has to pre-decide everything
@@ -81,10 +123,19 @@ function commonFlags(input: BuildRunInput, resuming = false): string[] {
     '--permission-mode',
     permissionModeFor(input),
   ];
-  // Comma-joined, not spread: `--disallowed-tools` is variadic and would
-  // otherwise swallow whatever flag follows it.
-  if (input.task.access === 'read-only' && !input.dangerouslyAllowAll) {
-    argv.push('--disallowed-tools', EDIT_TOOLS.join(','));
+  // Comma-joined, not spread: both tool flags are variadic and would otherwise
+  // swallow whatever flag follows them.
+  if (input.noTools === true) {
+    // An empty allowlist, which claude accepts: no tool definitions at all.
+    argv.push('--tools', '');
+  } else if (wantsEverything(input.tools)) {
+    // `all` is the escape from the capability list: claude's own default
+    // surface, with only the access guard this adapter has always applied.
+    if (input.task.access === 'read-only' && !input.dangerouslyAllowAll) {
+      argv.push('--disallowed-tools', EDIT_TOOLS.join(','));
+    }
+  } else {
+    argv.push('--tools', toolsFor(input).join(','));
   }
   if (input.model !== null) argv.push('--model', input.model);
   // `--session-id` pre-assigns the id so resume needs no event parsing (M4.1).
@@ -93,6 +144,27 @@ function commonFlags(input: BuildRunInput, resuming = false): string[] {
   }
   return argv;
 }
+
+/**
+ * Suppresses claude's non-essential background traffic. The one that costs
+ * money is `generate_session_title`: before the first turn, claude sends the
+ * whole prompt to Haiku to write a display name for the `/resume` picker.
+ *
+ * Measured 2026-09-04 (v2.1.251) via `--debug api`, which names it outright —
+ * `[API REQUEST] /v1/messages source=generate_session_title`. It cost 1,282
+ * input tokens for an 11-token title on a task whose own prompt is ~400, and
+ * ~12% of that task's spend. Baya never reads the title: sessions are addressed
+ * by the id `--session-id` pre-assigns, so the picker it feeds is one nothing
+ * here ever opens.
+ *
+ * There is no flag for it. `--no-session-persistence` does not suppress it
+ * (measured: the Haiku call still fires) and would cost `--resume`, which
+ * chains depend on. The variable is the only lever, and it leaves the session
+ * itself intact — verified with a two-turn `--session-id` / `--resume`
+ * round-trip that carried its context across and made no Haiku call on either
+ * turn.
+ */
+const QUIET_ENV = { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' } as const;
 
 function classify(text: string): 'rate_limit' | 'auth' | 'other' {
   const lower = text.toLowerCase();
@@ -208,10 +280,11 @@ export const claudeAdapter: ProviderAdapter = {
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, ...commonFlags(input)],
+      argv: [input.bin, ...commonFlags(input), ...(input.extraArgs ?? [])],
       cwd: input.cwd,
       stdin: 'pipe',
       stdinData: input.prompt,
+      env: { ...QUIET_ENV },
     };
   },
 
@@ -221,10 +294,17 @@ export const claudeAdapter: ProviderAdapter = {
    */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, '--resume', sessionId, ...commonFlags(input, true)],
+      argv: [
+        input.bin,
+        '--resume',
+        sessionId,
+        ...commonFlags(input, true),
+        ...(input.extraArgs ?? []),
+      ],
       cwd: input.cwd,
       stdin: 'pipe',
       stdinData: answer,
+      env: { ...QUIET_ENV },
     };
   },
 

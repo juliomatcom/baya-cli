@@ -52,6 +52,45 @@ const plan = (): { argv: string[]; cwd: string; stdin: 'ignore' } => ({
   stdin: 'ignore',
 });
 
+describe('runProcess environment', () => {
+  // `SpawnPlan.env` carries knobs a CLI exposes only through the environment
+  // (claude's `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`). It must layer over
+  // the inherited env, never replace it: these CLIs find their credentials
+  // through `PATH`, `HOME` and their own `*_HOME` vars.
+  const echoEnv = (keys: string[]): string[] => [
+    process.execPath,
+    '-e',
+    `process.stdout.write(JSON.stringify(${JSON.stringify(keys)}.map((k) => process.env[k] ?? null)))`,
+  ];
+
+  it('merges adapter env over the inherited env without dropping it', async () => {
+    const result = await runProcess({
+      plan: {
+        argv: echoEnv(['BAYA_SPAWN_BASE', 'BAYA_SPAWN_ADAPTER', 'BAYA_SPAWN_OVERRIDE']),
+        cwd: process.cwd(),
+        stdin: 'ignore',
+        env: { BAYA_SPAWN_ADAPTER: 'adapter', BAYA_SPAWN_OVERRIDE: 'wins' },
+      },
+      env: { ...process.env, BAYA_SPAWN_BASE: 'base', BAYA_SPAWN_OVERRIDE: 'loses' },
+    });
+
+    expect(JSON.parse(result.stdout)).toEqual(['base', 'adapter', 'wins']);
+  });
+
+  it('leaves the env untouched when the plan sets none', async () => {
+    const result = await runProcess({
+      plan: {
+        argv: echoEnv(['BAYA_SPAWN_BASE']),
+        cwd: process.cwd(),
+        stdin: 'ignore',
+      },
+      env: { ...process.env, BAYA_SPAWN_BASE: 'base' },
+    });
+
+    expect(JSON.parse(result.stdout)).toEqual(['base']);
+  });
+});
+
 describe('runProcess timeout escalation', () => {
   it('escalates a SIGTERM-trapping process to SIGKILL after the grace window', async () => {
     const ft = fakeTimers();

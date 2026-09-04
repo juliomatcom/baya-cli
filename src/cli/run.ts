@@ -56,6 +56,7 @@ import {
 import { createTheme } from '../ui/theme.js';
 import {
   binOverrides as binOverridesFrom,
+  providerToolSettings,
   loadConfig,
   nonInteractiveDefault,
   runWizard,
@@ -126,6 +127,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   });
 
   const binOverrides = binOverridesFrom(loaded.config);
+  const { providerTools, extraArgs } = providerToolSettings(loaded.config);
 
   const statuses = await registry.resolveAll({ binOverrides, env, probe: false });
 
@@ -583,6 +585,9 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       onError: flags.onError,
       env,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
+      ...(flags.tools ? { tools: flags.tools } : {}),
+      providerTools,
+      extraArgs,
       onGroupStarted: spinner.onGroupStarted,
       onProcessSpawn: (pid) => activePids.add(pid),
       onProcessExit: (pid) => activePids.delete(pid),

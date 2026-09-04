@@ -11,7 +11,7 @@ import {
 } from '../manifest/index.js';
 import { descendantsOf, readySet, topoOrder, type ReadyState } from '../graph/index.js';
 import type { Logger } from '../log/index.js';
-import type { Registry } from '../providers/index.js';
+import type { Registry, ToolCapability } from '../providers/index.js';
 import {
   assembleContext,
   budgetFrom,
@@ -78,6 +78,16 @@ export interface RunSequentialOptions {
   contextBudget?: number;
   maxRuntimeS?: number;
   dangerouslyAllowAll?: boolean;
+  /**
+   * Capabilities restored on top of each provider's lean tool set, from
+   * `--tools`. A provider's own `providers.<id>.tools` applies when this is
+   * absent — the flag is a whole-run override, so it wins outright.
+   */
+  tools?: readonly ToolCapability[];
+  /** Raw argv per provider, from `providers.<id>.extraArgs`. */
+  extraArgs?: Partial<Record<ProviderId, readonly string[]>>;
+  /** Per-provider capability defaults, from `providers.<id>.tools`. */
+  providerTools?: Partial<Record<ProviderId, readonly ToolCapability[]>>;
   /** Cross-task memory. Default on. */
   memory?: boolean;
   memoryBudget?: number;
@@ -230,6 +240,24 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
   const memoryBudget = options.memoryBudget ?? DEFAULT_MEMORY_BUDGET;
   const groupCap = Math.max(1, options.groupSize ?? DEFAULT_GROUP_SIZE);
   const maxRetries = Math.max(0, options.retries ?? DEFAULT_RETRIES);
+
+  /**
+   * What this provider's spawn gets on top of its lean defaults. `--tools` is
+   * a whole-run override and wins over `providers.<id>.tools` outright rather
+   * than merging: a flag that only ever *added* to config could not narrow a
+   * configured set, and "the flag is the answer" is the rule everywhere else.
+   */
+  function toolOptionsFor(providerId: ProviderId): {
+    tools?: readonly ToolCapability[];
+    extraArgs?: readonly string[];
+  } {
+    const tools = options.tools ?? options.providerTools?.[providerId];
+    const extraArgs = options.extraArgs?.[providerId];
+    return {
+      ...(tools && tools.length > 0 ? { tools } : {}),
+      ...(extraArgs && extraArgs.length > 0 ? { extraArgs } : {}),
+    };
+  }
 
   /** Observations from every finished task, in completion order. */
   const observed: TaskObservations[] = [];
@@ -435,6 +463,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
           ...(memoryBlock !== '' ? { memory: memoryBlock } : {}),
           ...(options.env ? { env: options.env } : {}),
           ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
+          ...toolOptionsFor(adapter.id),
           onSpawn: (pid) => {
             group.pid = pid;
             for (const id of memberIds) store.transition(id, { pid });

@@ -8,6 +8,7 @@ exports[`opencodeAdapter.buildRun argv builds a resume around the captured sessi
   "json",
   "--dir",
   "/work",
+  "--pure",
   "-s",
   "ses_abc",
   "--",
@@ -23,6 +24,7 @@ exports[`opencodeAdapter.buildRun argv matches the recorded surface 1`] = `
   "json",
   "--dir",
   "/work",
+  "--pure",
   "--",
   "do the thing",
 ]

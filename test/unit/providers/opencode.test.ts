@@ -58,6 +58,37 @@ describe('opencodeAdapter.buildRun argv', () => {
     expect(opencodeAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
+  /**
+   * Measured 2026-09-04 against opencode 1.18.25: ~21,130 input tokens without
+   * `--pure`, ~10,427 with it. Half the context was externally installed
+   * plugins the run never called.
+   */
+  it('runs without external plugins by default', () => {
+    expect(opencodeAdapter.buildRun(input()).argv).toContain('--pure');
+  });
+
+  it('keeps plugins when asked for them by name, and under "all"', () => {
+    expect(opencodeAdapter.buildRun(input({ tools: ['plugins'] })).argv).not.toContain(
+      '--pure',
+    );
+    expect(opencodeAdapter.buildRun(input({ tools: ['all'] })).argv).not.toContain(
+      '--pure',
+    );
+  });
+
+  it('ignores a capability opencode has no flag for', () => {
+    expect(opencodeAdapter.buildRun(input({ tools: ['notebook'] })).argv).toContain(
+      '--pure',
+    );
+  });
+
+  // `--` ends the flags; the prompt follows it. extraArgs after that would be
+  // read as part of the message.
+  it('appends extraArgs before the -- prompt separator', () => {
+    const argv = opencodeAdapter.buildRun(input({ extraArgs: ['--share'] })).argv;
+    expect(argv.indexOf('--share')).toBeLessThan(argv.indexOf('--'));
+  });
+
   // The bug this pins: `-f` *attaches* a file, it is not the message. An argv
   // carrying only `-f prompt.md` reaches no model — opencode exits 1 with
   // "You must provide a message or a command". The prompt must be the trailing

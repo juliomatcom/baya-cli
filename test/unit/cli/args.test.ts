@@ -195,3 +195,29 @@ describe('failure flags', () => {
     );
   });
 });
+
+describe('--tools', () => {
+  const run = (argv: string[]) => parseArgs(argv);
+
+  it('parses a capability list onto the run flags', () => {
+    const parsed = run(['tasks.md', '--tools', 'web,agents']);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.flags.tools).toEqual(['web', 'agents']);
+  });
+
+  it('accepts all, the escape from the capability list', () => {
+    expect(run(['tasks.md', '--tools', 'all']).flags.tools).toEqual(['all']);
+  });
+
+  // Silently dropping a misspelled capability would leave a task without the
+  // access the user asked for, and nothing would say so.
+  it('rejects an unknown capability instead of ignoring it', () => {
+    const parsed = run(['tasks.md', '--tools', 'websearch']);
+    expect(parsed.errors.join(' ')).toMatch(/unknown tool capability "websearch"/);
+    expect(parsed.flags.tools).toBeUndefined();
+  });
+
+  it('is absent when not passed, so config can still speak', () => {
+    expect(run(['tasks.md']).flags.tools).toBeUndefined();
+  });
+});

@@ -179,7 +179,13 @@ export const copilotAdapter: ProviderAdapter = {
     return {
       // `-p <text>` — the one place a prompt rides in argv. Everything after is
       // fixed-order flags so the snapshot catches drift.
-      argv: [input.bin, '-p', input.prompt, ...commonFlags(input)],
+      argv: [
+        input.bin,
+        '-p',
+        input.prompt,
+        ...commonFlags(input),
+        ...(input.extraArgs ?? []),
+      ],
       cwd: input.cwd,
       stdin: 'ignore',
     };
@@ -188,7 +194,15 @@ export const copilotAdapter: ProviderAdapter = {
   /** `copilot --resume=<id>` with the answer as a fresh `-p` prompt. */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, '-p', answer, '--resume', sessionId, ...commonFlags(input)],
+      argv: [
+        input.bin,
+        '-p',
+        answer,
+        '--resume',
+        sessionId,
+        ...commonFlags(input),
+        ...(input.extraArgs ?? []),
+      ],
       cwd: input.cwd,
       stdin: 'ignore',
     };

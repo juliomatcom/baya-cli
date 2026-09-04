@@ -78,6 +78,17 @@ describe('claudeAdapter.buildRun argv', () => {
     expect(claudeAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
+  // claude bills a Haiku call to name the session for a picker Baya never
+  // opens — 1,282 input tokens per task, and no flag turns it off.
+  it('suppresses non-essential traffic on both run and resume', () => {
+    expect(claudeAdapter.buildRun(input()).env).toEqual({
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    });
+    expect(claudeAdapter.buildResume('sess-9', 'ok', input()).env).toEqual({
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    });
+  });
+
   // The two regressions this pins: `acceptEdits` pre-approves edits only and
   // `plan` refuses every non-readonly tool, so under `-p` — with nobody to
   // answer a prompt — both had Bash denied outright.
@@ -94,18 +105,89 @@ describe('claudeAdapter.buildRun argv', () => {
 
   // `access: "read-only"` bounds what a task may mutate, not whether it may act: a
   // task that runs the suite and reports back needs Bash and writes nothing.
-  it('withholds the editing tools from a read-only task, but never Bash', () => {
-    const argv = claudeAdapter.buildRun(input()).argv;
-    const denied = argv[argv.indexOf('--disallowed-tools') + 1] as string;
-    expect(denied.split(',')).toEqual(['Write', 'Edit', 'NotebookEdit']);
-    expect(denied).not.toContain('Bash');
+  /** The allowlist is the whole saving: 14,419 input tokens down to 7,517. */
+  const grantedTools = (argv: string[]): string[] => {
+    const index = argv.indexOf('--tools');
+    expect(index).toBeGreaterThan(-1);
+    const value = argv[index + 1] as string;
+    return value === '' ? [] : value.split(',');
+  };
+
+  it('grants a read-only task the reading tools, Bash included', () => {
+    // Bash stays: withholding it would close the shell-redirect gap
+    // `permissionModeFor` documents, but would also break every existing
+    // read-only task that shells out to `git log` or `rg`.
+    expect(grantedTools(claudeAdapter.buildRun(input()).argv)).toEqual([
+      'Read',
+      'Grep',
+      'Glob',
+      'Bash',
+    ]);
   });
 
-  it('withholds nothing from a writing task', () => {
+  it('adds the editing tools for a writing task', () => {
+    const granted = grantedTools(
+      claudeAdapter.buildRun(input({ task: task({ access: 'read-write' }) })).argv,
+    );
+    expect(granted).toEqual([
+      'Read',
+      'Grep',
+      'Glob',
+      'Bash',
+      'Write',
+      'Edit',
+      'TodoWrite',
+    ]);
+  });
+
+  it('never ships a tool definition it did not grant', () => {
+    // `--disallowed-tools` withheld a tool's *use* and still sent its schema.
+    // Nothing may reintroduce it: the allowlist is what makes the saving real.
+    for (const access of ['read-only', 'read-write'] as const) {
+      const argv = claudeAdapter.buildRun(input({ task: task({ access }) })).argv;
+      expect(argv).not.toContain('--disallowed-tools');
+      expect(grantedTools(argv)).not.toContain('WebFetch');
+      expect(grantedTools(argv)).not.toContain('Task');
+    }
+  });
+
+  it('restores named capabilities on top of the lean set', () => {
+    const granted = grantedTools(
+      claudeAdapter.buildRun(input({ tools: ['web', 'notebook'] })).argv,
+    );
+    expect(granted).toEqual(
+      expect.arrayContaining(['Read', 'WebFetch', 'WebSearch', 'NotebookEdit']),
+    );
+    expect(granted).not.toContain('Task');
+  });
+
+  it('ignores a capability this provider has no tool for', () => {
+    // `memories` is codex's. A mixed run passes one --tools to every adapter,
+    // so an unmapped name has to be inert rather than an error.
+    expect(
+      grantedTools(claudeAdapter.buildRun(input({ tools: ['memories'] })).argv),
+    ).toEqual(['Read', 'Grep', 'Glob', 'Bash']);
+  });
+
+  it('falls back to the CLI default surface under "all"', () => {
+    const argv = claudeAdapter.buildRun(input({ tools: ['all'] })).argv;
+    expect(argv).not.toContain('--tools');
+    // The access guard this adapter has always applied still stands.
+    expect(argv[argv.indexOf('--disallowed-tools') + 1]).toBe('Write,Edit,NotebookEdit');
+  });
+
+  it('grants nothing at all when the caller needs no tools', () => {
+    // The planner: a text-to-JSON transform that opens no file.
+    expect(grantedTools(claudeAdapter.buildRun(input({ noTools: true })).argv)).toEqual(
+      [],
+    );
+  });
+
+  it('appends extraArgs after every flag it chose, so they can override one', () => {
     const argv = claudeAdapter.buildRun(
-      input({ task: task({ access: 'read-write' }) }),
+      input({ extraArgs: ['--tools', 'Read,WebFetch'] }),
     ).argv;
-    expect(argv).not.toContain('--disallowed-tools');
+    expect(argv.slice(-2)).toEqual(['--tools', 'Read,WebFetch']);
   });
 
   it('withholds nothing under --dangerously-allow-all, even read-only', () => {

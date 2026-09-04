@@ -1,6 +1,7 @@
 import { type ProviderEvent, type TaskResult } from '../manifest/index.js';
 import { stripAnsi } from '../log/index.js';
 import { parseResultJson, synthesizeFailure } from './result.js';
+import { wants, wantsEverything } from './tools.js';
 import type {
   BuildRunInput,
   ExtractContext,
@@ -57,6 +58,29 @@ function sandboxFor(input: BuildRunInput): string {
 const NETWORK_ACCESS_FLAG = 'sandbox_workspace_write.network_access=true';
 
 /**
+ * codex injects the user's stored memories into every session, and they are
+ * the single largest slice of its overhead here.
+ *
+ * Measured 2026-09-04 against codex-cli 0.150.1, one knob at a time on a task
+ * whose own prompt is ~400 tokens:
+ *
+ * - baseline                                     17,421 input tokens
+ * - `-c plugins={}`                              17,421 — no effect
+ * - `--disable multi_agent`                      17,421 — no effect
+ * - `include_plan_tool` + 3 more tool disables    17,421 — no effect
+ * - **`--disable memories`                       13,498** — the whole saving
+ *
+ * So this is the one flag, and the four that read like they should have helped
+ * are not shipped. `--ignore-user-config` reaches lower (12,135) and is
+ * deliberately not used: it discards the user's `model_reasoning_effort`,
+ * `preferred_auth_method` and model default to buy tokens Baya did not ask for.
+ *
+ * A run that wants codex's memories back asks for them by name (`--tools
+ * memories`); Baya passes its own memory block either way (`memory/render.ts`).
+ */
+const MEMORIES_FEATURE = 'memories';
+
+/**
  * ⚠️ `codex exec` and `codex exec resume` do **not** share a flag surface.
  * Verified live 2026-08-29 against codex-cli 0.150.1: `resume` accepts
  * `--json`, `--skip-git-repo-check`, `--output-schema`, `-o`, `-m` — and
@@ -85,6 +109,11 @@ function commonFlags(input: BuildRunInput, mode: 'exec' | 'resume'): string[] {
   if (sandbox === 'workspace-write') argv.push('-c', NETWORK_ACCESS_FLAG);
   argv.push('--output-schema', input.schemaPath, '-o', input.resultFile);
   if (input.model !== null) argv.push('-m', input.model);
+  if (!wantsEverything(input.tools) && !wants(input.tools, 'memories')) {
+    argv.push('--disable', MEMORIES_FEATURE);
+  }
+  if (wants(input.tools, 'agents')) argv.push('--enable', 'multi_agent');
+  if (wants(input.tools, 'web')) argv.push('-c', 'tools.web_search=true');
   return argv;
 }
 
@@ -203,7 +232,13 @@ export const codexAdapter: ProviderAdapter = {
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, 'exec', ...commonFlags(input, 'exec'), '-'],
+      argv: [
+        input.bin,
+        'exec',
+        ...commonFlags(input, 'exec'),
+        ...(input.extraArgs ?? []),
+        '-',
+      ],
       cwd: input.cwd,
       stdin: 'pipe',
       stdinData: input.prompt,
@@ -223,6 +258,7 @@ export const codexAdapter: ProviderAdapter = {
         'resume',
         sessionId,
         ...commonFlags(input, 'resume'),
+        ...(input.extraArgs ?? []),
         '-',
       ],
       cwd: input.cwd,

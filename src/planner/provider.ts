@@ -86,6 +86,17 @@ export function runPlannerProvider(
       schemaContents: readFileSync(options.schemaPath, 'utf8'),
       resultFile: options.resultFile,
       prompt,
+      // Planning is a text-to-JSON transform: the task list arrives in the
+      // prompt and the answer is one object. It opens no file and runs no
+      // command, so it is the one call in a run that needs no tools at all —
+      // and, going through `buildRun` like a task, it was paying for a full
+      // agentic surface to do it. Measured 2026-09-04: claude 14,419 input
+      // tokens with its default tools, 4,294 with none.
+      //
+      // `extraArgs` is deliberately not forwarded here. It is a per-provider
+      // escape for task execution; a raw flag that re-armed the planner's
+      // tools would undo this for no stated reason.
+      noTools: true,
     });
 
     const events: ProviderEvent[] = [];

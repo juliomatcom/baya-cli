@@ -1,4 +1,5 @@
 import { LOG_LEVELS, type LogLevel } from '../log/index.js';
+import { parseToolCapabilities, type ToolCapability } from '../providers/tools.js';
 
 /**
  * Arg parsing (cli.md §Invocation). Hand-rolled deliberately: the one subtle
@@ -42,6 +43,11 @@ export interface RunFlags {
   memoryBudget?: number;
   /** `--group-size <n>`: max tasks per provider process. `1` = one each. */
   groupSize?: number;
+  /**
+   * `--tools <list>`: capabilities to restore on top of each provider's lean
+   * tool set. `all` means the CLI's own default surface.
+   */
+  tools?: ToolCapability[];
   /** `--retries <n>`: extra attempts after the first, transient failures only. */
   retries?: number;
   onError: 'continue' | 'stop';
@@ -198,6 +204,17 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
           if (Number.isNaN(parsed) || parsed < 0)
             errors.push(`--retries must be a non-negative integer`);
           else flags.retries = parsed;
+        }
+        break;
+      }
+      case '--tools': {
+        const value = takeValue();
+        if (value !== undefined) {
+          try {
+            flags.tools = parseToolCapabilities(value, '--tools');
+          } catch (error) {
+            errors.push((error as Error).message);
+          }
         }
         break;
       }

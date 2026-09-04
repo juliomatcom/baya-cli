@@ -16,7 +16,11 @@ import {
   type Logger,
 } from '../log/index.js';
 import { FileLock } from '../lock/index.js';
-import { binOverrides as binOverridesFrom, loadConfig } from '../config/index.js';
+import {
+  binOverrides as binOverridesFrom,
+  loadConfig,
+  providerToolSettings,
+} from '../config/index.js';
 import type { Registry } from '../providers/index.js';
 import {
   StateStore,
@@ -256,6 +260,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
       `\n  ${theme.taskId('baya resume')} · ${runId} · ${targets.rerun.length} to run · ${theme.note(`${targets.keep.length} kept`)}\n\n`,
     );
 
+    const resumeConfig = loadConfig({ cwd, env }).config;
     await runSequential({
       manifest: override ? withProvider(manifest, rerunning, override) : manifest,
       cwd,
@@ -267,7 +272,12 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
       batchSchemaPath,
       defaultProvider,
       defaultModel: override ? null : snapshot.defaults.model,
-      binOverrides: binOverridesFrom(loadConfig({ cwd, env }).config),
+      binOverrides: binOverridesFrom(resumeConfig),
+      // Tool settings are read fresh rather than from the snapshot: they are
+      // about how a provider is driven, not what the run decided, and a user
+      // resuming after a task ran short of a capability is doing exactly that.
+      ...providerToolSettings(resumeConfig),
+      ...(flags.tools ? { tools: flags.tools } : {}),
       // The run's own settings, not whatever the config says today — except
       // where this invocation names one explicitly.
       contextStrategy:

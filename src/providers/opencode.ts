@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path';
 import { type ProviderEvent, type TaskResult } from '../manifest/index.js';
 import { stripAnsi } from '../log/index.js';
 import { extractResultFromText, synthesizeFailure } from './result.js';
+import { wants, wantsEverything } from './tools.js';
 import type {
   BuildRunInput,
   ExtractContext,
@@ -44,6 +45,14 @@ export const OPENCODE_PROVIDER = 'opencode' as const;
 function commonFlags(input: BuildRunInput): string[] {
   const argv = ['run', '--format', 'json', '--dir', input.cwd];
   if (input.model !== null) argv.push('-m', input.model);
+  // Externally installed plugins arrive as tool definitions in every session.
+  // Measured 2026-09-04 against opencode 1.18.25 on a task whose own prompt is
+  // ~1,400 tokens (opencode enforces no schema, so it is inlined): ~21,130
+  // input tokens without this flag, ~10,427 with it. Half the context was
+  // plugins the run never called. `--tools plugins` (or `all`) keeps them.
+  if (!wantsEverything(input.tools) && !wants(input.tools, 'plugins')) {
+    argv.push('--pure');
+  }
   return argv;
 }
 
@@ -148,7 +157,13 @@ export const opencodeAdapter: ProviderAdapter = {
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, ...commonFlags(input), '--', input.prompt],
+      argv: [
+        input.bin,
+        ...commonFlags(input),
+        ...(input.extraArgs ?? []),
+        '--',
+        input.prompt,
+      ],
       cwd: input.cwd,
       stdin: 'ignore',
       // Still written, though nothing reads it back: `prompt.md` in the task's
@@ -161,7 +176,15 @@ export const opencodeAdapter: ProviderAdapter = {
   /** `opencode run -s <sessionID>` — the id captured from the event stream. */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, ...commonFlags(input), '-s', sessionId, '--', answer],
+      argv: [
+        input.bin,
+        ...commonFlags(input),
+        '-s',
+        sessionId,
+        ...(input.extraArgs ?? []),
+        '--',
+        answer,
+      ],
       cwd: input.cwd,
       stdin: 'ignore',
       files: [{ path: promptFile(input), contents: answer }],
