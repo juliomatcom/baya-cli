@@ -12,6 +12,8 @@ exports[`codexAdapter.buildRun argv builds a resume around the captured thread i
   "/work/.baya/schema/task_result.schema.json",
   "-o",
   "/work/.baya/runs/r1/tasks/gen-schema/result.json",
+  "--disable",
+  "memories",
   "-",
 ]
 `;
@@ -32,6 +34,8 @@ exports[`codexAdapter.buildRun argv matches the recorded surface 1`] = `
   "/work/.baya/schema/task_result.schema.json",
   "-o",
   "/work/.baya/runs/r1/tasks/gen-schema/result.json",
+  "--disable",
+  "memories",
   "-",
 ]
 `;
@@ -54,6 +58,8 @@ exports[`codexAdapter.buildRun argv uses the workspace-write sandbox only for re
   "/work/.baya/schema/task_result.schema.json",
   "-o",
   "/work/.baya/runs/r1/tasks/gen-schema/result.json",
+  "--disable",
+  "memories",
   "-",
 ]
 `;

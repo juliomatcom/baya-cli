@@ -47,15 +47,19 @@ import {
   createEventRenderer,
   createProgress,
   exitCodeFor,
+  formatCost,
+  formatTokens,
   renderDag,
   renderReport,
   resolveRunModel,
   runModelGate,
   type Progress,
 } from '../ui/index.js';
-import { createTheme } from '../ui/theme.js';
+import { createTheme, type Theme } from '../ui/theme.js';
+import type { ProviderUsage } from '../providers/index.js';
 import {
   binOverrides as binOverridesFrom,
+  providerToolSettings,
   loadConfig,
   nonInteractiveDefault,
   runWizard,
@@ -126,6 +130,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   });
 
   const binOverrides = binOverridesFrom(loaded.config);
+  const { providerTools, extraArgs } = providerToolSettings(loaded.config);
 
   const statuses = await registry.resolveAll({ binOverrides, env, probe: false });
 
@@ -309,6 +314,9 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- plan
     let manifest: Manifest;
     let planOrigin: 'planner' | 'fallback' | 'file' = 'planner';
+    /** Empty on the `--plan-in` path, where no planner ran. */
+    const plannerUsage: ProviderUsage = {};
+    let plannerAttempts = 0;
 
     if (flags.planIn) {
       const parsed: unknown = JSON.parse(
@@ -401,6 +409,10 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
             // able to reach it — see RunPlannerProviderOptions.onProcessSpawn.
             onProcessSpawn: (pid) => activePids.add(pid),
             onProcessExit: (pid) => activePids.delete(pid),
+            onUsage: (usage) => {
+              plannerAttempts += 1;
+              addUsage(plannerUsage, usage);
+            },
           }),
           logger,
           // Inlined only for a planner that enforces nothing. Naming a schema by
@@ -476,7 +488,11 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- the gate
     progress.stop();
     io.stderr.write(
-      `\n  ${theme.taskId('baya')} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ''}${planOrigin === 'fallback' ? theme.warn(' · linear fallback') : ''}\n\n`,
+      `\n  ${theme.taskId('baya')} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ''}${planOrigin === 'fallback' ? theme.warn(' · linear fallback') : ''}\n`,
+    );
+    // Where the run happens — not the task list's path above it (cli.md §Plan gate).
+    io.stderr.write(
+      `  \u{1F916} ${theme.note('agents will run in')} ${theme.path(cwd)}\n\n`,
     );
     io.stderr.write(
       `${renderDag(manifest, theme, defaultProvider as ProviderId, {
@@ -490,6 +506,23 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       io.stderr.write(`  ${theme.note('resolved')} ${note}\n`);
     }
     if (modelGate.notes.length > 0) io.stderr.write('\n');
+
+    const plannerCostLine = renderPlannerCost(
+      plannerUsage,
+      String(plannerProvider),
+      plannerModel,
+      plannerAttempts,
+      theme,
+    );
+    if (plannerCostLine !== null) {
+      logger.info('plan.usage', {
+        provider: String(plannerProvider),
+        model: plannerModel,
+        attempts: plannerAttempts,
+        ...plannerUsage,
+      });
+      io.stderr.write(`${plannerCostLine}\n\n`);
+    }
 
     if (flags.dryRun) {
       logger.info('run.completed', { dry_run: true, tasks: manifest.tasks.length });
@@ -583,6 +616,9 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       onError: flags.onError,
       env,
       ...(flags.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
+      ...(flags.tools ? { tools: flags.tools } : {}),
+      providerTools,
+      extraArgs,
       onGroupStarted: spinner.onGroupStarted,
       onProcessSpawn: (pid) => activePids.add(pid),
       onProcessExit: (pid) => activePids.delete(pid),
@@ -643,6 +679,49 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     progress.dispose();
     lock.release();
   }
+}
+
+/** Folds one attempt's usage into the running total, field by field. */
+function addUsage(total: ProviderUsage, next: ProviderUsage): void {
+  for (const key of [
+    'cost_usd',
+    'input_tokens',
+    'output_tokens',
+    'cached_input_tokens',
+    'cache_write_input_tokens',
+  ] as const) {
+    const value = next[key];
+    if (value !== undefined) total[key] = (total[key] ?? 0) + value;
+  }
+}
+
+/** `null`, never a `0 tokens` line, when there is no usage. cli.md §Plan gate. */
+export function renderPlannerCost(
+  usage: ProviderUsage,
+  provider: string,
+  model: string | null,
+  attempts: number,
+  theme: Theme,
+): string | null {
+  const tokens = (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0);
+  if (tokens === 0 && !(usage.cost_usd && usage.cost_usd > 0)) return null;
+
+  const meter: string[] = [];
+  if (tokens > 0) {
+    const cached = usage.cached_input_tokens ?? 0;
+    meter.push(
+      cached > 0
+        ? `${formatTokens(tokens)} tokens (${formatTokens(cached)} cached)`
+        : `${formatTokens(tokens)} tokens`,
+    );
+  }
+  if (usage.cost_usd && usage.cost_usd > 0) meter.push(formatCost(usage.cost_usd));
+  // Without the count, a repaired plan's number is not explicable.
+  if (attempts > 1) meter.push(`${attempts} attempts`);
+
+  return `  ${theme.note('planned by')} ${theme.provider(provider)}${
+    model ? theme.note(` ${model}`) : ''
+  } ${theme.note(`· ${meter.join(' · ')}`)}`;
 }
 
 function nullStream(): NodeJS.WritableStream {

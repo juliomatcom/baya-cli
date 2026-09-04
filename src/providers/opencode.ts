@@ -41,6 +41,7 @@ export const OPENCODE_PROVIDER = 'opencode' as const;
  */
 
 /** `-m` wants the compound `provider/model` form; a bare model is passed as-is. */
+/** ⚠️ No lean-tools flag: `--pure` measured no saving. providers.md §Negative results. */
 function commonFlags(input: BuildRunInput): string[] {
   const argv = ['run', '--format', 'json', '--dir', input.cwd];
   if (input.model !== null) argv.push('-m', input.model);
@@ -148,7 +149,13 @@ export const opencodeAdapter: ProviderAdapter = {
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, ...commonFlags(input), '--', input.prompt],
+      argv: [
+        input.bin,
+        ...commonFlags(input),
+        ...(input.extraArgs ?? []),
+        '--',
+        input.prompt,
+      ],
       cwd: input.cwd,
       stdin: 'ignore',
       // Still written, though nothing reads it back: `prompt.md` in the task's
@@ -161,7 +168,15 @@ export const opencodeAdapter: ProviderAdapter = {
   /** `opencode run -s <sessionID>` — the id captured from the event stream. */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, ...commonFlags(input), '-s', sessionId, '--', answer],
+      argv: [
+        input.bin,
+        ...commonFlags(input),
+        '-s',
+        sessionId,
+        ...(input.extraArgs ?? []),
+        '--',
+        answer,
+      ],
       cwd: input.cwd,
       stdin: 'ignore',
       files: [{ path: promptFile(input), contents: answer }],

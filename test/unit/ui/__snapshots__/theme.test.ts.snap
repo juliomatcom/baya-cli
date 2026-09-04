@@ -28,6 +28,8 @@ exports[`theme color on (createTheme('always')) renders every status token wrapp
 }
 `;
 
-exports[`theme color on (createTheme('always')) wraps taskId and provider text in ANSI 1`] = `"[1mgen-schema[22m"`;
+exports[`theme color on (createTheme('always')) wraps taskId, provider and path text in ANSI 1`] = `"[1mgen-schema[22m"`;
 
-exports[`theme color on (createTheme('always')) wraps taskId and provider text in ANSI 2`] = `"[35mcodex[39m"`;
+exports[`theme color on (createTheme('always')) wraps taskId, provider and path text in ANSI 2`] = `"[35mcodex[39m"`;
+
+exports[`theme color on (createTheme('always')) wraps taskId, provider and path text in ANSI 3`] = `"[1m[33m/work/repo[39m[22m"`;

@@ -1,6 +1,7 @@
 import { type ProviderEvent, type TaskResult } from '../manifest/index.js';
 import { stripAnsi } from '../log/index.js';
 import { parseResultJson, synthesizeFailure } from './result.js';
+import { wants, wantsEverything } from './tools.js';
 import type {
   BuildRunInput,
   ExtractContext,
@@ -56,6 +57,9 @@ function sandboxFor(input: BuildRunInput): string {
  */
 const NETWORK_ACCESS_FLAG = 'sandbox_workspace_write.network_access=true';
 
+/** ⚠️ The only codex knob that measured a saving. providers.md §Lean tool sets. */
+const MEMORIES_FEATURE = 'memories';
+
 /**
  * ⚠️ `codex exec` and `codex exec resume` do **not** share a flag surface.
  * Verified live 2026-08-29 against codex-cli 0.150.1: `resume` accepts
@@ -85,6 +89,11 @@ function commonFlags(input: BuildRunInput, mode: 'exec' | 'resume'): string[] {
   if (sandbox === 'workspace-write') argv.push('-c', NETWORK_ACCESS_FLAG);
   argv.push('--output-schema', input.schemaPath, '-o', input.resultFile);
   if (input.model !== null) argv.push('-m', input.model);
+  if (!wantsEverything(input.tools) && !wants(input.tools, 'memories')) {
+    argv.push('--disable', MEMORIES_FEATURE);
+  }
+  if (wants(input.tools, 'agents')) argv.push('--enable', 'multi_agent');
+  if (wants(input.tools, 'web')) argv.push('-c', 'tools.web_search=true');
   return argv;
 }
 
@@ -203,7 +212,13 @@ export const codexAdapter: ProviderAdapter = {
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, 'exec', ...commonFlags(input, 'exec'), '-'],
+      argv: [
+        input.bin,
+        'exec',
+        ...commonFlags(input, 'exec'),
+        ...(input.extraArgs ?? []),
+        '-',
+      ],
       cwd: input.cwd,
       stdin: 'pipe',
       stdinData: input.prompt,
@@ -223,6 +238,7 @@ export const codexAdapter: ProviderAdapter = {
         'resume',
         sessionId,
         ...commonFlags(input, 'resume'),
+        ...(input.extraArgs ?? []),
         '-',
       ],
       cwd: input.cwd,

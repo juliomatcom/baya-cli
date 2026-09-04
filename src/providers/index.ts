@@ -8,6 +8,15 @@ export {
   type SpawnPlan,
 } from './types.js';
 export {
+  CAPABILITY_HELP,
+  TOOL_CAPABILITIES,
+  isToolCapability,
+  parseToolCapabilities,
+  wants,
+  wantsEverything,
+  type ToolCapability,
+} from './tools.js';
+export {
   enumerateModels,
   knownLocations,
   probeVersion,

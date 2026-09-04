@@ -58,6 +58,33 @@ describe('opencodeAdapter.buildRun argv', () => {
     expect(opencodeAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
+  /**
+   * ⚠️ This adapter takes no lean-tools flag, and that is a measured decision,
+   * not an omission. `--pure` did not survive measurement: repeated identical
+   * invocations alternating it gave 10,426 / 31,886 / 20,902 / 10,426 input
+   * tokens — the number tracks session and cache state, not the flag — and the
+   * controlled pair through this adapter measured 10,878 without it against
+   * 10,895 with it.
+   */
+  it('does not disable plugins, which measured no saving', () => {
+    expect(opencodeAdapter.buildRun(input()).argv).not.toContain('--pure');
+  });
+
+  it('still accepts a capability list without acting on it', () => {
+    // A mixed run passes one --tools to every adapter, so names meant for
+    // another provider have to be inert here rather than an error.
+    expect(opencodeAdapter.buildRun(input({ tools: ['web', 'all'] })).argv).toEqual(
+      opencodeAdapter.buildRun(input()).argv,
+    );
+  });
+
+  // `--` ends the flags; the prompt follows it. extraArgs after that would be
+  // read as part of the message.
+  it('appends extraArgs before the -- prompt separator', () => {
+    const argv = opencodeAdapter.buildRun(input({ extraArgs: ['--share'] })).argv;
+    expect(argv.indexOf('--share')).toBeLessThan(argv.indexOf('--'));
+  });
+
   // The bug this pins: `-f` *attaches* a file, it is not the message. An argv
   // carrying only `-f prompt.md` reaches no model — opencode exits 1 with
   // "You must provide a message or a command". The prompt must be the trailing

@@ -15,7 +15,9 @@
 - **Scoped Mechanical Edit Delegation:** Execute directly in-thread if the active model is already strong enough for the task at hand. Never spawn a subagent if the active model can perform the task in-thread. Do not delegate trivial edits or edits requiring repository-wide context or specification interpretation.
 - **Repository Skills:** Read `.agents/skills/<skill>/SKILL.md` before using a repository skill.
 - **Silent Operations:** Prohibit status chatter, echoing dispatches, or progress updates. Output only standard completion status or errors.
+- **Measurements Live in `wiki-llm/`:** Benchmark numbers, before/after token or timing data, dated findings, negative results, and the reasoning behind a tuning decision NEVER go inline. Write them to the owning `wiki-llm/` page; the comment may cite that page, never restate it. A number in a comment is stale the day the CLI ships a new version.
 - **Code Comments (default: none):** Assume the reader reads code. Write a comment ONLY for a true edge case — a WHY the code cannot express: workaround for an external bug, non-obvious constraint, deliberately counterintuitive logic. Prohibit comments that narrate an edit, mark a fix/correction/change, restate the code, or describe what a name already says. Route architectural, protocol, and design explanation to `wiki-llm/`, never inline. When editing a line, delete adjacent obsolete or now-obvious comments.
+- **Comment Hard Cap (2 lines):** No comment exceeds 2 lines. A WHY needing more than 2 lines is a `wiki-llm/` page; cite it (`see providers.md §claude`) and stop. Applies to block comments and JSDoc on internal symbols alike.
 - **Memory Protocol (`MEMORY.md`):**
   - **Lazy Read:** Prohibit auto-loading `MEMORY.md` at session start. Query/grep `MEMORY.md` on-demand ONLY during cross-task failure recovery or explicit user invocation.
   - **Explicit Write Triggers:** Write or update `MEMORY.md` ONLY upon discovering unscripted tooling quirks, non-obvious workspace failures, or explicit user command.
@@ -43,5 +45,5 @@
    - [ ] Automated tests pass cleanly (zero real DB/network I/O; mocked dependencies).
    - [ ] Full verification command runs clean (e.g. `npm run typecheck && npm run lint && npm test` — fill in your actual command).
    - [ ] Zero raw `console.*` statements; log via the shared logger.
-   - [ ] No new comment except a true edge-case WHY (see Code Comments); zero edit-narrating or restating comments.
+   - [ ] No new comment except a true edge-case WHY (see Code Comments); zero edit-narrating or restating comments; none over 2 lines; zero measurements or dated findings inline.
    - [ ] Formatter run before commit.

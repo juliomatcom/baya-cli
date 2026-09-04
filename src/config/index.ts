@@ -13,6 +13,7 @@ export {
   ConfigError,
   LAYER_NAMES,
   binOverrides,
+  providerToolSettings,
   loadConfig,
   readUserConfig,
   setConfigValue,

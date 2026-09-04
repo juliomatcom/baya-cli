@@ -6,6 +6,7 @@ import type {
   TaskResult,
 } from '../manifest/index.js';
 import type { Observation } from '../memory/index.js';
+import type { ToolCapability } from './tools.js';
 
 /** Adapter interface (providers.md §Adapter interface). */
 export interface ProviderCapabilities {
@@ -64,6 +65,12 @@ export interface BuildRunInput {
   /** Pre-assigned session id, for `sessionId: 'preassign'` providers. */
   sessionId?: string;
   dangerouslyAllowAll?: boolean;
+  /** Restored on top of the lean set. providers.md §Lean tool sets. */
+  tools?: readonly ToolCapability[];
+  /** No tool use at all — distinct from empty `tools`, which grants the lean base. */
+  noTools?: boolean;
+  /** Raw argv, appended after adapter flags and before any prompt positional. */
+  extraArgs?: readonly string[];
 }
 
 /**
@@ -79,6 +86,8 @@ export interface SpawnPlan {
   stdinData?: string;
   /** Files the adapter needs on disk before the spawn, e.g. a prompt file. */
   files?: Array<{ path: string; contents: string }>;
+  /** ⚠️ Merged over the inherited env, never replacing it — credentials live there. */
+  env?: Record<string, string>;
 }
 
 export interface ExtractContext {

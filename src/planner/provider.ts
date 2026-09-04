@@ -6,7 +6,7 @@ import {
   type TaskRequest,
 } from '../manifest/index.js';
 import type { Logger } from '../log/index.js';
-import type { ProviderAdapter } from '../providers/index.js';
+import type { ProviderAdapter, ProviderUsage } from '../providers/index.js';
 import { runProcess } from '../executor/spawn.js';
 
 /**
@@ -42,6 +42,8 @@ export interface RunPlannerProviderOptions {
   onProcessSpawn?: (pid: number) => void;
   /** Must fire on every exit path, or a stale pid is SIGKILLed after pid reuse. */
   onProcessExit?: (pid: number) => void;
+  /** Fires per attempt — a repair round is a second call, paid for like the first. */
+  onUsage?: (usage: ProviderUsage) => void;
 }
 
 const PLANNER_TASK_ID = 'baya-planner';
@@ -86,6 +88,8 @@ export function runPlannerProvider(
       schemaContents: readFileSync(options.schemaPath, 'utf8'),
       resultFile: options.resultFile,
       prompt,
+      // Planning opens no file and runs no command. providers.md §Lean tool sets.
+      noTools: true,
     });
 
     const events: ProviderEvent[] = [];
@@ -107,6 +111,8 @@ export function runPlannerProvider(
     } finally {
       if (spawnedPid !== null) options.onProcessExit?.(spawnedPid);
     }
+
+    options.onUsage?.(options.adapter.extractUsage?.(events) ?? {});
 
     try {
       const contents = readFileSync(options.resultFile, 'utf8');

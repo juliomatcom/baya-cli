@@ -52,6 +52,54 @@ describe('codexAdapter.buildRun argv', () => {
     expect(codexAdapter.buildRun(input()).argv).toMatchSnapshot();
   });
 
+  /**
+   * Measured 2026-09-04 against codex-cli 0.150.1: `--disable memories` is the
+   * only knob that moved the number (17,421 -> 13,498). `-c plugins={}`,
+   * `--disable multi_agent` and the `include_*_tool` disables each measured
+   * zero, so none of them are shipped — a flag that buys nothing is still a
+   * flag someone has to understand.
+   */
+  it('disables codex memories by default', () => {
+    const argv = codexAdapter.buildRun(input()).argv;
+    expect(argv[argv.indexOf('--disable') + 1]).toBe('memories');
+  });
+
+  it('does not ship the knobs that measured zero', () => {
+    const argv = codexAdapter.buildRun(input()).argv.join(' ');
+    expect(argv).not.toContain('plugins={}');
+    expect(argv).not.toContain('include_plan_tool');
+    expect(argv).not.toContain('--ignore-user-config');
+  });
+
+  it('keeps memories when asked for them by name, and under "all"', () => {
+    expect(codexAdapter.buildRun(input({ tools: ['memories'] })).argv).not.toContain(
+      '--disable',
+    );
+    expect(codexAdapter.buildRun(input({ tools: ['all'] })).argv).not.toContain(
+      '--disable',
+    );
+  });
+
+  it('maps the capabilities codex has flags for', () => {
+    const argv = codexAdapter.buildRun(input({ tools: ['agents', 'web'] })).argv;
+    expect(argv[argv.indexOf('--enable') + 1]).toBe('multi_agent');
+    expect(argv).toContain('tools.web_search=true');
+  });
+
+  it('ignores a capability codex has no flag for', () => {
+    const argv = codexAdapter.buildRun(input({ tools: ['notebook'] })).argv;
+    expect(argv[argv.indexOf('--disable') + 1]).toBe('memories');
+    expect(argv).not.toContain('--enable');
+  });
+
+  // `-` is the positional meaning "prompt on stdin". Anything after it is read
+  // as a second prompt, not as a flag.
+  it('appends extraArgs before the stdin positional', () => {
+    const argv = codexAdapter.buildRun(input({ extraArgs: ['-c', 'foo=1'] })).argv;
+    expect(argv.at(-1)).toBe('-');
+    expect(argv.slice(-3, -1)).toEqual(['-c', 'foo=1']);
+  });
+
   it('uses the workspace-write sandbox only for read-write access', () => {
     expect(
       codexAdapter.buildRun(input({ task: task({ access: 'read-write' }) })).argv,

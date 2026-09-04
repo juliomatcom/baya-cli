@@ -15,7 +15,7 @@ const line = (event: string, fields: Record<string, unknown> = {}): LogLine => (
 });
 
 describe('startup', () => {
-  it('names the agent and model before anything runs', () => {
+  it('names the default provider and model before anything runs', () => {
     const out = render(
       line('run.agent', {
         provider: 'codex',
@@ -24,9 +24,37 @@ describe('startup', () => {
         planner_model: 'gpt-5-codex',
       }),
     );
-    expect(out).toContain('agent');
+    expect(out).toContain('default:');
     expect(out).toContain('codex');
     expect(out).toContain('gpt-5-codex');
+  });
+
+  // Labelled, because two provider/model pairs on one line are otherwise
+  // indistinguishable — and only shown when the planner differs.
+  it('labels the planner when it differs from the default', () => {
+    const out = render(
+      line('run.agent', {
+        provider: 'codex',
+        model: 'gpt-5.6-luna',
+        planner_provider: 'opencode',
+        planner_model: 'opencode/mimo-v2.5-free',
+      }),
+    );
+    expect(out).toContain('default:');
+    expect(out).toContain('planner:');
+    expect(out).toContain('opencode/mimo-v2.5-free');
+  });
+
+  it('omits the planner label when the planner is the default', () => {
+    const out = render(
+      line('run.agent', {
+        provider: 'codex',
+        model: 'gpt-5-codex',
+        planner_provider: 'codex',
+        planner_model: 'gpt-5-codex',
+      }),
+    );
+    expect(out).not.toContain('planner:');
   });
 
   it('says (provider default) when no model is pinned', () => {

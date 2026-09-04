@@ -20,6 +20,7 @@ export {
   formatCost,
   formatDuration,
   formatElapsed,
+  formatTokens,
   wrap,
 } from './text.js';
 export { createEventRenderer, type RendererOptions } from './render.js';

@@ -96,7 +96,9 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: plan.cwd,
-      env: options.env ?? process.env,
+      env: plan.env
+        ? { ...(options.env ?? process.env), ...plan.env }
+        : (options.env ?? process.env),
       detached: true,
       windowsHide: true,
       stdio: [plan.stdin === 'pipe' ? 'pipe' : 'ignore', 'pipe', 'pipe'],

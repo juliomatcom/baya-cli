@@ -9,7 +9,11 @@ import {
 } from '../manifest/index.js';
 import type { Logger } from '../log/index.js';
 import type { Observation } from '../memory/index.js';
-import type { ProviderAdapter, ProviderUsage } from '../providers/index.js';
+import type {
+  ProviderAdapter,
+  ProviderUsage,
+  ToolCapability,
+} from '../providers/index.js';
 import { runProcess } from './spawn.js';
 import type { RunPaths } from './paths.js';
 import { renderGroupPrompt } from './prompt.js';
@@ -47,6 +51,10 @@ export interface ExecuteGroupOptions {
   env?: NodeJS.ProcessEnv;
   timeoutMs: number;
   dangerouslyAllowAll?: boolean;
+  /** Capabilities restored on top of this provider's lean tool set. */
+  tools?: readonly ToolCapability[];
+  /** Raw argv from `providers.<id>.extraArgs`, appended to the spawn. */
+  extraArgs?: readonly string[];
   onSpawn?: (pid: number, pgid: number) => void;
   /** Rendered memory block, injected into the prompt. `""`/absent => no section. */
   memory?: string;
@@ -138,6 +146,8 @@ export async function executeGroup(
     resultFile,
     prompt,
     ...(options.dangerouslyAllowAll ? { dangerouslyAllowAll: true } : {}),
+    ...(options.tools ? { tools: options.tools } : {}),
+    ...(options.extraArgs ? { extraArgs: options.extraArgs } : {}),
   };
   const plan = adapter.buildRun(buildInput);
 

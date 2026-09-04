@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   ConfigError,
   loadConfig,
+  providerToolSettings,
   setConfigValue,
   userConfigPath,
 } from '../../../src/config/index.js';
@@ -278,5 +279,51 @@ describe('modelCatalog override resolves end to end', () => {
       (catalog.codex ?? []).find((m) => m.id === viaBuiltinAlias.match?.model)
         ?.description,
     ).toBe('my cheaper luna');
+  });
+});
+
+describe('provider tool settings', () => {
+  it('reads tools and extraArgs per provider', () => {
+    const { cwd, env } = workspace();
+    writeUser(env, {
+      providers: {
+        claude: { tools: ['web'] },
+        codex: { extraArgs: ['-c', 'foo=1'] },
+      },
+    });
+    const { providerTools, extraArgs } = providerToolSettings(
+      loadConfig({ cwd, env }).config,
+    );
+    expect(providerTools.claude).toEqual(['web']);
+    expect(extraArgs.codex).toEqual(['-c', 'foo=1']);
+  });
+
+  // "not configured" and "configured empty" are different answers: the second
+  // is a user deliberately asking for the lean set on a provider.
+  it('omits a provider that configured neither', () => {
+    const { cwd, env } = workspace();
+    writeUser(env, { providers: { claude: { tools: [] } } });
+    const { providerTools, extraArgs } = providerToolSettings(
+      loadConfig({ cwd, env }).config,
+    );
+    expect(providerTools.claude).toEqual([]);
+    expect(providerTools.codex).toBeUndefined();
+    expect(extraArgs.claude).toBeUndefined();
+  });
+
+  it('rejects an unknown capability at load, naming the key', () => {
+    const { cwd, env } = workspace();
+    writeUser(env, { providers: { claude: { tools: ['websearch'] } } });
+    expect(() => loadConfig({ cwd, env })).toThrow(ConfigError);
+    expect(() => loadConfig({ cwd, env })).toThrow(/providers\.claude\.tools/);
+  });
+
+  it('leaves both absent when nothing is configured', () => {
+    const { cwd, env } = workspace();
+    const { providerTools, extraArgs } = providerToolSettings(
+      loadConfig({ cwd, env }).config,
+    );
+    expect(providerTools).toEqual({});
+    expect(extraArgs).toEqual({});
   });
 });

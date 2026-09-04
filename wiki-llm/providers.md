@@ -140,7 +140,7 @@ Capabilities: `promptDelivery ['stdin','argv']` · `structuredOutput 'schema-inl
 
 Adapter `src/providers/claude.ts`, snapshot `test/unit/providers/claude.test.ts`. argv: `claude -p --output-format json --json-schema <inline JSON, $schema stripped> --permission-mode <mode> [--model <m>] [--session-id <uuid>]`, prompt on stdin, `cwd` on spawn. `--output-format json` (not `stream-json`): one object parsed once. `.structured_output`=rung 1; `.result`=rungs 2–3; `permission_denials[]`⇒non-retryable `permission` failure **when no rung parsed**, else a `warn` note on the succeeding result (a denied run must not report clean); `is_error`⇒failure classified by message. Usage: `total_cost_usd`⇒`cost_usd`; `usage.{input,output}_tokens` + both cache token fields folded into `input_tokens`.
 
-`--permission-mode` map: `auto` for every task, `--dangerously-allow-all`⇒`bypassPermissions`. `access:"read-only"` additionally passes `--disallowed-tools Write,Edit,NotebookEdit` (comma-joined — the flag is variadic and would swallow the next flag if spread).
+`--permission-mode` map: `auto` for every task, `--dangerously-allow-all`⇒`bypassPermissions`. Tool surface is an **allowlist** via `--tools` (comma-joined — the flag is variadic and would swallow the next flag if spread): see §Lean tool sets.
 
 ⚠️ **Never `acceptEdits`, never `plan`.** `access` bounds whether a task may **act on** the workspace, not merely whether it edits source — a task that runs the suite needs Bash, and (on codex) a writable `$TMPDIR` besides. `acceptEdits` pre-approves edits only, so `-p`, with nobody to answer a Bash prompt, denies every command: measured 2026-08-29, a 12-task run logged 54 `Bash` denials (`npm test`, `tsc`, bare `grep`) and shipped unverified work. `plan` is worse — it refuses every non-readonly tool and bends the output into a plan proposal.
 
@@ -192,6 +192,60 @@ Success-path event shape verified live 2026-08-31 (opencode 1.18.25, `opencode/*
 `gemini -p <prompt>` (stdin prepended) · `-m` · `-o {text,json,stream-json}` · `--approval-mode {default,auto_edit,yolo,plan}` · `-y/--yolo` · `--include-directories` · `-r/--resume`. Adapter interface accommodates it; only registration is missing.
 
 ---
+
+## Lean tool sets — ✅ measured 2026-09-04
+
+Tool **definitions**, not prompts, are what a task's context is made of. A rendered Baya prompt is ~400 tokens (schema-enforced providers) / ~1,400 (opencode, schema inlined); everything else is the CLI's preamble.
+
+Each adapter requests the smallest surface `task.access` implies. Names what it wants, never what it withholds.
+
+| Provider | Lean flag                                                                 | Before |  After |
+| :------- | :------------------------------------------------------------------------ | -----: | -----: |
+| claude   | `--tools Read,Grep,Glob,Bash` (+`Write,Edit,TodoWrite` when `read-write`) | 14,419 |  7,517 |
+| claude   | `--tools ''` (planner, `noTools`)                                         | 14,419 |  4,294 |
+| codex    | `--disable memories`                                                      | 17,421 | 13,498 |
+| opencode | none — see negative results                                               | 10,878 |      — |
+
+⚠️ `--disallowed-tools` withholds a tool's **use** and still ships its **definition**. That distinction is the entire cost; never revert to a denylist.
+
+⚠️ `Bash` stays in claude's **read-only** set. Withholding it would close the shell-redirect gap (§claude) but breaks every read-only task that shells out (`git log`, `rg`). `access` semantics are not a tuning knob.
+
+⚠️ Planner uses `noTools`, distinct from empty `tools` (which still grants the lean base). Planning is a text-to-JSON transform over a task list carried in the prompt: no file opened, no command run. `extraArgs` is deliberately NOT forwarded to it.
+
+### Escape hatch
+
+Capability names are provider-neutral, the way `access` is. A name a provider has no flag for is **ignored, never rejected** — one `--tools` must be safe across a mixed run.
+
+| Name       | claude               | codex                      |
+| :--------- | :------------------- | :------------------------- |
+| `web`      | `WebFetch,WebSearch` | `-c tools.web_search=true` |
+| `agents`   | `Task`               | `--enable multi_agent`     |
+| `notebook` | `NotebookEdit`       | —                          |
+| `memories` | —                    | `--enable memories`        |
+| `all`      | omit `--tools`       | omit `--disable memories`  |
+
+`all` is the escape from the enum itself (claude's `Skill`, `SlashCommand`, `ToolSearch`, …). Below that: `providers.<id>.extraArgs`, raw argv appended after every adapter flag so it can override one — and always **before** a prompt positional (codex `-`, opencode `--`). Sources: `--tools` (whole-run, wins outright) > `providers.<id>.tools`. See config.md, cli.md.
+
+### Negative results — do not re-derive
+
+- **opencode `--pure`: no saving.** Repeated identical invocations alternating the flag: 10,426 / 31,886 / 20,902 / 10,426 input tokens — tracks session and cache state, not the flag. Controlled pair through the adapter: 10,878 without, 10,895 with. Not shipped; a user with plugins would lose them for nothing.
+- **codex `-c plugins={}`, `--disable multi_agent`, `include_plan_tool`/`include_apply_patch_tool`/`include_view_image_tool`/`tools.web_search` disables: each measured zero.** Only `--disable memories` moves the number.
+- **codex `--ignore-user-config`: reaches 12,135 but is rejected** — discards the user's `model_reasoning_effort`, `preferred_auth_method` and model default.
+- **codex `experimental_instructions_file`: silently ignored** in codex-cli 0.150.1. Output byte-identical at 10,552.
+- **claude `--setting-sources ''` + `--strict-mcp-config`: 1.6%, noise.**
+- **claude `--bare`: unusable** — forces `ANTHROPIC_API_KEY`/`apiKeyHelper`, never OAuth or keychain.
+
+### Floors — not reachable
+
+claude ~4,400 · codex ~10,552 · opencode ~10,427. Each CLI's base system prompt; only codex exposes an override and it does not work.
+
+### claude non-essential traffic
+
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, carried by `SpawnPlan.env` (merged **over** the inherited env — these CLIs resolve credentials through `PATH`/`HOME`/`*_HOME`).
+
+Suppresses `generate_session_title`: the whole prompt sent to Haiku before turn 1 to name a session for a `/resume` picker Baya never opens. 1,282 input tokens per task, ~12% of a short task's cost, absent from `report.json`.
+
+⚠️ `--no-session-persistence` does NOT suppress it, and would cost `--resume`. No flag exists; the env var is the only lever. Verified: two-turn `--session-id`/`--resume` round-trip keeps context, no Haiku call on either turn.
 
 ## Drift policy
 

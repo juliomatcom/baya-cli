@@ -12,8 +12,8 @@ exports[`claudeAdapter.buildRun argv builds a resume around the session id 1`] =
   "{"type":"object","properties":{"status":{"type":"string"}}}",
   "--permission-mode",
   "auto",
-  "--disallowed-tools",
-  "Write,Edit,NotebookEdit",
+  "--tools",
+  "Read,Grep,Glob,Bash",
 ]
 `;
 
@@ -27,7 +27,7 @@ exports[`claudeAdapter.buildRun argv matches the recorded surface 1`] = `
   "{"type":"object","properties":{"status":{"type":"string"}}}",
   "--permission-mode",
   "auto",
-  "--disallowed-tools",
-  "Write,Edit,NotebookEdit",
+  "--tools",
+  "Read,Grep,Glob,Bash",
 ]
 `;

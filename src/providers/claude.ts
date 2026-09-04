@@ -1,6 +1,7 @@
 import { type ProviderEvent, type TaskResult } from '../manifest/index.js';
 import { stripAnsi } from '../log/index.js';
 import { extractResultFromText, parseResultJson, synthesizeFailure } from './result.js';
+import { wantsEverything, type ToolCapability } from './tools.js';
 import type {
   BuildRunInput,
   ExtractContext,
@@ -30,11 +31,30 @@ function withoutSchemaKey(schemaContents: string): Record<string, unknown> {
   return rest;
 }
 
-/**
- * The editing tools, withheld from a task granted only `read-only` access.
- * Bash is deliberately NOT in this list — see `permissionModeFor`.
- */
+/** Reachable only under `tools: ['all']`; Bash is deliberately not here. */
 const EDIT_TOOLS = ['Write', 'Edit', 'NotebookEdit'] as const;
+
+/** ⚠️ An allowlist, and Bash stays read-only. See providers.md §Lean tool sets. */
+const READ_TOOLS = ['Read', 'Grep', 'Glob', 'Bash'] as const;
+const WRITE_TOOLS = ['Write', 'Edit', 'TodoWrite'] as const;
+
+/** Unmapped names are ignored — one `--tools` must be safe across a mixed run. */
+const CAPABILITY_TOOLS: Partial<Record<ToolCapability, readonly string[]>> = {
+  web: ['WebFetch', 'WebSearch'],
+  agents: ['Task'],
+  notebook: ['NotebookEdit'],
+};
+
+function toolsFor(input: BuildRunInput): string[] {
+  const names = new Set<string>(READ_TOOLS);
+  if (input.task.access === 'read-write' || input.dangerouslyAllowAll) {
+    for (const name of WRITE_TOOLS) names.add(name);
+  }
+  for (const capability of input.tools ?? []) {
+    for (const name of CAPABILITY_TOOLS[capability] ?? []) names.add(name);
+  }
+  return [...names];
+}
 
 /**
  * Non-interactive `-p` cannot prompt, so the mode has to pre-decide everything
@@ -81,10 +101,16 @@ function commonFlags(input: BuildRunInput, resuming = false): string[] {
     '--permission-mode',
     permissionModeFor(input),
   ];
-  // Comma-joined, not spread: `--disallowed-tools` is variadic and would
-  // otherwise swallow whatever flag follows it.
-  if (input.task.access === 'read-only' && !input.dangerouslyAllowAll) {
-    argv.push('--disallowed-tools', EDIT_TOOLS.join(','));
+  // Comma-joined, not spread: both tool flags are variadic and would otherwise
+  // swallow whatever flag follows them.
+  if (input.noTools === true) {
+    argv.push('--tools', '');
+  } else if (wantsEverything(input.tools)) {
+    if (input.task.access === 'read-only' && !input.dangerouslyAllowAll) {
+      argv.push('--disallowed-tools', EDIT_TOOLS.join(','));
+    }
+  } else {
+    argv.push('--tools', toolsFor(input).join(','));
   }
   if (input.model !== null) argv.push('--model', input.model);
   // `--session-id` pre-assigns the id so resume needs no event parsing (M4.1).
@@ -93,6 +119,9 @@ function commonFlags(input: BuildRunInput, resuming = false): string[] {
   }
   return argv;
 }
+
+/** ⚠️ Kills the `generate_session_title` Haiku call; no flag does. providers.md §claude. */
+const QUIET_ENV = { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' } as const;
 
 function classify(text: string): 'rate_limit' | 'auth' | 'other' {
   const lower = text.toLowerCase();
@@ -208,10 +237,11 @@ export const claudeAdapter: ProviderAdapter = {
 
   buildRun(input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, ...commonFlags(input)],
+      argv: [input.bin, ...commonFlags(input), ...(input.extraArgs ?? [])],
       cwd: input.cwd,
       stdin: 'pipe',
       stdinData: input.prompt,
+      env: { ...QUIET_ENV },
     };
   },
 
@@ -221,10 +251,17 @@ export const claudeAdapter: ProviderAdapter = {
    */
   buildResume(sessionId: string, answer: string, input: BuildRunInput): SpawnPlan {
     return {
-      argv: [input.bin, '--resume', sessionId, ...commonFlags(input, true)],
+      argv: [
+        input.bin,
+        '--resume',
+        sessionId,
+        ...commonFlags(input, true),
+        ...(input.extraArgs ?? []),
+      ],
       cwd: input.cwd,
       stdin: 'pipe',
       stdinData: answer,
+      env: { ...QUIET_ENV },
     };
   },
 

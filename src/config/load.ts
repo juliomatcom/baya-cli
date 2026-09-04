@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ProviderIdSchema, type ProviderId } from '../manifest/index.js';
+import type { ToolCapability } from '../providers/tools.js';
 import {
   BUILTIN_CONFIG,
   CONFIG_VERSION,
@@ -211,6 +212,21 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
     userPath,
     userConfigExists: user !== null,
   };
+}
+
+/** Only providers that configured one appear: "configured empty" ≠ "not configured". */
+export function providerToolSettings(config: ResolvedConfig): {
+  providerTools: Partial<Record<ProviderId, readonly ToolCapability[]>>;
+  extraArgs: Partial<Record<ProviderId, readonly string[]>>;
+} {
+  const providerTools: Partial<Record<ProviderId, readonly ToolCapability[]>> = {};
+  const extraArgs: Partial<Record<ProviderId, readonly string[]>> = {};
+  for (const [id, settings] of Object.entries(config.providers)) {
+    const providerId = id as ProviderId;
+    if (settings.tools !== undefined) providerTools[providerId] = settings.tools;
+    if (settings.extraArgs !== undefined) extraArgs[providerId] = settings.extraArgs;
+  }
+  return { providerTools, extraArgs };
 }
 
 /**

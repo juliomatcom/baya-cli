@@ -39,6 +39,8 @@ export interface Theme {
   pending: (text: string) => string;
   taskId: (text: string) => string;
   provider: (text: string) => string;
+  /** A filesystem path the reader must actually look at, not skim past. */
+  path: (text: string) => string;
   warn: (text: string) => string;
   action: (text: string) => string;
   note: (text: string) => string;
@@ -70,6 +72,7 @@ export function createTheme(mode: ColorMode = 'auto'): Theme {
   const pending = (text: string): string => c.dim(text);
   const taskId = (text: string): string => c.bold(text);
   const provider = (text: string): string => c.magenta(text);
+  const path = (text: string): string => c.bold.yellow(text);
   const warn = (text: string): string => c.yellow(text);
   const action = (text: string): string => c.bold.yellow(text);
   const note = (text: string): string => c.dim(text);
@@ -102,6 +105,7 @@ export function createTheme(mode: ColorMode = 'auto'): Theme {
     pending,
     taskId,
     provider,
+    path,
     warn,
     action,
     note,
