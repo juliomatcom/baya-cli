@@ -78,11 +78,7 @@ export interface RunSequentialOptions {
   contextBudget?: number;
   maxRuntimeS?: number;
   dangerouslyAllowAll?: boolean;
-  /**
-   * Capabilities restored on top of each provider's lean tool set, from
-   * `--tools`. A provider's own `providers.<id>.tools` applies when this is
-   * absent — the flag is a whole-run override, so it wins outright.
-   */
+  /** From `--tools`; a whole-run override that wins over `providerTools`. */
   tools?: readonly ToolCapability[];
   /** Raw argv per provider, from `providers.<id>.extraArgs`. */
   extraArgs?: Partial<Record<ProviderId, readonly string[]>>;
@@ -241,12 +237,7 @@ export async function runSequential(options: RunSequentialOptions): Promise<RunO
   const groupCap = Math.max(1, options.groupSize ?? DEFAULT_GROUP_SIZE);
   const maxRetries = Math.max(0, options.retries ?? DEFAULT_RETRIES);
 
-  /**
-   * What this provider's spawn gets on top of its lean defaults. `--tools` is
-   * a whole-run override and wins over `providers.<id>.tools` outright rather
-   * than merging: a flag that only ever *added* to config could not narrow a
-   * configured set, and "the flag is the answer" is the rule everywhere else.
-   */
+  /** `--tools` wins outright rather than merging: a flag must be able to narrow. */
   function toolOptionsFor(providerId: ProviderId): {
     tools?: readonly ToolCapability[];
     extraArgs?: readonly string[];

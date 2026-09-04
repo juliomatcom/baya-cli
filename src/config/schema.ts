@@ -13,17 +13,9 @@ const ProviderSettingsSchema = z
     /** Absolute path override for the binary; skips the resolution chain. */
     bin: z.string().optional(),
     maxConcurrency: z.number().int().positive().optional(),
-    /**
-     * Capabilities to restore on top of this provider's lean tool set
-     * (`providers/tools.ts`). `["all"]` gives back the CLI's own default
-     * surface. Persistent form of `--tools`, which overrides it.
-     */
+    /** Persistent form of `--tools`, which overrides it. config.md §Keys. */
     tools: z.array(ToolCapabilitySchema).optional(),
-    /**
-     * Raw argv appended to every spawn of this provider — the last resort, for
-     * a flag no capability name covers. Unvalidated by design: it is the CLI's
-     * vocabulary, not Baya's, and Baya cannot know what a future version takes.
-     */
+    /** ⚠️ Unvalidated by design — the CLI's vocabulary, not Baya's. */
     extraArgs: z.array(z.string()).optional(),
   })
   .strict();

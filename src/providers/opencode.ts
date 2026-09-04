@@ -41,20 +41,7 @@ export const OPENCODE_PROVIDER = 'opencode' as const;
  */
 
 /** `-m` wants the compound `provider/model` form; a bare model is passed as-is. */
-/**
- * ⚠️ `--pure` (no external plugins) is deliberately NOT set, though it looks
- * like the obvious twin of claude's `--tools` and codex's `--disable memories`.
- *
- * It does not survive measurement. Repeated identical invocations on
- * opencode 1.18.25, alternating the flag: 10,426 / 31,886 / 20,902 / 10,426
- * input tokens — the number tracks session and cache state, not the flag. The
- * controlled pair is the one that settles it: the same task through this
- * adapter, same prompt and model, measured 10,878 tokens without `--pure` and
- * 10,895 with it.
- *
- * So it would buy nothing and cost something: a user with plugins installed
- * would silently lose them. An unmeasured saving is not a saving.
- */
+/** ⚠️ No lean-tools flag: `--pure` measured no saving. providers.md §Negative results. */
 function commonFlags(input: BuildRunInput): string[] {
   const argv = ['run', '--format', 'json', '--dir', input.cwd];
   if (input.model !== null) argv.push('-m', input.model);

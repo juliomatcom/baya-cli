@@ -65,29 +65,11 @@ export interface BuildRunInput {
   /** Pre-assigned session id, for `sessionId: 'preassign'` providers. */
   sessionId?: string;
   dangerouslyAllowAll?: boolean;
-  /**
-   * Capabilities to restore on top of the lean set this task's `access`
-   * implies (`providers/tools.ts`). Absent or empty means the lean set, which
-   * is what almost every task wants; `all` means the CLI's own default surface.
-   */
+  /** Restored on top of the lean set. providers.md §Lean tool sets. */
   tools?: readonly ToolCapability[];
-  /**
-   * This call makes no tool use at all — it reads the prompt and answers.
-   *
-   * Distinct from an empty `tools`, which still grants the lean base set. Only
-   * the planner sets it: planning is a text-to-JSON transform over a task list
-   * that arrives in the prompt. An adapter whose CLI cannot express an empty
-   * tool surface ignores it.
-   */
+  /** No tool use at all — distinct from empty `tools`, which grants the lean base. */
   noTools?: boolean;
-  /**
-   * Raw argv for this provider, from `providers.<id>.extraArgs`. Appended
-   * after every flag the adapter chose, so it can override one, and never
-   * after a prompt positional.
-   *
-   * The last resort, and the only place a CLI's own vocabulary is allowed to
-   * reach user config — `tools` is the supported way to ask for a capability.
-   */
+  /** Raw argv, appended after adapter flags and before any prompt positional. */
   extraArgs?: readonly string[];
 }
 
@@ -104,16 +86,7 @@ export interface SpawnPlan {
   stdinData?: string;
   /** Files the adapter needs on disk before the spawn, e.g. a prompt file. */
   files?: Array<{ path: string; contents: string }>;
-  /**
-   * Environment an adapter needs on top of the inherited one. Merged over the
-   * base env at spawn, never replacing it — these CLIs find their credentials
-   * through `PATH`, `HOME` and their own `*_HOME` vars, so a clean env is a
-   * broken one.
-   *
-   * This exists for knobs a CLI exposes only through the environment. `claude`
-   * has no flag for suppressing its session-title call; the variable is the
-   * whole interface.
-   */
+  /** ⚠️ Merged over the inherited env, never replacing it — credentials live there. */
   env?: Record<string, string>;
 }
 

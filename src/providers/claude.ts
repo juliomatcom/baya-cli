@@ -31,36 +31,14 @@ function withoutSchemaKey(schemaContents: string): Record<string, unknown> {
   return rest;
 }
 
-/**
- * The editing tools, withheld from a task granted only `read-only` access.
- * Bash is deliberately NOT in this list — see `permissionModeFor`.
- *
- * Only reachable under `tools: ['all']` now; the lean path names what it wants
- * instead of naming what it does not.
- */
+/** Reachable only under `tools: ['all']`; Bash is deliberately not here. */
 const EDIT_TOOLS = ['Write', 'Edit', 'NotebookEdit'] as const;
 
-/**
- * What a task actually gets, as an **allowlist**.
- *
- * ⚠️ `--disallowed-tools` — what this replaced — withholds a tool's *use* and
- * still ships its *definition*. That distinction is the whole cost: measured
- * 2026-09-04 (v2.1.251) on a task whose prompt is ~400 tokens, claude's default
- * surface is 14,419 input tokens and this set is 7,517. The ~7k difference is
- * tool JSON for `Task`, `WebFetch`, `WebSearch`, `Skill`, `SlashCommand`,
- * `ToolSearch` and friends, none of which a "summarize this file" task opens.
- *
- * ⚠️ `Bash` is in the **read-only** set on purpose. Withholding it would read
- * as the stricter choice — and would finally close the gap `permissionModeFor`
- * documents, where a read-only claude task can still write through a shell
- * redirect — but it would also silently break every existing read-only task
- * that shells out to `git log` or `rg`. Access semantics are not this change's
- * to alter; `access` still means what it meant.
- */
+/** ⚠️ An allowlist, and Bash stays read-only. See providers.md §Lean tool sets. */
 const READ_TOOLS = ['Read', 'Grep', 'Glob', 'Bash'] as const;
 const WRITE_TOOLS = ['Write', 'Edit', 'TodoWrite'] as const;
 
-/** Capability names to the tools claude calls them. Unmapped names are ignored. */
+/** Unmapped names are ignored — one `--tools` must be safe across a mixed run. */
 const CAPABILITY_TOOLS: Partial<Record<ToolCapability, readonly string[]>> = {
   web: ['WebFetch', 'WebSearch'],
   agents: ['Task'],
@@ -126,11 +104,8 @@ function commonFlags(input: BuildRunInput, resuming = false): string[] {
   // Comma-joined, not spread: both tool flags are variadic and would otherwise
   // swallow whatever flag follows them.
   if (input.noTools === true) {
-    // An empty allowlist, which claude accepts: no tool definitions at all.
     argv.push('--tools', '');
   } else if (wantsEverything(input.tools)) {
-    // `all` is the escape from the capability list: claude's own default
-    // surface, with only the access guard this adapter has always applied.
     if (input.task.access === 'read-only' && !input.dangerouslyAllowAll) {
       argv.push('--disallowed-tools', EDIT_TOOLS.join(','));
     }
@@ -145,25 +120,7 @@ function commonFlags(input: BuildRunInput, resuming = false): string[] {
   return argv;
 }
 
-/**
- * Suppresses claude's non-essential background traffic. The one that costs
- * money is `generate_session_title`: before the first turn, claude sends the
- * whole prompt to Haiku to write a display name for the `/resume` picker.
- *
- * Measured 2026-09-04 (v2.1.251) via `--debug api`, which names it outright —
- * `[API REQUEST] /v1/messages source=generate_session_title`. It cost 1,282
- * input tokens for an 11-token title on a task whose own prompt is ~400, and
- * ~12% of that task's spend. Baya never reads the title: sessions are addressed
- * by the id `--session-id` pre-assigns, so the picker it feeds is one nothing
- * here ever opens.
- *
- * There is no flag for it. `--no-session-persistence` does not suppress it
- * (measured: the Haiku call still fires) and would cost `--resume`, which
- * chains depend on. The variable is the only lever, and it leaves the session
- * itself intact — verified with a two-turn `--session-id` / `--resume`
- * round-trip that carried its context across and made no Haiku call on either
- * turn.
- */
+/** ⚠️ Kills the `generate_session_title` Haiku call; no flag does. providers.md §claude. */
 const QUIET_ENV = { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' } as const;
 
 function classify(text: string): 'rate_limit' | 'auth' | 'other' {

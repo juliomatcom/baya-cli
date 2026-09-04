@@ -273,9 +273,8 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
       defaultProvider,
       defaultModel: override ? null : snapshot.defaults.model,
       binOverrides: binOverridesFrom(resumeConfig),
-      // Tool settings are read fresh rather than from the snapshot: they are
-      // about how a provider is driven, not what the run decided, and a user
-      // resuming after a task ran short of a capability is doing exactly that.
+      // Read fresh, not from the snapshot: how a provider is driven, not what
+      // the run decided.
       ...providerToolSettings(resumeConfig),
       ...(flags.tools ? { tools: flags.tools } : {}),
       // The run's own settings, not whatever the config says today — except

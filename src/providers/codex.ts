@@ -57,27 +57,7 @@ function sandboxFor(input: BuildRunInput): string {
  */
 const NETWORK_ACCESS_FLAG = 'sandbox_workspace_write.network_access=true';
 
-/**
- * codex injects the user's stored memories into every session, and they are
- * the single largest slice of its overhead here.
- *
- * Measured 2026-09-04 against codex-cli 0.150.1, one knob at a time on a task
- * whose own prompt is ~400 tokens:
- *
- * - baseline                                     17,421 input tokens
- * - `-c plugins={}`                              17,421 — no effect
- * - `--disable multi_agent`                      17,421 — no effect
- * - `include_plan_tool` + 3 more tool disables    17,421 — no effect
- * - **`--disable memories`                       13,498** — the whole saving
- *
- * So this is the one flag, and the four that read like they should have helped
- * are not shipped. `--ignore-user-config` reaches lower (12,135) and is
- * deliberately not used: it discards the user's `model_reasoning_effort`,
- * `preferred_auth_method` and model default to buy tokens Baya did not ask for.
- *
- * A run that wants codex's memories back asks for them by name (`--tools
- * memories`); Baya passes its own memory block either way (`memory/render.ts`).
- */
+/** ⚠️ The only codex knob that measured a saving. providers.md §Lean tool sets. */
 const MEMORIES_FEATURE = 'memories';
 
 /**

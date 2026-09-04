@@ -25,7 +25,7 @@ There is deliberately **no project layer**. A per-project `./.baya/config.json` 
   "version": 1,
   "defaults": { "provider": "codex", "model": null },
   "planner":  { "provider": "codex", "model": null },
-  "providers": { "codex": { "bin": "/custom/path/codex", "maxConcurrency": 2 } },
+  "providers": { "codex": { "bin": "/custom/path/codex", "maxConcurrency": 2, "tools": ["web"], "extraArgs": ["-c", "foo=1"] } },
   "modelAliases": { "fast": "gpt-5.6-luna" },
   "modelCatalog": { "codex": [ { "id": "gpt-5.6-luna", "aliases": ["luna"], "description": "…" } ], "opencode": [ … ] }
 }
@@ -33,6 +33,8 @@ There is deliberately **no project layer**. A per-project `./.baya/config.json` 
 
 - `model: null` ⇒ provider's own default. `defaults` = task fallback; `planner` = parses the task list → DAG. Wizard sets both from one answer; edit the file to split.
 - `modelAliases` — `nickname → real id`. `baya config set modelAliases.<name> <id>` (`… null` drops).
+- `providers.<id>.tools` — capability names restored on top of that provider's lean tool set (providers.md §Lean tool sets). Validated at load; unknown name ⇒ `ConfigError` naming the key. `--tools` outranks it outright, never merges.
+- `providers.<id>.extraArgs` — raw argv appended to every spawn of that provider, after each adapter flag so it can override one, always before a prompt positional. **Unvalidated by design:** the CLI's vocabulary, not Baya's. The last resort; prefer `tools`.
 - `modelCatalog` — user-editable resolution catalog. `BUILTIN_CATALOG` (`src/providers/catalog.ts`) provides the base; config layers merge per provider and by entry `id`, with higher layers replacing lower entries. `baya config set modelCatalog.<provider>.<id> <description>` adds or re-describes one entry (`… null` drops it); unknown `<provider>` errors. See **Model resolution** and **What the file stores**.
 
 ### What the file stores

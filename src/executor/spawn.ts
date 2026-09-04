@@ -96,8 +96,6 @@ export function runProcess(options: RunProcessOptions): Promise<SpawnResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: plan.cwd,
-      // Adapter env is merged over the base, not substituted for it: these
-      // CLIs resolve credentials through the inherited environment.
       env: plan.env
         ? { ...(options.env ?? process.env), ...plan.env }
         : (options.env ?? process.env),

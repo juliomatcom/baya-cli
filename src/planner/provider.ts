@@ -42,13 +42,7 @@ export interface RunPlannerProviderOptions {
   onProcessSpawn?: (pid: number) => void;
   /** Must fire on every exit path, or a stale pid is SIGKILLed after pid reuse. */
   onProcessExit?: (pid: number) => void;
-  /**
-   * What this attempt spent, if the adapter reports usage.
-   *
-   * Fires per attempt, not per plan: a repair round is a second call to the
-   * model and is paid for like the first. The caller accumulates, because only
-   * it knows how many attempts a plan took.
-   */
+  /** Fires per attempt — a repair round is a second call, paid for like the first. */
   onUsage?: (usage: ProviderUsage) => void;
 }
 
@@ -94,16 +88,7 @@ export function runPlannerProvider(
       schemaContents: readFileSync(options.schemaPath, 'utf8'),
       resultFile: options.resultFile,
       prompt,
-      // Planning is a text-to-JSON transform: the task list arrives in the
-      // prompt and the answer is one object. It opens no file and runs no
-      // command, so it is the one call in a run that needs no tools at all —
-      // and, going through `buildRun` like a task, it was paying for a full
-      // agentic surface to do it. Measured 2026-09-04: claude 14,419 input
-      // tokens with its default tools, 4,294 with none.
-      //
-      // `extraArgs` is deliberately not forwarded here. It is a per-provider
-      // escape for task execution; a raw flag that re-armed the planner's
-      // tools would undo this for no stated reason.
+      // Planning opens no file and runs no command. providers.md §Lean tool sets.
       noTools: true,
     });
 

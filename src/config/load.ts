@@ -214,11 +214,7 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
   };
 }
 
-/**
- * The `providers.<id>.tools` and `providers.<id>.extraArgs` settings in the
- * shape the executor takes. Only providers that configured one appear, so the
- * executor can tell "configured empty" from "not configured" without a sentinel.
- */
+/** Only providers that configured one appear: "configured empty" ≠ "not configured". */
 export function providerToolSettings(config: ResolvedConfig): {
   providerTools: Partial<Record<ProviderId, readonly ToolCapability[]>>;
   extraArgs: Partial<Record<ProviderId, readonly string[]>>;

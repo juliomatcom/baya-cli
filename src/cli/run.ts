@@ -314,10 +314,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     // ---- plan
     let manifest: Manifest;
     let planOrigin: 'planner' | 'fallback' | 'file' = 'planner';
-    /**
-     * What planning spent, accumulated across attempts. Stays empty on the
-     * `--plan-in` path, where no planner ran and there is nothing to report.
-     */
+    /** Empty on the `--plan-in` path, where no planner ran. */
     const plannerUsage: ProviderUsage = {};
     let plannerAttempts = 0;
 
@@ -493,21 +490,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     io.stderr.write(
       `\n  ${theme.taskId('baya')} · ${manifest.source.path} · ${manifest.tasks.length} tasks · ${theme.provider(String(defaultProvider))}${defaultModel ? theme.note(` ${defaultModel}`) : ''}${planOrigin === 'fallback' ? theme.warn(' · linear fallback') : ''}\n`,
     );
-    // ⚠️ Where the run happens, stated before it happens.
-    //
-    // The gate named the task list, the task count and the provider — every
-    // input except the one with a blast radius. Measured 2026-09-04 on a run
-    // from `~/personal`, a directory holding 16 children and 7 git repos:
-    // "make sure unit tests pass" had no place attached, so each agent picked
-    // one. codex and claude read the tree as a container of projects and ran
-    // 315 suites across five of them; opencode ran baya's 67. Same
-    // instruction, same directory, a 7.6x spread in tokens — and two of them
-    // ran `pnpm build:packages` inside sibling repos on the way.
-    //
-    // Nothing there is a failure Baya can detect: the run reported
-    // `succeeded`, because it did. The only moment it is cheap to catch is
-    // this one, and the fix is for the directory to be on screen next to the
-    // question rather than assumed.
+    // Where the run happens — not the task list's path above it (cli.md §Plan gate).
     io.stderr.write(`  ${theme.note('in')} ${cwd}\n\n`);
     io.stderr.write(
       `${renderDag(manifest, theme, defaultProvider as ProviderId, {
@@ -522,8 +505,6 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     }
     if (modelGate.notes.length > 0) io.stderr.write('\n');
 
-    // Immediately after the resolved models and before the gate question: the
-    // last thing read before deciding whether to spend more.
     const plannerCostLine = renderPlannerCost(
       plannerUsage,
       String(plannerProvider),
@@ -712,19 +693,7 @@ function addUsage(total: ProviderUsage, next: ProviderUsage): void {
   }
 }
 
-/**
- * What planning cost, on one line at the gate.
- *
- * Planning is the one spend a run makes before the user has agreed to
- * anything, and until now it was invisible: `report.json` totals what the
- * *tasks* spent, and the planner is not a task. Asking "run this?" is easier
- * to answer knowing the plan already cost something.
- *
- * Returns `null` rather than a placeholder line when the planner reported no
- * usage — `--plan-in` ran no planner at all, and an adapter with no
- * `extractUsage` has nothing to say. A line reading `0 tokens` would be a
- * claim, not an absence.
- */
+/** `null`, never a `0 tokens` line, when there is no usage. cli.md §Plan gate. */
 export function renderPlannerCost(
   usage: ProviderUsage,
   provider: string,
@@ -745,8 +714,7 @@ export function renderPlannerCost(
     );
   }
   if (usage.cost_usd && usage.cost_usd > 0) meter.push(formatCost(usage.cost_usd));
-  // A repair round is a second call to the model, paid for like the first. If
-  // one happened, the number is only explicable with the count beside it.
+  // Without the count, a repaired plan's number is not explicable.
   if (attempts > 1) meter.push(`${attempts} attempts`);
 
   return `  ${theme.note('planned by')} ${theme.provider(provider)}${
