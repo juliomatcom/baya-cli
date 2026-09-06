@@ -2,11 +2,16 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
   PROTOCOL_VERSION,
+  type Access,
   type ProviderEvent,
   type TaskRequest,
 } from '../manifest/index.js';
 import type { Logger } from '../log/index.js';
-import type { ProviderAdapter, ProviderUsage } from '../providers/index.js';
+import type {
+  ProviderAdapter,
+  ProviderUsage,
+  ToolCapability,
+} from '../providers/index.js';
 import { runProcess } from '../executor/spawn.js';
 
 /**
@@ -14,6 +19,10 @@ import { runProcess } from '../executor/spawn.js';
  * with an unusual schema, so it inherits argv construction, stdin discipline,
  * process-group spawning, and ANSI stripping for free rather than growing a
  * second, subtly different spawn path.
+ *
+ * `baya consensus` reuses it unchanged for every one of its calls — the only
+ * differences are the task identity, the schema, and the access posture, which
+ * the optional fields below carry.
  */
 export interface RunPlannerProviderOptions {
   adapter: ProviderAdapter;
@@ -44,6 +53,18 @@ export interface RunPlannerProviderOptions {
   onProcessExit?: (pid: number) => void;
   /** Fires per attempt — a repair round is a second call, paid for like the first. */
   onUsage?: (usage: ProviderUsage) => void;
+  /** Defaults to the planner's own identity. Consensus names its own calls. */
+  taskId?: string;
+  taskTitle?: string;
+  /** Defaults to `read-only`; consensus raises it when the moderator asks (§7). */
+  access?: Access;
+  /** Defaults to `true` — planning opens no file. Consensus turns it off. */
+  noTools?: boolean;
+  tools?: readonly ToolCapability[];
+  /** Forwarded to the adapter. Never set for planning. */
+  dangerouslyAllowAll?: boolean;
+  onStdoutLine?: (line: string) => void;
+  onStderrLine?: (line: string) => void;
 }
 
 const PLANNER_TASK_ID = 'baya-planner';
@@ -51,12 +72,20 @@ const PLANNER_TASK_ID = 'baya-planner';
 export function runPlannerProvider(
   options: RunPlannerProviderOptions,
 ): (prompt: string, attempt: number) => Promise<string> {
+  const taskId = options.taskId ?? PLANNER_TASK_ID;
+  const access: Access = options.access ?? 'read-only';
+  const noTools = options.noTools ?? true;
+
   const request: TaskRequest = {
     baya: PROTOCOL_VERSION,
     kind: 'task_request',
     run_id: options.runId,
-    task: { id: PLANNER_TASK_ID, title: 'Plan the task list', instruction: '' },
-    workspace: { cwd: options.cwd, access: 'read-only', isolation: 'shared' },
+    task: {
+      id: taskId,
+      title: options.taskTitle ?? 'Plan the task list',
+      instruction: '',
+    },
+    workspace: { cwd: options.cwd, access, isolation: 'shared' },
     context: [],
     response_contract: { schema_path: options.schemaPath },
     constraints: { max_runtime_s: Math.floor((options.timeoutMs ?? 300_000) / 1000) },
@@ -71,14 +100,13 @@ export function runPlannerProvider(
     const plan = options.adapter.buildRun({
       bin: options.bin,
       task: {
-        id: PLANNER_TASK_ID,
+        id: taskId,
         title: request.task.title,
         instruction: prompt,
         provider: options.adapter.id,
         model: options.model,
         depends_on: [],
-        // Planning reads the repo; it never writes to it.
-        access: 'read-only',
+        access,
         cwd: null,
       },
       request,
@@ -89,7 +117,11 @@ export function runPlannerProvider(
       resultFile: options.resultFile,
       prompt,
       // Planning opens no file and runs no command. providers.md §Lean tool sets.
-      noTools: true,
+      noTools,
+      ...(options.tools ? { tools: options.tools } : {}),
+      ...(options.dangerouslyAllowAll !== undefined
+        ? { dangerouslyAllowAll: options.dangerouslyAllowAll }
+        : {}),
     });
 
     const events: ProviderEvent[] = [];
@@ -105,8 +137,10 @@ export function runPlannerProvider(
           options.onProcessSpawn?.(pid);
         },
         onStdoutLine: (line) => {
+          options.onStdoutLine?.(line);
           events.push(...options.adapter.parseEvents(line));
         },
+        ...(options.onStderrLine ? { onStderrLine: options.onStderrLine } : {}),
       });
     } finally {
       if (spawnedPid !== null) options.onProcessExit?.(spawnedPid);

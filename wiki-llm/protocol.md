@@ -175,3 +175,23 @@ type ProviderEvent =
 - Unrecognized transport lines ⇒ `unknown`, never discarded — upstream CLIs add event types silently; drops make drift invisible.
 - Every event forwarded to the main process, surfaced at `info` (`text`, `tool`, child stderr) — a running task is never a black box. Rendering + levels: [logging.md](logging.md).
 - `error.kind` classifies retryability: `rate_limit` + transient network retryable; `auth` not. Full classification: `providers.md` §Failure classifier.
+
+## 6. Consensus envelopes
+
+`baya consensus` adds three `kind` values on the same envelope. `PROTOCOL_VERSION` is unchanged — additions, not a break. Schemas in `src/manifest/schemas.ts`, JSON Schema documents in `src/manifest/json-schema.ts`, written to `.baya/schema/`. Behaviour: [consensus.md](consensus.md).
+
+**`consensus_criteria`** — moderator, pass 0. `{baya, kind, artifact_kind, needs_workspace, needs_draft, criteria[{id,question}]}`. `artifact_kind`: `question|plan|spec|review|idea|prompt`. `needs_workspace` sets the access posture for every reviewer in the run; absent or unparseable ⇒ `true`. `needs_draft` says the deliverable does not exist yet, so the reviewers produce it and the moderator only reports agreement; a question forces both `question` and `true`. ⚠️ `criteria` is **empty** when `needs_draft` — there is nothing to judge against because the job is not judging. Otherwise it reaches the moderator only, never a reviewer prompt. There is no `out_of_scope`: scope comes from the artifact, in the user's words.
+
+**`proposal_result`** — one per reviewer per round, when `needs_draft`. `{baya, kind, document, notes[]}`. `document` is that model's own answer, written blind in round 1 and revised or held in later rounds; `notes[]` carries why it moved or did not.
+
+**`agreement_result`** — moderator, once per round, when `needs_draft`. `{baya, kind, round, agreed, differences[], notes[]}`. ⚠️ **No `document`, no ranking, no count** — the moderator does not know the answer and has nowhere to put one. `agreed` is substance, not wording. `differences[]` states what each split _is_, never which side is right; reviewers read those lines next round.
+
+**`critique_result`** — one per reviewer per round. `{baya, kind, round, position, findings[{id,severity,claim,evidence,suggestion,location}], notes[]}`. `severity`: `blocker|major|minor|nit`; `blocker`/`major` keep the debate open. `notes[]` reuses `NoteSchema`. `evidence` is required and is what separates a finding from an opinion. `position` is the one self-reported field, capped, exempted as `summary`/`notes` are.
+
+**`reconcile_result`** — moderator, once per round. `{baya, kind, round, document, changes[{finding_ids[],criterion_id,action,rationale}], unresolved[{claim,providers[],rationale}], converged}`. `action`: `accepted|rejected|deferred`. `criterion_id` is the moderator's declaration of which criterion the decision serves — reviewers never see the criteria, so only the moderator can map it. Baya discards an **accepted** change naming a criterion the run does not have. `document` is the whole updated artifact, never a patch. `converged` is advisory and is never the stop gate.
+
+**Finding ids are namespaced `<provider>:<id>` by Baya on read** — reviewers pick ids independently and `f1` collides. No model sees or writes the prefix.
+
+**A `changes` entry is the agreement cluster.** Distinct providers among its `finding_ids` are the reviewers that raised the same point. No clustering code exists.
+
+Parsing reuses §4's ladder unchanged: native ⇒ verbatim ⇒ fenced ⇒ null. `opencode`/`copilot` reach rungs 2–3 with the schema inlined in the prompt.

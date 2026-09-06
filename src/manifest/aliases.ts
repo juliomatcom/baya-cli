@@ -25,12 +25,27 @@ const RULES: readonly AliasRule[] = [
   { provider: 'codex', tokens: ['codex', 'gpt-', 'gpt4', 'gpt5', 'o1-', 'o3-', 'o4-'] },
 ];
 
+/**
+ * `opencode` ids are `<upstream>/<model>` — `opencode/mimo-v2.5-free`,
+ * `anthropic/claude-sonnet-4`. No other CLI's ids carry a slash, so the shape
+ * itself routes them, and it does so without enumerating a catalog that is
+ * fetched live and would be stale here.
+ *
+ * ⚠️ Checked **before** the token rules: `anthropic/claude-…` is an opencode id
+ * that also contains "claude", and the CLI that serves it is opencode.
+ */
+function routesByShape(lower: string): ProviderId | null {
+  return lower.includes('/') ? 'opencode' : null;
+}
+
 /** Verified but deferred to v1.1 (providers.md) — route to a clear error, not a guess. */
 const DEFERRED_TOKENS: readonly string[] = ['gemini', 'bard'];
 
 export function providerForModel(model: string | null): ProviderId | null {
   if (model === null) return null;
   const lower = model.toLowerCase();
+  const byShape = routesByShape(lower);
+  if (byShape !== null) return byShape;
   for (const rule of RULES) {
     if (rule.tokens.some((token) => lower.includes(token))) return rule.provider;
   }

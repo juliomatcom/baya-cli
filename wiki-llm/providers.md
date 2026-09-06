@@ -83,6 +83,8 @@ A model name reaches a provider **resolved**, never as typed. Task-named models 
 
 ⚠️ Measured 2026-08-30: before `resolveRunModel`, `--planner-model luna` spawned `codex … -m luna`, codex answered ``Model metadata for `luna` not found``, the planner exited 1 three times and the run fell back to a linear plan — from a name `baya models` lists and the task gate resolves without complaint.
 
+**Model → provider routing.** `providerForModel` routes a model named without a provider. Shape first: an id containing `/` is an `opencode` id (`opencode/mimo-v2.5-free`, `anthropic/claude-sonnet-4`) — checked **before** the token rules, since an opencode id may also contain another vendor's name. Then substring tokens: `claude`/`sonnet`/`opus`/`haiku` ⇒ claude; `codex`/`gpt-`/`o1-`/`o3-`/`o4-` ⇒ codex. `gemini`/`bard` ⇒ a deferred-provider error, never a guess. `src/manifest/aliases.ts`.
+
 ## Binary resolution
 
 Chain: user config (`providers.<id>.bin`) override → `$PATH` → known locations → not found. Known: `~/.local/bin`, `~/.opencode/bin`, active nvm `bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`.

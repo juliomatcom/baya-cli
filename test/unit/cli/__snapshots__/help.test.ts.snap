@@ -12,6 +12,7 @@ USAGE
   baya upgrade [provider]         update installed provider CLIs; optional provider filter
   baya runs                       list resumable runs, newest first; --json emits the rows
   baya resume [<runId>]           re-run a run's unfinished tasks; no id ⇒ pick from a list
+  baya consensus <file|"prompt">  several CLIs debate one artifact until they agree
 
 PROVIDERS
   codex      ✗ not found — npm i -g @openai/codex
@@ -43,6 +44,17 @@ OPTIONS
   --verbose                  alias for --log-level debug
   --quiet                    alias for --log-level warn
   --no-progress              disable the spinner
+
+CONSENSUS OPTIONS
+  --providers <models>       reviewers, by model or alias: luna,sonnet
+                             a bare provider id means that CLI's own default
+  --moderator <model>        reconciler (default: your configured planner model)
+  --rounds <n>               ceiling, not a count — it stops early (default 5)
+  --kind <k>                 question|plan|spec|review|idea|prompt
+                             question = answer it · prompt = reword it
+  --ledger-budget <n>        chars of history per reviewer (default 8000)
+  --output <f>               write the final document here instead of stdout
+  --no-diff                  suppress the change summary
   --no-color                 disable ANSI
   -v, --version              print the release version and exit
 
@@ -52,6 +64,9 @@ EXAMPLES
   baya ./tasks.md --dry-run          # show the plan, run nothing
   baya plan tasks.md --plan-out plan.json
   baya run tasks.md --plan-in plan.json --yes
+  baya consensus "prompt" --providers luna,sonnet,opencode/mimo-v2.5-free --rounds 3
+  baya consensus ./spec.md --providers claude,codex   # each CLI's own default
+  baya con "should we split this module?" --kind idea
 
   Run \`baya doctor\` to check installs, \`baya config\` to change defaults.
   Full reference: wiki-llm/cli.md
