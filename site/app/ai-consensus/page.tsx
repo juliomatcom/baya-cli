@@ -11,6 +11,9 @@ export const metadata: Metadata = {
     description:
       'baya consensus runs a multi-model AI consensus from your terminal: several LLM CLIs review one spec, diff, or question independently, a moderator reconciles each round, and you get back what they agree on and what they do not. No API keys — it drives the coding subscriptions you already have.',
     path: '/ai-consensus',
+    image: '/og/ai-consensus.png',
+    imageAlt:
+      'Diagram — how a baya consensus debate runs: your spec, diff, or question goes to a moderator, several models review it blind and in parallel, the moderator merges their feedback into a new draft, and the loop repeats until nothing important is unresolved.',
   }),
   keywords: [
     'AI consensus',

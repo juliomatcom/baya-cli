@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "og:consensus": "node scripts/generate-consensus-og.mjs"
   },
   "dependencies": {
     "mermaid": "^11.17.2",
