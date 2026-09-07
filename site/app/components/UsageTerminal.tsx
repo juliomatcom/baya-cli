@@ -25,6 +25,19 @@ const COMMANDS: Command[] = [
     ],
   },
   {
+    label: 'CONSENSUS:',
+    labelClassName: 'text-violet-300',
+    copyText: 'baya consensus ./spec.md --providers sol,opus',
+    segments: [
+      { text: '$ ', className: 'text-slate-500' },
+      { text: 'baya ', className: 'text-green-400' },
+      { text: 'consensus ', className: 'text-cyan-300' },
+      { text: './spec.md ', className: 'text-amber-300' },
+      { text: '--providers ', className: 'text-cyan-300' },
+      { text: 'sol,opus', className: 'text-amber-300' },
+    ],
+  },
+  {
     label: 'HELP:',
     labelClassName: 'text-pink-300',
     copyText: 'baya -h',
