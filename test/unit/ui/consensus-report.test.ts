@@ -122,6 +122,43 @@ describe('renderConsensusReport', () => {
     expect(text).not.toContain('discarded');
   });
 
+  it("prints each reviewer's whole answer, not just its opening line", () => {
+    const long =
+      'First line of the answer.\n\nA second paragraph with the actual detail nobody should lose.';
+    const text = renderConsensusReport({
+      theme: createTheme('never'),
+      outcome: {
+        criteria,
+        needsWorkspace: false,
+        proposed: true,
+        document: long,
+        stopReason: 'converged',
+        pseudonyms: {},
+        rounds: [
+          {
+            round: 1,
+            critiques: [],
+            proposals: [
+              { provider: 'codex', alias: 'Reviewer A', document: long, notes: [] },
+            ],
+            agreement: null,
+            failed: [],
+            unsourced: [],
+            dropped: [],
+            document: long,
+            reconcile: null,
+          },
+        ],
+      },
+      usage: [],
+      paths: consensusPaths('/w', 'run-1'),
+      elapsedMs: 184_000,
+    });
+    expect(text).toContain('same page');
+    expect(text).toContain('the actual detail nobody should lose');
+    expect(text).toContain('3m04s');
+  });
+
   it('says nothing about the debate under --no-diff', () => {
     const text = renderConsensusReport({
       theme: createTheme('never'),

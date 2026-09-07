@@ -53,9 +53,24 @@ describe('the consensus gate', () => {
     expect(gate(false, 'never')).not.toContain('What breaks under load?');
   });
 
-  it("names every participant's model, and says so when there is none", () => {
+  it('lists reviewers on one line, model names only, falling back to the provider', () => {
     const out = gate(false, 'never');
-    expect(out).toContain('gpt-5.6-luna');
+    expect(out).toContain('reviewers [gpt-5.6-luna, claude]');
+  });
+
+  it('says when the moderator has no pinned model', () => {
+    const out = renderGate({
+      theme: createTheme('never'),
+      artifact: './spec.md',
+      criteria: criteria(false),
+      moderator: 'codex' as ProviderId,
+      moderatorModel: null,
+      reviewers: ['codex'] as ProviderId[],
+      reviewerModels: new Map<ProviderId, string | null>([['codex', null]]),
+      maxRounds: 2,
+      calls: 6,
+      cwd: '/work',
+    });
     expect(out).toContain('(provider default)');
   });
 

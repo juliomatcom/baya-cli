@@ -87,7 +87,7 @@ The gate states the reading in words — `doing  answering the question` — rat
 
 **Posture is coloured by blast radius** — `tool-less` green (the agents can touch nothing), `workspace` yellow (they can write in your tree). The one word on that line with consequences behind it.
 
-Shows: artifact · `artifact_kind` · posture · moderator and every reviewer **with its model** (`(provider default)` when unpinned) · `R × (N + 1)` remaining calls and how the run stops · the unsupervised-agents warning in the workspace posture only.
+Shows: artifact · `artifact_kind` · posture · moderator **with its model** (`(provider default)` when unpinned) · reviewers on one line as `[model, model, …]`, model names only, falling back to the provider id when unpinned · `R × (N + 1)` remaining calls and how the run stops · the unsupervised-agents warning in the workspace posture only.
 
 ⚠️ **Not the criteria.** They are the moderator's private yardstick and a producing run has none; showing them invited reading them as the run's definition, which they are not.
 
@@ -197,11 +197,15 @@ The report is where a debate becomes learnable, and until 2026-09-06 it printed 
 
 **positions** — each reviewer's `position` from the final round, verbatim and wrapped. The one field where a reviewer states a _view_ rather than a defect; it was written to `round-<n>.critique.json` and shown nowhere.
 
-A producing run shows **same page** / **not the same page** instead, each reviewer's answer by its opening line, what they differ on, and which answer was printed. No answer is ranked or marked best.
+A producing run shows **same page** / **not the same page** instead, then **every reviewer's last answer in full** — wrapped, not cut to its opening line — what they differ on, and which answer is the canonical one (the first reviewer named). No answer is ranked or marked best. The stop-reason line is green when the debate converged, plain otherwise.
 
 **decisions** — a review run's `changes[]`, each carrying the `claim` of the finding behind it, who raised it, the agreement count, and the moderator's rationale. A rationale alone says what was done; the claim beside it says what it was answering, which is the half that explains why one argument beat another. `unresolved[]` prints as `unsettled` with the reviewers behind it.
 
 Both are suppressed by `--no-diff`. Nothing is duplicated into `report.json` — the raw records already hold it.
+
+**spend** closes with `total <tokens> · <cost> · <wall-clock>` — the whole run's elapsed time, not just per-provider token counts. **record** is the run directory, last.
+
+**The bare document goes to stdout only when stdout is piped.** Interactively the report already carries every answer in full, so a second raw copy is noise; a redirect (`> answer.md`) or `--output` still gets the plain document.
 
 ## The criteria are private — and absent for a producing run
 

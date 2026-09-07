@@ -9,7 +9,7 @@ import type {
 import { findingIndex } from '../consensus/engine.js';
 import { agreementOf } from '../consensus/prompt.js';
 import type { ConsensusPaths } from '../consensus/paths.js';
-import { DEFAULT_WIDTH, firstLine, formatCost, formatTokens, wrap } from './text.js';
+import { DEFAULT_WIDTH, formatCost, formatDuration, formatTokens, wrap } from './text.js';
 import type { Theme } from './theme.js';
 
 /**
@@ -26,6 +26,8 @@ export interface ConsensusReportOptions {
   paths: ConsensusPaths;
   noDiff?: boolean;
   width?: number;
+  /** Wall-clock time the whole run took, printed under `spend`. */
+  elapsedMs?: number;
 }
 
 const ACTION_STATUS: Record<string, 'ok' | 'skip' | 'warn'> = {
@@ -115,12 +117,15 @@ function renderAnswers(
     '',
   ];
 
+  // Every reviewer's last answer in full — not its opening line. An answer cut
+  // to one line is the one thing a producing run exists to deliver, gone.
   for (const proposal of proposals) {
-    lines.push(
-      ...labelled(theme.provider(proposal.provider), firstLine(proposal.document), width),
-    );
+    lines.push(`  ${theme.provider(proposal.provider)}`, '');
+    for (const row of wrap(proposal.document.trim(), width - 4)) {
+      lines.push(row === '' ? '' : `    ${row}`);
+    }
+    lines.push('');
   }
-  lines.push('');
 
   const differences = last?.agreement?.differences ?? [];
   if (differences.length > 0) {
@@ -133,10 +138,10 @@ function renderAnswers(
 
   lines.push(
     agreed
-      ? `  ${theme.note('printed')}   the answer they agreed on, in ${theme.provider(
+      ? `  ${theme.note('canonical')} ${theme.provider(
           (proposals[0] as RoundProposal).provider,
-        )}'s words`
-      : `  ${theme.note('printed')}   every answer, side by side — none is chosen`,
+        )}'s answer — they agreed, so any one stands`
+      : `  ${theme.note('canonical')} none — every answer stands, no pick`,
     '',
   );
   return lines;
@@ -209,10 +214,9 @@ export function renderConsensusReport(options: ConsensusReportOptions): string {
     '',
     `  ${theme.note('consensus')} · ${outcome.criteria.artifact_kind} · ${String(outcome.rounds.length)} round${outcome.rounds.length === 1 ? '' : 's'}`,
   ];
-  lines.push(
-    `  ${theme.note(STOP_REASON[outcome.stopReason] ?? outcome.stopReason)}`,
-    '',
-  );
+  const settled = outcome.stopReason === 'converged';
+  const stopLine = STOP_REASON[outcome.stopReason] ?? outcome.stopReason;
+  lines.push(`  ${settled ? theme.ok(stopLine) : theme.note(stopLine)}`, '');
 
   const width = options.width ?? DEFAULT_WIDTH;
   const last = outcome.rounds[outcome.rounds.length - 1];
@@ -277,6 +281,8 @@ export function renderConsensusReport(options: ConsensusReportOptions): string {
       output_tokens: (current.output_tokens ?? 0) + (entry.usage.output_tokens ?? 0),
     });
   }
+  const took =
+    options.elapsedMs !== undefined ? ` · ${formatDuration(options.elapsedMs)}` : '';
   if (totals.size > 0) {
     lines.push(`  ${theme.note('spend')}`, '');
     let cost = 0;
@@ -291,7 +297,14 @@ export function renderConsensusReport(options: ConsensusReportOptions): string {
     }
     lines.push(
       '',
-      `    ${theme.note('total'.padEnd(9))} ${formatTokens(tokens)}${cost > 0 ? ` · ${formatCost(cost)}` : ''}`,
+      `    ${theme.note('total'.padEnd(9))} ${formatTokens(tokens)}${cost > 0 ? ` · ${formatCost(cost)}` : ''}${took}`,
+      '',
+    );
+  } else if (took !== '') {
+    lines.push(
+      `  ${theme.note('spend')}`,
+      '',
+      `    ${theme.note('total'.padEnd(9))}${took.replace(' · ', ' ')}`,
       '',
     );
   }

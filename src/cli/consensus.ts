@@ -166,6 +166,7 @@ function parseParticipants(
 export async function consensusCommand(
   options: ConsensusCommandOptions,
 ): Promise<number> {
+  const startedAt = Date.now();
   const { args, cwd, env, io, registry } = options;
   const { flags } = args;
   const theme = createTheme(flags.noColor || env['NO_COLOR'] ? 'never' : 'auto');
@@ -616,9 +617,20 @@ export async function consensusCommand(
     io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
     io.stderr.write(
-      renderConsensusReport({ theme, outcome, usage, paths, noDiff: flags.noDiff }),
+      renderConsensusReport({
+        theme,
+        outcome,
+        usage,
+        paths,
+        noDiff: flags.noDiff,
+        elapsedMs: Date.now() - startedAt,
+      }),
     );
-    if (flags.output === undefined) io.stdout.write(`${outcome.document}\n`);
+    // Piped only — interactively the report already prints every answer in
+    // full. A redirect still gets the bare document.
+    if (flags.output === undefined && !io.stdoutIsTty) {
+      io.stdout.write(`${outcome.document}\n`);
+    }
   }
   if (flags.output !== undefined) {
     writeFileSync(resolvePath(cwd, flags.output), `${outcome.document}\n`, 'utf8');
@@ -747,13 +759,11 @@ export function renderGate(options: {
 
     '',
     `  ${theme.note('moderator')} ${theme.provider(options.moderator)}${options.moderatorModel ? ` ${options.moderatorModel}` : theme.note(' (provider default)')}`,
-    ...options.reviewers.map((id, index) => {
-      const label = index === 0 ? 'reviewers' : '         ';
-      const model = options.reviewerModels.get(id) ?? null;
-      // A pinned model is the likeliest thing to be wrong and this is the last
-      // place to catch it, so it is always shown.
-      return `  ${theme.note(label)} ${theme.provider(id)}${model ? ` ${model}` : theme.note(' (provider default)')}`;
-    }),
+    // One line, model names only — a pinned model is the likeliest thing to be
+    // wrong and this is the last place to catch it, so it is always shown.
+    `  ${theme.note('reviewers')} [${options.reviewers
+      .map((id) => options.reviewerModels.get(id) ?? id)
+      .join(', ')}]`,
     // ⚠️ The criteria are not shown. They are the moderator's private
     // yardstick, and a producing run has none at all — consensus.md §3.6.
     '',
