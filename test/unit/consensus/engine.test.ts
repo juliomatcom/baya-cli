@@ -732,6 +732,7 @@ describe('runConsensus', () => {
         kind: 'consensus_criteria',
         artifact_kind: 'idea',
         needs_workspace: false,
+        needs_draft: false,
         criteria: [{ id: 'c1', question: 'q' }],
       },
       runner: (call) => {

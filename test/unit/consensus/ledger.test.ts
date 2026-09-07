@@ -29,7 +29,6 @@ function critique(provider: ProviderId, alias: string, ids: string[]): RoundCrit
       position: `${provider} thinks it is close`,
       findings: ids.map((id) => ({
         id: `${provider}:${id}`,
-        criterion_id: 'c1',
         severity: 'major' as const,
         claim: `claim ${id}`,
         evidence: 'e',
@@ -49,10 +48,16 @@ const reconcile: ReconcileResult = {
   changes: [
     {
       finding_ids: ['claude:f1', 'codex:f1'],
+      criterion_id: 'c1',
       action: 'accepted',
       rationale: 'Both saw the same gap.',
     },
-    { finding_ids: ['claude:f2'], action: 'rejected', rationale: 'Out of scope.' },
+    {
+      finding_ids: ['claude:f2'],
+      criterion_id: 'c1',
+      action: 'rejected',
+      rationale: 'Out of scope.',
+    },
   ],
   unresolved: [{ claim: 'naming', providers: ['codex'], rationale: 'taste' }],
   converged: false,

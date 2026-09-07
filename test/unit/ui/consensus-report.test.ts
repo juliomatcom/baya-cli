@@ -84,7 +84,7 @@ function outcome(
 
 function render(out: ConsensusOutcome): string {
   return renderConsensusReport({
-    theme: createTheme({ color: false }),
+    theme: createTheme('never'),
     outcome: out,
     usage: [],
     paths: consensusPaths('/w', 'run-1'),
@@ -124,7 +124,7 @@ describe('renderConsensusReport', () => {
 
   it('says nothing about the debate under --no-diff', () => {
     const text = renderConsensusReport({
-      theme: createTheme({ color: false }),
+      theme: createTheme('never'),
       outcome: outcome([finding('codex:f1', 'A claim.')], ['codex:f1']),
       usage: [],
       paths: consensusPaths('/w', 'run-1'),

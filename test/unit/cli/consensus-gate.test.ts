@@ -11,6 +11,7 @@ function criteria(needsWorkspace: boolean): ConsensusCriteria {
     kind: 'consensus_criteria',
     artifact_kind: 'spec',
     needs_workspace: needsWorkspace,
+    needs_draft: false,
     criteria: [{ id: 'edge-cases', question: 'What breaks under load?' }],
   };
 }

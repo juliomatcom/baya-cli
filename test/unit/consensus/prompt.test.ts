@@ -12,12 +12,12 @@ const criteria: ConsensusCriteria = {
   kind: 'consensus_criteria',
   artifact_kind: 'spec',
   needs_workspace: true,
+  needs_draft: false,
   criteria: [{ id: 'edge-cases', question: 'What breaks under load?' }],
 };
 
 const finding: Finding = {
   id: 'claude:f1',
-  criterion_id: 'edge-cases',
   severity: 'major',
   claim: 'No retry policy.',
   evidence: 'src/run.ts:40',
@@ -169,6 +169,7 @@ describe('agreementOf', () => {
     expect(
       agreementOf({
         finding_ids: ['claude:f1', 'codex:f4', 'claude:f9'],
+        criterion_id: 'c1',
         action: 'accepted',
         rationale: 'x',
       }),
@@ -177,7 +178,12 @@ describe('agreementOf', () => {
 
   it('ignores an un-namespaced id rather than inventing a provider', () => {
     expect(
-      agreementOf({ finding_ids: ['f1'], action: 'rejected', rationale: 'x' }),
+      agreementOf({
+        finding_ids: ['f1'],
+        criterion_id: 'c1',
+        action: 'rejected',
+        rationale: 'x',
+      }),
     ).toEqual([]);
   });
 });
