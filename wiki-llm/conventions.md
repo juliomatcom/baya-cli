@@ -35,6 +35,7 @@ src/
 ├─ manifest/   zod schemas + validation            [pure]
 ├─ graph/      topo sort, ready-set, descendants   [pure]
 ├─ providers/  one adapter per CLI + registry
+├─ consensus/  baya consensus: round loop, ledgers, compaction, persistence
 ├─ executor/   scheduler, budgets, locks, spawn, signals
 ├─ context/    result persistence, context assembly, budgeting
 ├─ escalation/ park queue, stdin ownership, resume dispatch
@@ -46,7 +47,8 @@ test/
 ├─ unit/  integration/  contract/
 └─ fixtures/fake-provider.mjs
 wiki-llm/      source of truth for architecture, docs, commands
-specs/001/     point-in-time refinement record
+specs/         point-in-time refinement records (001 run, 002-ai-consensus)
+site/          user-facing website (baya-cli.depre.net); isolated Next.js project
 ```
 
 ## Hard rules
@@ -84,9 +86,10 @@ specs/001/     point-in-time refinement record
 
 ## Documentation split
 
-| Location     | Holds                                                                                                                                                     |
-| :----------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wiki-llm/`  | **Source of truth.** Architecture, protocol, provider surfaces, commands, runbooks, conventions. Kept current; every page token-optimized (AGENTS.md §0). |
-| `specs/001/` | Point-in-time record of this refinement: what the original spec got wrong, the refined target, the phased plan. Not updated as code evolves.              |
-| `README.md`  | Only: what Baya is, quickstart, repo layout, pointer to `wiki-llm/index.md`. No runbooks, no CLI reference.                                               |
-| `AGENTS.md`  | Agent operating rules.                                                                                                                                    |
+| Location    | Holds                                                                                                                                                                                                  |
+| :---------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wiki-llm/` | **Source of truth.** Architecture, protocol, provider surfaces, commands, runbooks, conventions. Kept current; every page token-optimized (AGENTS.md §0).                                              |
+| `site/`     | The user-facing website ([baya-cli.depre.net](https://baya-cli.depre.net)): features, docs, FAQ. Where heavy reader-facing docs live, drawn from `wiki-llm/`; `wiki-llm/` still leads on any conflict. |
+| `specs/`    | Point-in-time refinement records — `001/` (the run), `002-ai-consensus/` (the debate engine): what the origin draft got wrong, the refined target, the plan. Not updated as code evolves.              |
+| `README.md` | Only: what Baya is, install, usage, pointers to `site/` and `wiki-llm/index.md`. No feature list, no runbooks, no CLI reference — those moved to the site.                                             |
+| `AGENTS.md` | Agent operating rules.                                                                                                                                                                                 |

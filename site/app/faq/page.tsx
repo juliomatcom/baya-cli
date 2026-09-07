@@ -98,6 +98,48 @@ const FAQ: FaqEntry[] = [
     ),
   },
   {
+    id: 'why-consensus',
+    question: 'Why use consensus / debate?',
+    answerText:
+      'One model reviewing your work has blind spots and will rubber-stamp its own kind of mistake. Consensus runs the same review across several provider CLIs in parallel and blind, then a moderator reconciles their findings into a new draft and the loop repeats until nothing blocking is left or the round ceiling hits. Blind and independent means no model anchors on another; the moderator never picks the answer, it only reports whether the reviewers agree — so you see where the models actually converge versus where one is guessing confidently. Use it when being wrong is expensive: a spec, a diff, or a design question, where a second and third opinion is cheap next to shipping the mistake. It is not a run: no DAG, no lock, and baya runs and baya resume never see it. Consensus is for reviewing, not developing — in the workspace posture the reviewers run unsupervised with write access, so commit or stash first.',
+    answer: (
+      <>
+        <p>
+          One model reviewing your work has blind spots, and it will
+          rubber-stamp its own kind of mistake. Consensus runs the same review
+          across several provider CLIs in parallel and <em>blind</em>, then a
+          moderator reconciles their findings into a new draft and the loop
+          repeats until nothing blocking is left or the <code>--rounds</code>{' '}
+          ceiling hits.
+        </p>
+        <p>
+          Blind and independent means no model anchors on another. The moderator
+          never picks the answer — it writes the criteria, reconciles each
+          round, and reports only whether the reviewers agree, so you see where
+          the models actually converge versus where one is guessing
+          confidently. Use it when being wrong is expensive: a spec, a diff, or
+          a design question, where a second and third opinion is cheap next to
+          shipping the mistake.
+        </p>
+        <p>
+          It is <strong>not a run</strong>: no DAG, no lock, and{' '}
+          <code>baya runs</code> / <code>baya resume</code> never see it.
+          Consensus is for reviewing, not developing — in the workspace posture
+          the reviewers run unsupervised with write access to your tree, so
+          commit or stash first. Full detail:{' '}
+          <a
+            href="https://github.com/juliomatcom/baya-cli/blob/main/wiki-llm/consensus.md"
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            wiki-llm/consensus.md
+          </a>
+          .
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'api-keys',
     question: 'Does this need API keys?',
     answerText:

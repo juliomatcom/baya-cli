@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 const FOOTER_LINKS = [
   { label: 'Features', href: '/features' },
+  { label: 'Consensus', href: '/consensus' },
   { label: 'Docs', href: '/docs' },
   { label: 'FAQ', href: '/faq' },
   { label: 'GitHub', href: 'https://github.com/juliomatcom/baya-cli' },

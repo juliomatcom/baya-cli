@@ -5,6 +5,8 @@
 
 Baya is a local multi-provider CLI orchestrator: a freeform task list (Markdown, plain text, YAML, any UTF-8 text) → LLM-planned JSON DAG → parallel dispatch to local agent CLIs (`opencode`, `codex`, `claude`, `copilot`) over a strict JSON protocol.
 
+Reader-facing docs (features, install, walkthroughs, FAQ) live on the website — [baya-cli.depre.net](https://baya-cli.depre.net), built from `site/`. These pages are the technical source of truth; `README.md` is a pointer only.
+
 | Page                               | Answers                                                                                                                                                                                                                                                 |
 | :--------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [architecture.md](architecture.md) | What are the layers/modules, how does data flow, what is the task state machine, where does code live?                                                                                                                                                  |
