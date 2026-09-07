@@ -50,3 +50,15 @@ export {
   type ModelGatePlan,
   type TaskModelAsk,
 } from './model-gate.js';
+
+export {
+  createBlock,
+  MAX_ROWS,
+  type Block,
+  type BlockOptions,
+  type BlockRow,
+} from './block.js';
+export {
+  renderConsensusReport,
+  type ConsensusReportOptions,
+} from './consensus-report.js';

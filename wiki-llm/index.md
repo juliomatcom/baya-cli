@@ -5,6 +5,8 @@
 
 Baya is a local multi-provider CLI orchestrator: a freeform task list (Markdown, plain text, YAML, any UTF-8 text) → LLM-planned JSON DAG → parallel dispatch to local agent CLIs (`opencode`, `codex`, `claude`, `copilot`) over a strict JSON protocol.
 
+Reader-facing docs (features, install, walkthroughs, FAQ) live on the website — [baya-cli.depre.net](https://baya-cli.depre.net), built from `site/`. These pages are the technical source of truth; `README.md` is a pointer only.
+
 | Page                               | Answers                                                                                                                                                                                                                                                 |
 | :--------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [architecture.md](architecture.md) | What are the layers/modules, how does data flow, what is the task state machine, where does code live?                                                                                                                                                  |
@@ -15,6 +17,7 @@ Baya is a local multi-provider CLI orchestrator: a freeform task list (Markdown,
 | [recovery.md](recovery.md)         | How is progress tracked, what is recorded on failure, and how does a run resume after a crash or exhausted credits?                                                                                                                                     |
 | [logging.md](logging.md)           | What does Baya record about its own behavior, where does it go, and what is the full event vocabulary?                                                                                                                                                  |
 | [cli.md](cli.md)                   | What commands and flags does `baya` expose, and what are the exit codes?                                                                                                                                                                                |
+| [consensus.md](consensus.md)       | How does `baya consensus` run a multi-provider debate? What does each reviewer remember, who may write to my tree, and when does it stop?                                                                                                               |
 | [testing.md](testing.md)           | How is any of this tested without spending money? Fake-provider harness, test tiers, commands.                                                                                                                                                          |
 | [conventions.md](conventions.md)   | Repo layout, TS/ESM/Jest setup, hard rules, definition of done, license (MIT).                                                                                                                                                                          |
 

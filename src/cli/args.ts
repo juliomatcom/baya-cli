@@ -20,6 +20,8 @@ export const COMMANDS = [
   'upgrade',
   'resume',
   'runs',
+  'consensus',
+  'con',
   'help',
 ] as const;
 export type Command = (typeof COMMANDS)[number];
@@ -56,7 +58,54 @@ export interface RunFlags {
   logLevel?: LogLevel;
   noColor: boolean;
   noProgress: boolean;
+  /** `consensus --providers <models>`: reviewers, by model or alias. */
+  providers?: string;
+  /** `consensus --moderator <model>`: the reconciler, by model or alias. */
+  moderator?: string;
+  /** Accepted as a synonym for `--moderator`; both name a model. */
+  moderatorModel?: string;
+  /** `consensus --rounds <n>`: a ceiling, not a count. */
+  rounds?: number;
+  /** `consensus --kind <k>`: skips the moderator's classification call. */
+  kind?: ConsensusKind;
+  /** `consensus --output <f>`: where the final document goes. Default stdout. */
+  output?: string;
+  /** `consensus --no-diff`: suppress the change summary. */
+  noDiff: boolean;
+  /** `consensus --ledger-budget <n>`: chars of history before compaction. */
+  ledgerBudget?: number;
 }
+
+/** `--kind` values. Each also fixes the access posture (spec 002 §5.1). */
+export const CONSENSUS_KINDS = [
+  'question',
+  'plan',
+  'spec',
+  'review',
+  'idea',
+  'prompt',
+] as const;
+export type ConsensusKind = (typeof CONSENSUS_KINDS)[number];
+
+/** Which `--kind` values imply the workspace posture. */
+export const KIND_NEEDS_WORKSPACE: Readonly<Record<ConsensusKind, boolean>> = {
+  question: false,
+  plan: false,
+  idea: false,
+  prompt: false,
+  spec: true,
+  review: true,
+};
+
+/** Which `--kind` values name a deliverable that does not exist yet. */
+export const KIND_NEEDS_DRAFT: Readonly<Record<ConsensusKind, boolean>> = {
+  question: true,
+  plan: false,
+  idea: false,
+  prompt: false,
+  spec: false,
+  review: false,
+};
 
 export interface ParsedArgs {
   command: Command;
@@ -85,6 +134,10 @@ const VALUE_FLAGS = new Map<string, keyof RunFlags>([
   ['--provider', 'provider'],
   ['--plan-out', 'planOut'],
   ['--plan-in', 'planIn'],
+  ['--providers', 'providers'],
+  ['--moderator', 'moderator'],
+  ['--moderator-model', 'moderatorModel'],
+  ['--output', 'output'],
 ]);
 
 function emptyFlags(): RunFlags {
@@ -99,6 +152,7 @@ function emptyFlags(): RunFlags {
     quiet: false,
     noColor: false,
     noProgress: false,
+    noDiff: false,
   };
 }
 
@@ -170,6 +224,40 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       case '--no-memory':
         flags.noMemory = true;
         break;
+      case '--no-diff':
+        flags.noDiff = true;
+        break;
+      case '--rounds': {
+        const value = takeValue();
+        if (value !== undefined) {
+          const parsed = Number.parseInt(value, 10);
+          if (Number.isNaN(parsed) || parsed < 1)
+            errors.push(`--rounds must be a positive integer`);
+          else flags.rounds = parsed;
+        }
+        break;
+      }
+      case '--ledger-budget': {
+        const value = takeValue();
+        if (value !== undefined) {
+          const parsed = Number.parseInt(value, 10);
+          if (Number.isNaN(parsed) || parsed < 0)
+            errors.push(`--ledger-budget must be a non-negative integer`);
+          else flags.ledgerBudget = parsed;
+        }
+        break;
+      }
+      case '--kind': {
+        const value = takeValue();
+        if (value !== undefined) {
+          if ((CONSENSUS_KINDS as readonly string[]).includes(value)) {
+            flags.kind = value as ConsensusKind;
+          } else {
+            errors.push(`--kind must be one of ${CONSENSUS_KINDS.join(', ')}`);
+          }
+        }
+        break;
+      }
       case '--dangerously-allow-all':
         flags.dangerouslyAllowAll = true;
         break;
@@ -295,9 +383,12 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
   const rest = isCommand ? positionals.slice(1) : positionals;
 
+  const isConsensus = command === 'consensus' || command === 'con';
+
   const parsed: ParsedArgs = {
     command,
-    file: command === 'run' || command === 'plan' ? (rest[0] ?? null) : null,
+    file:
+      command === 'run' || command === 'plan' || isConsensus ? (rest[0] ?? null) : null,
     flags,
     showVersion,
     errors,
@@ -332,6 +423,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
   // `plan` is exactly `run --dry-run` (cli.md §Commands).
   if (command === 'plan') parsed.flags.dryRun = true;
+
+  if (isConsensus && parsed.file === null) {
+    errors.push('consensus needs a file path or a prompt');
+  }
 
   return parsed;
 }

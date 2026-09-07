@@ -118,12 +118,18 @@ export default function FeaturesTeaser() {
             ))}
           </div>
 
-          <p className="mt-6">
+          <p className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
             <Link
               href="/features"
               className="text-sm font-semibold text-accent"
             >
               See all features →
+            </Link>
+            <Link
+              href="/ai-consensus"
+              className="text-sm font-semibold text-accent"
+            >
+              Multi-model AI consensus →
             </Link>
           </p>
 

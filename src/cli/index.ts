@@ -30,6 +30,7 @@ import { renderHelp } from './help.js';
 import { runCommand, type CliIo } from './run.js';
 import { resumeCommand } from './resume.js';
 import { runsCommand } from './runs.js';
+import { consensusCommand } from './consensus.js';
 import { upgradeCommand } from './upgrade.js';
 
 /**
@@ -160,6 +161,10 @@ export async function main(options: MainOptions = {}): Promise<number> {
 
       case 'resume':
         return await resumeCommand({ args, cwd, env, io, registry });
+
+      case 'consensus':
+      case 'con':
+        return await consensusCommand({ args, cwd, env, io, registry });
 
       case 'run':
       case 'plan':

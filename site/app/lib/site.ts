@@ -22,18 +22,29 @@ export const OG_IMAGE_ALT =
  * Per-page metadata: an absolute (non-templated) title, description, canonical
  * path, and the shared Open Graph / Twitter card. A page that sets its own
  * `openGraph` object drops any inherited from the root layout — including the
- * file-convention card — so every page spells the image out here.
+ * file-convention card — so every page spells the image out here. Pass `image`
+ * (an absolute path under `public/`) with `imageAlt` to override the default
+ * card with a page-specific one.
  */
 export function pageMetadata({
   title,
   description,
   path,
+  image: imageUrl,
+  imageAlt,
 }: {
   title: string;
   description: string;
   path: string;
+  image?: string;
+  imageAlt?: string;
 }): import('next').Metadata {
-  const image = { url: OG_IMAGE, width: 1200, height: 630, alt: OG_IMAGE_ALT };
+  const image = {
+    url: imageUrl ?? OG_IMAGE,
+    width: 1200,
+    height: 630,
+    alt: imageUrl ? (imageAlt ?? OG_IMAGE_ALT) : OG_IMAGE_ALT,
+  };
 
   return {
     title: { absolute: title },

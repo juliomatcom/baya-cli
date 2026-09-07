@@ -214,3 +214,171 @@ export const ProviderEventSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('unknown'), raw: z.string() }).strict(),
 ]);
 export type ProviderEvent = z.infer<typeof ProviderEventSchema>;
+
+// -------------------------------------------------------------- consensus
+
+/** `baya consensus` wire format (specs/002-ai-consensus/spec.md §4). */
+
+/**
+ * ⚠️ `question` and `prompt` are the same text read two ways, and the
+ * difference is the whole output. A question is **answered**; a prompt is
+ * **rewritten**. A bare interrogative is a question — workshopping someone's
+ * wording when they asked a question is not what they came for.
+ */
+export const ARTIFACT_KINDS = [
+  'question',
+  'plan',
+  'spec',
+  'review',
+  'idea',
+  'prompt',
+] as const;
+export const ArtifactKindSchema = z.enum(ARTIFACT_KINDS);
+export type ArtifactKind = z.infer<typeof ArtifactKindSchema>;
+
+export const FINDING_SEVERITIES = ['blocker', 'major', 'minor', 'nit'] as const;
+export const FindingSeveritySchema = z.enum(FINDING_SEVERITIES);
+export type FindingSeverity = z.infer<typeof FindingSeveritySchema>;
+
+/** Severities that keep a debate open (§6). */
+export const BLOCKING_SEVERITIES: readonly FindingSeverity[] = ['blocker', 'major'];
+
+export const POSITION_MAX_CHARS = 1500;
+
+export const CriterionSchema = z
+  .object({ id: z.string().min(1), question: z.string().min(1) })
+  .strict();
+export type Criterion = z.infer<typeof CriterionSchema>;
+
+export const ConsensusCriteriaSchema = z
+  .object({
+    baya: z.literal(PROTOCOL_VERSION),
+    kind: z.literal('consensus_criteria'),
+    artifact_kind: ArtifactKindSchema,
+    /**
+     * Decides the access posture for every reviewer in the run (§7). Absent or
+     * unparseable resolves to `true` at the call site: a wrong `false` costs
+     * the debate its evidence silently, a wrong `true` costs tokens.
+     */
+    needs_workspace: z.boolean(),
+    /**
+     * Whether the deliverable has to be written before there is anything to
+     * review (§3.1). True when the artifact only *asks* for it.
+     */
+    needs_draft: z.boolean().default(false),
+    /**
+     * ⚠️ Empty for a question. There is nothing to judge against, because the
+     * job is not judging — see specs/002-ai-consensus §3.6.
+     */
+    criteria: z.array(CriterionSchema).default([]),
+  })
+  .strict();
+export type ConsensusCriteria = z.infer<typeof ConsensusCriteriaSchema>;
+
+/**
+ * One reviewer's own answer, written blind in round 1 when the artifact only
+ * asks for something. Not a draft to be edited — the whole of what that model
+ * had to say before it saw anyone else's.
+ */
+export const ProposalResultSchema = z
+  .object({
+    baya: z.literal(PROTOCOL_VERSION),
+    kind: z.literal('proposal_result'),
+    document: z.string().min(1),
+    notes: z.array(z.string()).default([]),
+  })
+  .strict();
+export type ProposalResult = z.infer<typeof ProposalResultSchema>;
+
+/**
+ * ⚠️ The moderator's entire output when the job is to produce something: are
+ * these answers saying the same thing, and if not, where do they differ.
+ *
+ * There is no `document`, no ranking and no count, and that is the point. It
+ * does not know the answer to the job, it is not its job to know, and every
+ * field that could hold one is absent by design — §3.6.
+ */
+export const AgreementResultSchema = z
+  .object({
+    baya: z.literal(PROTOCOL_VERSION),
+    kind: z.literal('agreement_result'),
+    round: z.number().int().positive(),
+    agreed: z.boolean(),
+    /** One line per point they do not agree on. Empty when `agreed`. */
+    differences: z.array(z.string()).default([]),
+    notes: z.array(z.string()).default([]),
+  })
+  .strict();
+export type AgreementResult = z.infer<typeof AgreementResultSchema>;
+
+export const FindingSchema = z
+  .object({
+    id: z.string().min(1),
+    severity: FindingSeveritySchema,
+    claim: z.string().min(1),
+    evidence: z.string(),
+    suggestion: z.string().default(''),
+    location: z.string().nullable().default(null),
+  })
+  .strict();
+export type Finding = z.infer<typeof FindingSchema>;
+
+export const CritiqueResultSchema = z
+  .object({
+    baya: z.literal(PROTOCOL_VERSION),
+    kind: z.literal('critique_result'),
+    round: z.number().int().positive(),
+    /** The one self-reported field, exempted as `summary`/`notes` are (§4). */
+    position: z.string().max(POSITION_MAX_CHARS).default(''),
+    findings: z.array(FindingSchema).default([]),
+    notes: z.array(NoteSchema).default([]),
+  })
+  .strict();
+export type CritiqueResult = z.infer<typeof CritiqueResultSchema>;
+
+export const CHANGE_ACTIONS = ['accepted', 'rejected', 'deferred'] as const;
+export const ChangeActionSchema = z.enum(CHANGE_ACTIONS);
+export type ChangeAction = z.infer<typeof ChangeActionSchema>;
+
+/**
+ * A change is also the agreement cluster: distinct providers among
+ * `finding_ids` are the reviewers that raised the same point (§4). No
+ * clustering code exists anywhere else.
+ */
+export const ChangeSchema = z
+  .object({
+    finding_ids: z.array(z.string()).default([]),
+    /**
+     * Which criterion this serves. The moderator's declaration, not the
+     * reviewer's: the criteria are the moderator's yardstick and never reach a
+     * reviewer. Baya rejects a change naming a criterion the run does not have.
+     */
+    criterion_id: z.string().default(''),
+    action: ChangeActionSchema,
+    rationale: z.string().min(1),
+  })
+  .strict();
+export type Change = z.infer<typeof ChangeSchema>;
+
+export const UnresolvedSchema = z
+  .object({
+    claim: z.string().min(1),
+    providers: z.array(z.string()).default([]),
+    rationale: z.string().default(''),
+  })
+  .strict();
+export type Unresolved = z.infer<typeof UnresolvedSchema>;
+
+export const ReconcileResultSchema = z
+  .object({
+    baya: z.literal(PROTOCOL_VERSION),
+    kind: z.literal('reconcile_result'),
+    round: z.number().int().positive(),
+    document: z.string().min(1),
+    changes: z.array(ChangeSchema).default([]),
+    unresolved: z.array(UnresolvedSchema).default([]),
+    /** Advisory only. §6's gate is Baya's, never the model's. */
+    converged: z.boolean().default(false),
+  })
+  .strict();
+export type ReconcileResult = z.infer<typeof ReconcileResultSchema>;

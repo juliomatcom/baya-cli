@@ -104,6 +104,17 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M12 19V5M5 12l7-7 7 7" />
     </>
   ),
+  debate: (
+    <>
+      <path d="M2 5h11v6H7l-3 3v-3H2z" />
+      <path d="M22 11v7l-3-3h-5a1 1 0 01-1-1v-1" />
+    </>
+  ),
+  scale: (
+    <>
+      <path d="M12 3v18M7 21h10M5 7h14M5 7l-3 6a3 3 0 006 0zM19 7l-3 6a3 3 0 006 0z" />
+    </>
+  ),
 };
 
 export type FeatureIconName = keyof typeof ICONS;

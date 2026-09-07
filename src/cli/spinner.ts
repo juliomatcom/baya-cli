@@ -1,4 +1,4 @@
-import { formatElapsed, type Progress } from '../ui/index.js';
+import { createBlock, formatElapsed, type Block, type Progress } from '../ui/index.js';
 import type { Theme } from '../ui/theme.js';
 
 /**
@@ -71,5 +71,69 @@ export function createGroupSpinner(deps: {
       dispose();
       stopLine = startElapsedLine(progress, theme, `${theme.taskId(lead)}${more} ${who}`);
     },
+  };
+}
+
+/**
+ * The live block for a consensus round: one row per in-flight provider process
+ * (specs/002-ai-consensus §11). Reviewers run in parallel, so the unit is the
+ * block, not a line.
+ */
+export interface RoundSpinner {
+  started: (provider: string, model: string | null, round: number, kind: string) => void;
+  /** Drops the row. The call is not over for the reader until `completed`. */
+  finished: (provider: string) => void;
+  /**
+   * The line that stays. The block only ever holds what is still running, so
+   * anything that finished has to be written out or it vanishes with its row.
+   */
+  completed: (provider: string, outcome: { ok: boolean; detail: string }) => void;
+  dispose: () => void;
+}
+
+export function createRoundSpinner(deps: {
+  progress: Progress;
+  theme: Theme;
+  /** The CLI's own stderr. Defaulting to `process.stderr` would write past a
+   * caller that supplied its own stream — including every test. */
+  stream: NodeJS.WritableStream;
+  block?: Block;
+}): RoundSpinner {
+  const block =
+    deps.block ??
+    createBlock({
+      theme: deps.theme,
+      stream: deps.stream,
+      disabled: !deps.progress.enabled,
+    });
+
+  // Elapsed has to outlive the row: the completion line is written after the
+  // answer is parsed, by which time the row is already gone.
+  const startedAt = new Map<string, number>();
+  const models = new Map<string, string | null>();
+
+  return {
+    started: (provider, model, round, kind) => {
+      block.header(round > 0 ? `round ${String(round)}` : 'reading the artifact');
+      startedAt.set(provider, Date.now());
+      models.set(provider, model);
+      block.add({
+        key: provider,
+        provider,
+        model,
+        detail: kind === 'review' ? 'reviewing' : kind === 'draft' ? 'drafting' : kind,
+      });
+    },
+    finished: (provider) => block.remove(provider),
+    completed: (provider, outcome) => {
+      const began = startedAt.get(provider);
+      const elapsed = began === undefined ? '' : formatElapsed(Date.now() - began);
+      const model = models.get(provider) ?? null;
+      const glyph = deps.theme.status(outcome.ok ? 'ok' : 'fail');
+      block.write(
+        `  ${glyph} ${deps.theme.provider(provider.padEnd(9))}${deps.theme.note((model ?? '').padEnd(24))} ${elapsed.padStart(6)}  ${outcome.detail}`,
+      );
+    },
+    dispose: () => block.dispose(),
   };
 }

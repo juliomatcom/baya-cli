@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 const NAV_LINKS = [
   { label: 'Features', href: '/features' },
+  { label: 'AI Consensus', href: '/ai-consensus' },
   { label: 'Docs', href: '/docs' },
   { label: 'FAQ', href: '/faq' },
 ];
@@ -30,7 +31,7 @@ export default function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="surface-dark">
+    <header className="surface-dark sticky top-0 z-50">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link
           href="/"
@@ -42,10 +43,7 @@ export default function Header() {
           <span className="text-white">Baya-cli 🕊️</span>
         </Link>
 
-        <nav
-          className="hidden items-center gap-8 md:flex"
-          aria-label="Primary"
-        >
+        <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
           {NAV_LINKS.map((link) => (
             <Link key={link.href} href={link.href} className="nav-link text-sm">
               {link.label}

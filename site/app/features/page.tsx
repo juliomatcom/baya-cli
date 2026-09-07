@@ -7,7 +7,7 @@ import { pageMetadata } from '@/app/lib/site';
 export const metadata: Metadata = pageMetadata({
   title: 'Features – Baya',
   description:
-    'Everything Baya does: zero-config orchestration for AI coding agents, an LLM-planned dependency graph, per-task model routing, parallel execution, process grouping, cross-task memory, a preview gate, checkpointed resume, and clean Ctrl+C teardown.',
+    'Everything Baya does: zero-config orchestration for AI coding agents, an LLM-planned dependency graph, per-task model routing, parallel execution, process grouping, cross-task memory, a preview gate, checkpointed resume, clean Ctrl+C teardown, and baya consensus — a multi-provider debate that settles a spec, a diff, or a plain question across models.',
   path: '/features',
 });
 
@@ -22,6 +22,7 @@ type FeatureGroup = {
   label: string;
   blurb: string;
   features: Feature[];
+  cta?: { href: string; label: string };
 };
 
 const GROUPS: FeatureGroup[] = [
@@ -147,6 +148,51 @@ const GROUPS: FeatureGroup[] = [
       },
     ],
   },
+  {
+    id: 'consensus',
+    label: 'Settles a question across models',
+    cta: { href: '/ai-consensus', label: 'Multi-model AI consensus' },
+    blurb:
+      'Point baya consensus at a spec, a diff, or a plain question and several models review it at once. A moderator reconciles each round into a new draft; you get back what they agree on — and what they don’t. Its own command, not a mode of a run.',
+    features: [
+      {
+        icon: 'debate',
+        title: 'Multi-provider debate',
+        description:
+          'baya consensus <file|"prompt"> fans one artifact out to several provider CLIs, then a moderator merges their findings into a new draft. Repeat until nothing blocking is left or the round ceiling hits. Not a run — no DAG, no lock, invisible to baya runs and baya resume.',
+      },
+      {
+        icon: 'parallel',
+        title: 'Blind, independent review',
+        description:
+          'No reviewer sees another’s findings in the same round — independence is the whole reason to pay for N CLIs. They answer each other only through the reconciled draft the next round critiques, and rivals appear under stable pseudonyms so a finding stands on its evidence, not a brand name.',
+      },
+      {
+        icon: 'scale',
+        title: 'The moderator never picks the answer',
+        description:
+          'It writes the criteria, reconciles each round, and reports whether the reviewers agree — nothing it believes about the subject reaches the output. A plain question gets no criteria at all: agreement prints the first reviewer’s answer, disagreement prints every answer side by side, none marked best.',
+      },
+      {
+        icon: 'check',
+        title: 'Stops when the debate does',
+        description:
+          '--rounds is a ceiling, not a count. The run ends early when no reviewer raised a blocker or major finding, or when a round breaks no new ground the last one already fixed. Deterministic and computed by Baya, never a model’s self-assessment.',
+      },
+      {
+        icon: 'eye',
+        title: 'Real code review, gated',
+        description:
+          'When settling the question needs the filesystem, reviewers get the full tool set in your working directory and can run the suite to ground a finding. A confirm gate names the blast radius first: agents run unsupervised, several at once, nothing isolating them — commit or stash before you start.',
+      },
+      {
+        icon: 'layers',
+        title: 'The whole debate on disk',
+        description:
+          'Every round, every critique, and each reviewer’s append-only ledger land in .baya/consensus/<runId>/ as the round settles, so Ctrl+C on round 3 leaves rounds 1–2 complete and diffable. The report adds per-provider token spend, agreement counts, and the disagreements that never resolved.',
+      },
+    ],
+  },
 ];
 
 export default function FeaturesPage() {
@@ -194,6 +240,16 @@ export default function FeaturesPage() {
                   </div>
                 ))}
               </dl>
+              {group.cta ? (
+                <p className="mt-6">
+                  <Link
+                    href={group.cta.href}
+                    className="text-sm font-semibold text-accent"
+                  >
+                    {group.cta.label} →
+                  </Link>
+                </p>
+              ) : null}
             </section>
           ))}
         </div>
