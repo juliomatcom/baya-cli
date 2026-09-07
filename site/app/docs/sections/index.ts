@@ -30,7 +30,7 @@ export const DOC_SECTIONS: DocSection[] = [
   { id: 'task-lists', label: 'Writing task lists', Component: TaskLists },
   { id: 'models', label: 'Model routing', Component: ModelRouting },
   { id: 'run', label: 'Run', Component: Run },
-  { id: 'consensus', label: 'Consensus', Component: Consensus },
+  { id: 'consensus', label: 'AI Consensus', Component: Consensus },
   { id: 'internals', label: 'Design principles', Component: DesignPrinciples },
   { id: 'cli', label: 'CLI reference', Component: CliReference },
   { id: 'providers', label: 'Providers', Component: Providers },

@@ -151,7 +151,7 @@ const GROUPS: FeatureGroup[] = [
   {
     id: 'consensus',
     label: 'Settles a question across models',
-    cta: { href: '/consensus', label: 'Multi-model AI consensus' },
+    cta: { href: '/ai-consensus', label: 'Multi-model AI consensus' },
     blurb:
       'Point baya consensus at a spec, a diff, or a plain question and several models review it at once. A moderator reconciles each round into a new draft; you get back what they agree on — and what they don’t. Its own command, not a mode of a run.',
     features: [

@@ -126,7 +126,7 @@ export default function FeaturesTeaser() {
               See all features →
             </Link>
             <Link
-              href="/consensus"
+              href="/ai-consensus"
               className="text-sm font-semibold text-accent"
             >
               Multi-model AI consensus →

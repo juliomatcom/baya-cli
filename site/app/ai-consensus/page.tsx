@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     title: 'AI Consensus for Code — baya consensus',
     description:
       'baya consensus runs a multi-model AI consensus from your terminal: several LLM CLIs review one spec, diff, or question independently, a moderator reconciles each round, and you get back what they agree on and what they do not. No API keys — it drives the coding subscriptions you already have.',
-    path: '/consensus',
+    path: '/ai-consensus',
   }),
   keywords: [
     'AI consensus',
@@ -35,7 +35,7 @@ const jsonLd = {
       name: 'baya consensus',
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'macOS, Linux, Windows',
-      url: `${SITE_URL}/consensus`,
+      url: `${SITE_URL}/ai-consensus`,
       downloadUrl: 'https://www.npmjs.com/package/baya-cli',
       isAccessibleForFree: true,
       offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' },

@@ -38,7 +38,7 @@ export const CONSENSUS_DIAGRAM = `flowchart TB
     CONV -->|yes| ROUND
     CONV -->|no| OUT["Final document, rejected findings, unresolved disagreements"]`;
 
-// Plain-language version — used on the /consensus marketing page.
+// Plain-language version — used on the /ai-consensus marketing page.
 export const CONSENSUS_DIAGRAM_SIMPLE = `flowchart TB
     ART["Your spec, diff, or question"] --> P0["A moderator frames the review and decides what to check for"]
     P0 --> ROUND{"Each model reviews it on its own — no peeking at the others"}

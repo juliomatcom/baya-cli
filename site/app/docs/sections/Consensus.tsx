@@ -4,7 +4,7 @@ import { SectionHeading, WIKI_URL } from './shared';
 export default function Consensus() {
   return (
     <section aria-labelledby="consensus" className="space-y-4">
-      <SectionHeading id="consensus">Consensus</SectionHeading>
+      <SectionHeading id="consensus">AI Consensus</SectionHeading>
       <p className="text-slate-600">
         <code>baya consensus</code> puts one artifact — a spec, a diff, or a
         plain question — in front of several models at once and reports where
