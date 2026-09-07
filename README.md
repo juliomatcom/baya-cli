@@ -95,8 +95,8 @@ Baya never parses these structurally — the planner reads every format for inte
 
 The full picture lives on the website — no need to scroll a giant README:
 
-- **[Features](https://baya-cli.depre.net/features)** — everything Baya does, `baya run` and `baya consensus` both.
-- **[Consensus](https://baya-cli.depre.net/consensus)** — multi-model AI consensus: several CLIs review one spec, diff, or question and report where they agree.
+- **[Features](https://baya-cli.depre.net/features)** — everything Baya does.
+- **[Consensus](https://baya-cli.depre.net/ai-consensus)** — multi-model AI consensus: several CLIs review one spec, diff, or question and report where they agree.
 - **[Docs](https://baya-cli.depre.net/docs)** — install, task lists, model routing, run, consensus, the CLI reference, providers, configuration, recovery, and how it works.
 - **[FAQ](https://baya-cli.depre.net/faq)** — why Baya sits alongside your CLIs, what it does for your bill, and whether parallel runs are safe.
 
