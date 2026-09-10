@@ -41,7 +41,7 @@
 
 1. **Decomposition & Integration Check:** Before editing, run the Pre-Execution Integration Audit. Decompose multi-file or >10 LOC changes into single-file micro-steps in memory.
 2. **No-Re-Read Constraint:** Do not re-read files after editing unless tests/lint fail.
-3. **Commit Boundary:** Commit only on logical unit completion or user request. Return silent output (`SUCCESS: <task> micro-step N`).
+3. **Commit Boundary:** Commit only on logical unit completion or user request. Return silent output (`SUCCESS: <task> micro-step N`). **Never commit to `main`** — branch, then PR. Verify the current branch before every commit, not once per session.
 4. **Definition of Done:**
    - [ ] Passed Pre-Execution Integration Audit (zero broken cross-module imports/types).
    - [ ] Automated tests pass cleanly (zero real DB/network I/O; mocked dependencies).
