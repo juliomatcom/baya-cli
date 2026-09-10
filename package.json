@@ -1,13 +1,13 @@
 {
   "name": "baya-cli",
-  "version": "1.5.0",
+  "version": "1.9.1",
   "description": "Local multi-provider CLI orchestrator: a plain-text task list to LLM-planned JSON DAG to parallel dispatch across local agent CLIs.",
   "type": "module",
   "license": "MIT",
   "author": "Julio Cesar Martin",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/juliomatcom/baya-cli.git"
+    "url": "git+https://github.com/dephelion/baya-cli.git"
   },
   "engines": {
     "node": ">=24"

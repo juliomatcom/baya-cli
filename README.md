@@ -8,7 +8,7 @@
 
 **Run a list of coding tasks across the AI subscriptions you already use.**
 
-[![CI](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/juliomatcom/baya-cli/actions/workflows/ci.yml)
+[![CI](https://github.com/dephelion/baya-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/dephelion/baya-cli/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/baya-cli)](https://www.npmjs.com/package/baya-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-baya--cli.depre.net-16a34a)](https://baya-cli.depre.net)

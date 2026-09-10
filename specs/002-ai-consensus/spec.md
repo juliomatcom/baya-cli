@@ -3,7 +3,7 @@
 > **Maintenance Invariant:** One file. Validation findings, design, open decisions, and build order live here together — the `001` split into `00-validation`/`01-spec`/`02-plan`/`03-tasks` is not repeated. Every requirement is implementable against a provider surface verified in `wiki-llm/providers.md`, or is marked ⚠️ UNVERIFIED. Design that lands moves to `wiki-llm/`; this file never becomes the source of truth. Token-optimized: imperative, one fact per line, no prose, no mock walls.
 > **Answers:** What is `baya consensus`, what does it send and read back, and what was decided against what?
 
-**Issue:** [#33 Multi-Provider Debate & Alignment Engine](https://github.com/juliomatcom/baya-cli/issues/33) — close on merge.
+**Issue:** [#33 Multi-Provider Debate & Alignment Engine](https://github.com/dephelion/baya-cli/issues/33) — close on merge.
 **Status:** design settled and **built** 2026-09-06. Behaviour now lives in [`wiki-llm/consensus.md`](../../wiki-llm/consensus.md) — this file is the refinement record, not the source of truth. Open: step 10 (validate the 8000-char budget against a real debate) and step 11 (copilot argv guard, blocked on quota).
 **Origin:** a Gemini-authored draft written without repository access. §A records what it got wrong; the rest replaces it.
 

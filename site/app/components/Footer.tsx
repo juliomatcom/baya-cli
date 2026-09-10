@@ -5,7 +5,7 @@ const FOOTER_LINKS = [
   { label: 'AI Consensus', href: '/ai-consensus' },
   { label: 'Docs', href: '/docs' },
   { label: 'FAQ', href: '/faq' },
-  { label: 'GitHub', href: 'https://github.com/juliomatcom/baya-cli' },
+  { label: 'GitHub', href: 'https://github.com/dephelion/baya-cli' },
 ];
 
 export default function Footer() {
@@ -15,7 +15,7 @@ export default function Footer() {
         <p className="text-slate-600">
           © 2026 Julio Cesar Martin · Released under the{' '}
           <a
-            href="https://github.com/juliomatcom/baya-cli/blob/main/LICENSE"
+            href="https://github.com/dephelion/baya-cli/blob/main/LICENSE"
             target="_blank"
             rel="noreferrer noopener"
           >

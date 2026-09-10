@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-const GITHUB_URL = 'https://github.com/juliomatcom/baya-cli';
+const GITHUB_URL = 'https://github.com/dephelion/baya-cli';
 
 function GitHubIcon() {
   return (
