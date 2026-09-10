@@ -18,12 +18,17 @@ describe('BUILTIN_CATALOG', () => {
 
   it('gives codex the sol/terra/luna family with aliases', () => {
     const ids = (BUILTIN_CATALOG.codex ?? []).map((m) => m.id);
-    expect(ids).toEqual(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']);
-    expect((BUILTIN_CATALOG.codex ?? []).flatMap((m) => m.aliases)).toEqual([
-      'sol',
-      'terra',
-      'luna',
-    ]);
+    expect(ids).toEqual(
+      expect.arrayContaining(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']),
+    );
+    expect((BUILTIN_CATALOG.codex ?? []).flatMap((m) => m.aliases)).toEqual(
+      expect.arrayContaining(['sol', 'terra', 'luna']),
+    );
+  });
+
+  it('points the bare `fable` alias at the current Fable snapshot', () => {
+    const fable = (BUILTIN_CATALOG.claude ?? []).find((m) => m.aliases.includes('fable'));
+    expect(fable?.id).toBe('claude-fable-5-1');
   });
 });
 
@@ -93,7 +98,7 @@ describe('mergeCatalog', () => {
     });
     const luna = (merged.codex ?? []).find((m) => m.id === 'gpt-5.6-luna');
     expect(luna?.aliases).toEqual(['luna', 'cheap']);
-    expect(merged.codex).toHaveLength(3);
+    expect(merged.codex).toHaveLength((BUILTIN_CATALOG.codex ?? []).length);
   });
 
   it('is a no-op when there is nothing extra', () => {

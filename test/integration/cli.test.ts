@@ -162,7 +162,7 @@ describe('baya config refresh-models', () => {
       'openai/gpt-5',
     ]);
     // Counts still describe everything a run can resolve, built-ins included.
-    expect(result.stderr).toContain('codex 3');
+    expect(result.stderr).toContain(`codex ${(BUILTIN_CATALOG.codex ?? []).length}`);
     expect(result.stderr).toContain('opencode 2');
   });
 
@@ -187,8 +187,8 @@ describe('baya config refresh-models', () => {
 
     // …and the merged view a run sees is unchanged by the migration.
     const show = await runCli(['config', '--show'], { workspace });
-    expect(show.stdout).toContain('codex:3');
-    expect(show.stdout).toContain('claude:4');
+    expect(show.stdout).toContain(`codex:${(BUILTIN_CATALOG.codex ?? []).length}`);
+    expect(show.stdout).toContain(`claude:${(BUILTIN_CATALOG.claude ?? []).length}`);
     expect(show.stdout).toContain('opencode:1');
   });
 

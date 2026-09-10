@@ -84,7 +84,11 @@ export function checkModelRouting(
   for (const task of tasks) {
     if (task.model === null) continue;
 
-    if (isDeferredModel(task.model)) {
+    // A deferred family (Gemini) still runs when an allowlisted provider is named
+    // outright — e.g. copilot serving `gemini-3.8-flash`.
+    const providerServesModel =
+      task.provider !== null && allowlist.includes(task.provider);
+    if (isDeferredModel(task.model) && !providerServesModel) {
       issues.push({
         taskId: task.id,
         message: `task "${task.id}" names model "${task.model}", whose provider is not in this release. Choose a codex or claude model.`,
