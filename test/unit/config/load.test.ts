@@ -188,11 +188,9 @@ describe('setConfigValue', () => {
     expect((merged.codex ?? []).find((m) => m.id === 'gpt-5.6-luna')?.description).toBe(
       'my cheaper luna',
     );
-    expect((merged.codex ?? []).map((m) => m.id)).toEqual([
-      'gpt-5.6-sol',
-      'gpt-5.6-terra',
-      'gpt-5.6-luna',
-    ]);
+    expect((merged.codex ?? []).map((m) => m.id)).toEqual(
+      (BUILTIN_CATALOG.codex ?? []).map((m) => m.id),
+    );
   });
 
   it('removes a modelCatalog entry on null and prunes empty containers', () => {
@@ -245,11 +243,9 @@ describe('modelCatalog override resolves end to end', () => {
 
     const catalog = mergeCatalog(BUILTIN_CATALOG, loaded.config.modelCatalog);
     // The merge keeps the other built-in codex entries and swaps in the user's.
-    expect((catalog.codex ?? []).map((m) => m.id)).toEqual([
-      'gpt-5.6-sol',
-      'gpt-5.6-terra',
-      'gpt-5.6-luna',
-    ]);
+    expect((catalog.codex ?? []).map((m) => m.id)).toEqual(
+      (BUILTIN_CATALOG.codex ?? []).map((m) => m.id),
+    );
     expect((catalog.codex ?? []).find((m) => m.id === 'gpt-5.6-luna')).toEqual({
       id: 'gpt-5.6-luna',
       aliases: ['luna', 'penny-pincher'],

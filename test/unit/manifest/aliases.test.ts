@@ -85,6 +85,12 @@ describe('checkModelRouting', () => {
     expect(issue?.message).toContain('not in this release');
   });
 
+  it('allows a deferred-family model when an allowlisted provider serves it', () => {
+    expect(
+      checkModelRouting([task({ provider: 'copilot', model: 'gemini-3.8-flash' })], all),
+    ).toEqual([]);
+  });
+
   it('says nothing about a task with no model', () => {
     expect(checkModelRouting([task({ provider: 'codex' })], all)).toEqual([]);
   });
