@@ -128,6 +128,28 @@ Keyed (`command:<cmd>` / `file:<path>`), so a later fact **replaces** an earlier
 
 Flags: `--no-memory` (off, for A/B measurement) · `--memory-budget <chars>` (default 1200).
 
+## Cost floor
+
+> **Read before proposing any token optimization.** Measured 2026-09-10 across all five run stores.
+
+Ground truth is the raw provider event — codex `turn.completed.usage`, claude final `.usage`. Never a `report.json` roll-up.
+
+| Layer Baya controls              | Share of a run's tokens                        |
+| :------------------------------- | :--------------------------------------------- |
+| Rendered prompt (~1,700 tokens)  | 0.25% of mean input/task (696k; max seen 4.1M) |
+| All model output                 | 0.74% — 1.66M against 221.5M input             |
+| JSON escaping inside that output | 1.70% of output chars                          |
+
+Prompt cache: claude **97.5%** over 88.7M input · codex **90.3%** over 26.0M. No headroom — prefix reordering is hygiene (`AGENTS.md` §Prompt Cache Invariant), not a lever.
+
+⚠️ **Weight a cache rate by input tokens.** codex processes under 100k read 37% and are 6.6% of its traffic; over 100k read 94.1%. A cold first turn has nothing to cache.
+
+⚠️ **Runs before 2026-08-29 22:05 report 0% cache** — artifact of `9e99258`, which started recording the split. Never mix them into a rate.
+
+The model never sees JSON: `renderGroupPrompt` sends Markdown, `request.json` is a disk record, upstream output is inlined raw. Escaping is paid once and never compounds. Rung 1 of the parsing ladder needs JSON Schema (`codex --output-schema`, `claude --json-schema`); a non-JSON envelope forfeits it.
+
+What remains is turn count inside the agent CLI's own loop. §Grouping and §Memory are the only levers that reach it.
+
 ## Failure semantics
 
 | Concern            | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
