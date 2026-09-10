@@ -75,9 +75,15 @@ Every component of the key is load bearing:
 | `access`           | A process gets **one sandbox**. Grouping read-only with read-write would silently widen permissions — the one thing `access` prevents. |
 | `cwd`              | A process has one working directory.                                                                                                   |
 
-**Cap:** `--group-size` (default 3, **unmeasured**). Two jobs. It bounds prompt length, because a long prompt holding many tasks invites the failure 1:1 execution cannot have — conflating two tasks, drifting, quietly skipping one. And it bounds blast radius: the scheduler commits to a group **before** the first task runs, so a process that dies partway fails the members it never reached. `--group-size 1` is a true bypass — one process per task, and byte-for-byte the pre-grouping prompt and wire format.
+**Cap:** `--group-size` (default 3, **measured on cost, unmeasured on blast radius**). Two jobs. It bounds prompt length, because a long prompt holding many tasks invites the failure 1:1 execution cannot have — conflating two tasks, drifting, quietly skipping one. And it bounds blast radius: the scheduler commits to a group **before** the first task runs, so a process that dies partway fails the members it never reached. `--group-size 1` is a true bypass — one process per task, and byte-for-byte the pre-grouping prompt and wire format.
 
-The saving is the fixed per-spawn cost paid once instead of N times, so the return curve is `(N-1)/N`: 50% at 2, 67% at 3, 75% at 4, 83% at 6. Most of the win is early; what grows with N is the risk. 3 takes two thirds of the saving and keeps the blast radius small enough to re-run by hand. Settle it with `.baya/runs/*` (`cost_usd` + the cache split are already recorded per run), not by argument.
+**Two costs are shared, not one.** Measured 2026-09-10, 12 runs, 6 sibling read-only tasks on `codex`/`luna` (`.local/probe-matrix.sh`; spreads under 1%): **setup** — spawn, system prompt, tool definitions, orientation — is 28,047 per process, and **learning** — the agent finding the files it needs — is a further 13,960 per solo task. A grouped task inherits both from the conversation above it.
+
+Counting setup alone understates the saving by a third: at `--group-size 3` the measured saving was 150,099 against the 112,187 a setup-only model permits, and at 6, 200,384 against 140,233.
+
+⚠️ **The marginal in-group task gets cheaper as the group grows** — 4,482 at size 3, 1,930 at size 6 (4.6% of the 42,007 a solo task costs). Returns therefore beat `(N-1)/N` rather than matching it: a constant marginal cost predicts 64,417 at size 6 and the measured figure was 51,657. 3 → 6 halved total cost on this workload.
+
+⚠️ **Cost is the measured half only.** Every run above succeeded, so nothing here tests the failure side the cap exists for. The workload is also an upper bound — all six tasks needed the same files, and real task sets overlap less. Do not move the default on this evidence; measure blast radius against real task lists first.
 
 **Preview:** the plan gate projects the groups before the run is confirmed (`projectGroups`, cli.md §Plan gate) — which tasks share a process, and a warning when one fills the cap. It replays this scheduler loop rather than restating the rule, so it cannot drift; it is exact on the happy path and guaranteed only for the first group.
 
