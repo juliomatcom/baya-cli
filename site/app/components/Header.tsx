@@ -10,7 +10,7 @@ const NAV_LINKS = [
   { label: 'FAQ', href: '/faq' },
 ];
 
-const GITHUB_URL = 'https://github.com/juliomatcom/baya-cli';
+const GITHUB_URL = 'https://github.com/dephelion/baya-cli';
 
 function GitHubIcon() {
   return (

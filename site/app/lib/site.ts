@@ -5,7 +5,7 @@
  */
 export const SITE_URL = 'https://baya-cli.depre.net';
 
-export const GITHUB_URL = 'https://github.com/juliomatcom/baya-cli';
+export const GITHUB_URL = 'https://github.com/dephelion/baya-cli';
 
 export const SITE_NAME = 'Baya';
 

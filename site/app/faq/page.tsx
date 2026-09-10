@@ -128,7 +128,7 @@ const FAQ: FaqEntry[] = [
           the reviewers run unsupervised with write access to your tree, so
           commit or stash first. Full detail:{' '}
           <a
-            href="https://github.com/juliomatcom/baya-cli/blob/main/wiki-llm/consensus.md"
+            href="https://github.com/dephelion/baya-cli/blob/main/wiki-llm/consensus.md"
             target="_blank"
             rel="noreferrer noopener"
           >

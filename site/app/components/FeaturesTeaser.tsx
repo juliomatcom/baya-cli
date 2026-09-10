@@ -3,9 +3,9 @@ import CopyCodeBlock from '@/app/components/CopyCodeBlock';
 import FeatureCard from '@/app/components/FeatureCard';
 import UsageTerminal from '@/app/components/UsageTerminal';
 
-const GITHUB_URL = 'https://github.com/juliomatcom/baya-cli';
+const GITHUB_URL = 'https://github.com/dephelion/baya-cli';
 const LICENSE_URL =
-  'https://github.com/juliomatcom/baya-cli/blob/main/LICENSE';
+  'https://github.com/dephelion/baya-cli/blob/main/LICENSE';
 
 const TEASER_CARDS = [
   {
